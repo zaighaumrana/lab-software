@@ -92,7 +92,7 @@ export function VisitPage() {
     setShowNewPatientForm(false);
 
     const digits = phone.replace(/\D/g, '');
-    if (digits.length < 10) return;
+    if (digits.length < 11) return;
 
     debounceRef.current = setTimeout(async () => {
       setPhoneLookupLoading(true);
@@ -387,7 +387,6 @@ export function VisitPage() {
                   <input
                     className="input"
                     required
-                    autoFocus
                     value={newPatientForm.fullName}
                     onChange={(e) => setNewPatientForm({ ...newPatientForm, fullName: e.target.value })}
                   />
