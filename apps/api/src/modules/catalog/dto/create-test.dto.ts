@@ -123,6 +123,8 @@ export class ReplaceTestParametersDto {
   @Type(() => TestParameterDto)
   parameters!: TestParameterDto[];
 }
+
+export class CreateTestDto {
   @IsString()
   @MaxLength(30)
   code!: string;
