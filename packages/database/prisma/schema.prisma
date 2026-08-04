@@ -1,0 +1,899 @@
+// Laboratory Management System — Prisma Schema
+// Source of truth: 03_Core_Domain_Design.md
+// Every operationally-scoped table carries tenant_id (and branch_id when multi-branch is active).
+// Fixed to a single tenant for this client's deployment.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// TENANCY & BRANCHES
+// =============================================================================
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branches Branch[]
+  users    User[]
+  patients Patient[]
+  doctors  Doctor[]
+  companies Company[]
+  tests    Test[]
+  packages Package[]
+  bookings Booking[]
+  invoices Invoice[]
+  samples  Sample[]
+  results  Result[]
+  reports  Report[]
+  notifications Notification[]
+  commissions DoctorCommission[]
+  auditLogs AuditLog[]
+  syncOutbox SyncOutbox[]
+  featureFlags FeatureFlag[]
+  configurations Configuration[]
+  smsTemplates SmsTemplate[]
+
+  @@map("tenants")
+}
+
+model Branch {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  code      String
+  address   String?
+  phone     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  users     User[]
+  patients  Patient[]
+  bookings  Booking[]
+  invoices  Invoice[]
+  samples   Sample[]
+  reports   Report[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("branches")
+}
+
+// =============================================================================
+// AUTHENTICATION & AUTHORIZATION
+// =============================================================================
+
+enum Role {
+  ADMIN
+  RECEPTION
+  SAMPLE_COLLECTOR
+  LAB_TECH
+  LAB_OPERATOR // Combined role for this v1 client (Reception + Sample Collector + Lab Tech)
+  CASHIER
+  PATHOLOGIST
+  ACCOUNTANT
+  DOCTOR_PORTAL
+  CORPORATE_MANAGER
+  WEBSITE_CONTENT_MANAGER
+}
+
+model User {
+  id           String    @id @default(cuid())
+  tenantId     String
+  branchId     String?
+  email        String?
+  username     String
+  passwordHash String
+  fullName     String
+  role         Role
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id])
+  branch Branch? @relation(fields: [branchId], references: [id])
+
+  auditLogs AuditLog[] @relation("AuditActor")
+
+  @@unique([tenantId, username])
+  @@index([tenantId])
+  @@map("users")
+}
+
+// =============================================================================
+// PATIENT MANAGEMENT
+// =============================================================================
+
+model Patient {
+  id          String    @id @default(cuid())
+  tenantId    String
+  branchId    String?   // Preferential home branch (optional)
+  mrn         String?   // Medical Record Number (optional internal)
+  fullName    String
+  phone       String
+  phoneAlt    String?
+  cnic        String?   // Pakistani CNIC
+  dateOfBirth DateTime?
+  gender      Gender?
+  address     String?
+  email       String?
+  bloodGroup  String?
+  notes       String?
+  smsConsent  Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  branch   Branch?   @relation(fields: [branchId], references: [id])
+  bookings Booking[]
+  companyLinks PatientCompany[]
+
+  @@unique([tenantId, phone])
+  @@index([tenantId, cnic])
+  @@index([tenantId, fullName])
+  @@index([tenantId])
+  @@map("patients")
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  UNKNOWN
+}
+
+// =============================================================================
+// DOCTOR MANAGEMENT
+// =============================================================================
+
+model Doctor {
+  id              String   @id @default(cuid())
+  tenantId        String
+  fullName        String
+  phone           String?
+  email           String?
+  specialty       String?
+  clinicName      String?
+  commissionType  CommissionType @default(PERCENTAGE)
+  commissionValue Decimal  @db.Decimal(10, 2) // % or fixed amount
+  isActive        Boolean  @default(true)
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant      Tenant             @relation(fields: [tenantId], references: [id])
+  bookings    Booking[]
+  commissions DoctorCommission[]
+
+  @@index([tenantId])
+  @@map("doctors")
+}
+
+enum CommissionType {
+  PERCENTAGE
+  FIXED_AMOUNT
+  PER_TEST_FIXED
+}
+
+// =============================================================================
+// CORPORATE ACCOUNTS
+// =============================================================================
+
+model Company {
+  id                    String   @id @default(cuid())
+  tenantId              String
+  name                  String
+  code                  String?
+  contactPerson         String?
+  phone                 String?
+  email                 String?
+  address               String?
+  billingMode           CorporateBillingMode @default(COMPANY_PAYS_ALL)
+  resultSharingPolicy   ResultSharingPolicy  @default(BILLING_ONLY)
+  discountPercent       Decimal? @db.Decimal(5, 2)
+  isActive              Boolean  @default(true)
+  notes                 String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id])
+  patients PatientCompany[]
+  invoices Invoice[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("companies")
+}
+
+enum CorporateBillingMode {
+  COMPANY_PAYS_ALL
+  SPLIT_COPAY
+  EMPLOYEE_PAYS
+}
+
+enum ResultSharingPolicy {
+  BILLING_ONLY
+  FULL_REPORTS
+}
+
+model PatientCompany {
+  id        String   @id @default(cuid())
+  patientId String
+  companyId String
+  employeeId String? // Employee number at the company
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id])
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@unique([patientId, companyId])
+  @@map("patient_companies")
+}
+
+// =============================================================================
+// TEST CATALOG & PACKAGES
+// =============================================================================
+
+enum ParameterValueType {
+  NUMERIC
+  TEXT
+  BOOLEAN
+  CHOICE // value must be one of TestParameterChoice options
+}
+
+model Test {
+  id              String   @id @default(cuid())
+  tenantId        String
+  code            String
+  name            String
+  category        String?
+  sampleType      String?  // e.g. Blood, Urine, Serum
+  basePrice       Decimal  @db.Decimal(12, 2)
+  turnaroundHours Int?
+  isActive        Boolean  @default(true)
+  description     String?
+  /// true = multi-parameter panel (e.g. CBC); false = single-value test
+  isPanel         Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id])
+  parameters      TestParameter[]
+  packageItems    PackageItem[]
+  invoiceLines    InvoiceLine[]
+  results         Result[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("tests")
+}
+
+/// A single measurable variable belonging to a Test.
+/// Single-value tests have exactly one parameter; panels (CBC etc.) have many.
+model TestParameter {
+  id              String             @id @default(cuid())
+  testId          String
+  code            String             // e.g. WBC, RBC, HGB
+  name            String             // e.g. White Blood Cells
+  valueType       ParameterValueType @default(NUMERIC)
+  unit            String?            // default display unit
+  sortOrder       Int                @default(0)
+  isRequired      Boolean            @default(true)
+  decimalPlaces   Int?               // for NUMERIC display/rounding
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  test            Test                   @relation(fields: [testId], references: [id], onDelete: Cascade)
+  referenceRanges TestReferenceRange[]
+  choices         TestParameterChoice[]
+  resultValues    ResultValue[]
+
+  @@unique([testId, code])
+  @@index([testId])
+  @@map("test_parameters")
+}
+
+/// Optional fixed choices for CHOICE-type parameters (e.g. Positive/Negative)
+model TestParameterChoice {
+  id              String @id @default(cuid())
+  testParameterId String
+  value           String
+  label           String
+  sortOrder       Int    @default(0)
+
+  parameter TestParameter @relation(fields: [testParameterId], references: [id], onDelete: Cascade)
+
+  @@unique([testParameterId, value])
+  @@index([testParameterId])
+  @@map("test_parameter_choices")
+}
+
+/// Reference / critical ranges — attached to a parameter (not the whole test)
+model TestReferenceRange {
+  id              String   @id @default(cuid())
+  testParameterId String
+  gender          Gender?  // null = all
+  ageMinMonths    Int?     // null = no lower bound
+  ageMaxMonths    Int?     // null = no upper bound
+  lowNormal       Decimal? @db.Decimal(12, 4)
+  highNormal      Decimal? @db.Decimal(12, 4)
+  criticalLow     Decimal? @db.Decimal(12, 4)
+  criticalHigh    Decimal? @db.Decimal(12, 4)
+  unit            String?  // overrides parameter unit if set
+  interpretation  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  parameter TestParameter @relation(fields: [testParameterId], references: [id], onDelete: Cascade)
+
+  @@index([testParameterId])
+  @@map("test_reference_ranges")
+}
+
+model Package {
+  id          String   @id @default(cuid())
+  tenantId    String
+  code        String
+  name        String
+  basePrice   Decimal  @db.Decimal(12, 2)
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  items        PackageItem[]
+  invoiceLines InvoiceLine[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("packages")
+}
+
+model PackageItem {
+  id              String  @id @default(cuid())
+  packageId       String
+  testId          String?
+  nestedPackageId String? // Support nested packages
+  sortOrder       Int     @default(0)
+
+  package       Package  @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  test          Test?    @relation(fields: [testId], references: [id])
+  // nestedPackage relation omitted for simplicity; handled in application layer
+
+  @@index([packageId])
+  @@map("package_items")
+}
+
+// =============================================================================
+// BOOKING
+// =============================================================================
+
+enum BookingStatus {
+  PENDING_REVIEW  // Online booking awaiting staff
+  CONFIRMED
+  CHECKED_IN
+  CONVERTED       // Invoice generated
+  EXPIRED
+  CANCELLED
+}
+
+enum BookingSource {
+  WALK_IN
+  ONLINE
+  HOME_COLLECTION
+  PHONE
+}
+
+model Booking {
+  id                String        @id @default(cuid())
+  tenantId          String
+  branchId          String
+  patientId         String
+  doctorId          String?       // Referring doctor
+  companyId         String?
+  status            BookingStatus @default(CONFIRMED)
+  source            BookingSource @default(WALK_IN)
+  bookingCode       String        // Human-readable / SMS code
+  preferredAt       DateTime?     // Requested slot
+  checkedInAt       DateTime?
+  notes             String?
+  // Home collection fields
+  homeAddress       String?
+  homeCollectorId   String?       // User id of collector
+  homeRouteNotes    String?
+  homeTimeWindowStart DateTime?
+  homeTimeWindowEnd   DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  branch  Branch  @relation(fields: [branchId], references: [id])
+  patient Patient @relation(fields: [patientId], references: [id])
+  doctor  Doctor? @relation(fields: [doctorId], references: [id])
+  invoice Invoice?
+
+  @@unique([tenantId, bookingCode])
+  @@index([tenantId, status])
+  @@index([tenantId, patientId])
+  @@index([branchId])
+  @@map("bookings")
+}
+
+// =============================================================================
+// BILLING — INVOICE & PAYMENT
+// =============================================================================
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  VOIDED
+  CLOSED
+  REFUNDED
+}
+
+model Invoice {
+  id              String        @id @default(cuid())
+  tenantId        String
+  branchId        String
+  bookingId       String        @unique
+  companyId       String?
+  status          InvoiceStatus @default(DRAFT)
+  invoiceNumber   String
+  subtotal        Decimal       @db.Decimal(12, 2)
+  discountTotal   Decimal       @db.Decimal(12, 2) @default(0)
+  taxTotal        Decimal       @db.Decimal(12, 2) @default(0)
+  grandTotal      Decimal       @db.Decimal(12, 2)
+  amountPaid      Decimal       @db.Decimal(12, 2) @default(0)
+  amountDue       Decimal       @db.Decimal(12, 2)
+  currency        String        @default("PKR")
+  notes           String?
+  issuedAt        DateTime?
+  closedAt        DateTime?
+  voidedAt        DateTime?
+  voidReason      String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  tenant   Tenant        @relation(fields: [tenantId], references: [id])
+  branch   Branch        @relation(fields: [branchId], references: [id])
+  booking  Booking       @relation(fields: [bookingId], references: [id])
+  company  Company?      @relation(fields: [companyId], references: [id])
+  lines    InvoiceLine[]
+  payments Payment[]
+  samples  Sample[]
+  report   Report?
+  commissions DoctorCommission[]
+
+  @@unique([tenantId, invoiceNumber])
+  @@index([tenantId, status])
+  @@index([branchId])
+  @@map("invoices")
+}
+
+model InvoiceLine {
+  id              String   @id @default(cuid())
+  invoiceId       String
+  testId          String?
+  packageId       String?
+  description     String
+  quantity        Int      @default(1)
+  unitPrice       Decimal  @db.Decimal(12, 2) // Snapshotted final unit price after pipeline
+  basePrice       Decimal  @db.Decimal(12, 2) // Original catalog price
+  discountAmount  Decimal  @db.Decimal(12, 2) @default(0)
+  taxAmount       Decimal  @db.Decimal(12, 2) @default(0)
+  lineTotal       Decimal  @db.Decimal(12, 2)
+  sortOrder       Int      @default(0)
+  // Pricing pipeline audit
+  doctorDiscount  Decimal? @db.Decimal(12, 2)
+  corporateDiscount Decimal? @db.Decimal(12, 2)
+  campaignDiscount Decimal? @db.Decimal(12, 2)
+  manualDiscount  Decimal? @db.Decimal(12, 2)
+  manualDiscountReason String?
+  createdAt       DateTime @default(now())
+
+  invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  test    Test?    @relation(fields: [testId], references: [id])
+  package Package? @relation(fields: [packageId], references: [id])
+  results Result[]
+
+  @@index([invoiceId])
+  @@map("invoice_lines")
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  EASYPAISA
+  JAZZCASH
+  CARD          // Disabled in v1 but interface-ready
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIALLY_RECEIVED
+  FULLY_RECEIVED
+  VOIDED
+  REFUNDED
+  FAILED
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  invoiceId     String
+  amount        Decimal       @db.Decimal(12, 2)
+  method        PaymentMethod
+  status        PaymentStatus @default(PENDING)
+  reference     String?       // Transaction ID / cheque number
+  receivedAt    DateTime?
+  refundedAt    DateTime?
+  refundReason  String?
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
+  @@map("payments")
+}
+
+// =============================================================================
+// LABORATORY — SAMPLE, RESULT, REPORT
+// =============================================================================
+
+enum SampleStatus {
+  PENDING_COLLECTION
+  COLLECTED
+  IN_TRANSIT
+  RECEIVED_AT_LAB
+  ACCEPTED
+  REJECTED
+  RECOLLECTED
+  IN_TESTING
+  COMPLETED
+  DISCARDED
+}
+
+model Sample {
+  id              String       @id @default(cuid())
+  tenantId        String
+  branchId        String
+  invoiceId       String
+  sampleCode      String       // Barcode / label code
+  status          SampleStatus @default(PENDING_COLLECTION)
+  sampleType      String?
+  collectedAt     DateTime?
+  collectedById   String?      // User id
+  receivedAt      DateTime?
+  acceptedAt      DateTime?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  discardedAt     DateTime?
+  notes           String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id])
+  branch  Branch   @relation(fields: [branchId], references: [id])
+  invoice Invoice  @relation(fields: [invoiceId], references: [id])
+  results Result[]
+
+  @@unique([tenantId, sampleCode])
+  @@index([tenantId, status])
+  @@index([invoiceId])
+  @@map("samples")
+}
+
+enum ResultStatus {
+  ENTERED
+  RELEASED
+  SUPERSEDED
+  VOIDED
+}
+
+/// One Result = one Test performed on one Sample (versioned header).
+/// Actual measured values live in ResultValue (one row per TestParameter).
+model Result {
+  id                  String       @id @default(cuid())
+  tenantId            String
+  sampleId            String
+  invoiceLineId       String
+  testId              String
+  status              ResultStatus @default(ENTERED)
+  /// True if any of its ResultValues is critical
+  isCritical          Boolean      @default(false)
+  enteredById         String?
+  enteredAt           DateTime     @default(now())
+  releasedById        String?
+  releasedAt          DateTime?
+  amendedFromResultId String?      // Points to previous version
+  voidReason          String?
+  notes               String?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  tenant      Tenant        @relation(fields: [tenantId], references: [id])
+  sample      Sample        @relation(fields: [sampleId], references: [id])
+  invoiceLine InvoiceLine   @relation(fields: [invoiceLineId], references: [id])
+  test        Test          @relation(fields: [testId], references: [id])
+  values      ResultValue[]
+  amendedFrom Result?       @relation("ResultAmendments", fields: [amendedFromResultId], references: [id])
+  amendments  Result[]      @relation("ResultAmendments")
+
+  @@index([tenantId])
+  @@index([sampleId])
+  @@index([invoiceLineId])
+  @@index([testId])
+  @@map("results")
+}
+
+/// One measured value for one parameter within a Result.
+model ResultValue {
+  id              String      @id @default(cuid())
+  resultId        String
+  testParameterId String
+  valueNumeric    Decimal?    @db.Decimal(16, 6)
+  valueText       String?
+  unit            String?
+  flag            ResultFlag?
+  isCritical      Boolean     @default(false)
+  interpretation  String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  result    Result        @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  parameter TestParameter @relation(fields: [testParameterId], references: [id])
+
+  @@unique([resultId, testParameterId])
+  @@index([resultId])
+  @@index([testParameterId])
+  @@map("result_values")
+}
+
+enum ResultFlag {
+  NORMAL
+  LOW
+  HIGH
+  CRITICAL_LOW
+  CRITICAL_HIGH
+  ABNORMAL
+}
+
+enum ReportStatus {
+  PENDING
+  PARTIAL_READY
+  COMPLETE
+  AMENDED
+  ARCHIVED
+}
+
+model Report {
+  id            String       @id @default(cuid())
+  tenantId      String
+  branchId      String
+  invoiceId     String       @unique
+  status        ReportStatus @default(PENDING)
+  reportNumber  String
+  trackingId    String       // Public lookup ID
+  pdfPath       String?      // Local filesystem path or storage key
+  generatedAt   DateTime?
+  amendedAt     DateTime?
+  archivedAt    DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  branch  Branch  @relation(fields: [branchId], references: [id])
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@unique([tenantId, reportNumber])
+  @@unique([tenantId, trackingId])
+  @@index([tenantId, status])
+  @@map("reports")
+}
+
+// =============================================================================
+// DOCTOR COMMISSION
+// =============================================================================
+
+enum CommissionStatus {
+  CALCULATED
+  PAYABLE
+  PAID
+  REVERSED
+  CLAWBACK_PENDING
+  SETTLED
+}
+
+model DoctorCommission {
+  id              String           @id @default(cuid())
+  tenantId        String
+  doctorId        String
+  invoiceId       String
+  status          CommissionStatus @default(CALCULATED)
+  commissionType  CommissionType
+  rateOrAmount    Decimal          @db.Decimal(10, 2) // Snapshotted
+  calculatedAmount Decimal         @db.Decimal(12, 2)
+  paidAmount      Decimal?         @db.Decimal(12, 2)
+  paidAt          DateTime?
+  reversedAt      DateTime?
+  clawbackAt      DateTime?
+  settledAt       DateTime?
+  notes           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  doctor  Doctor  @relation(fields: [doctorId], references: [id])
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([tenantId, doctorId])
+  @@index([invoiceId])
+  @@map("doctor_commissions")
+}
+
+// =============================================================================
+// NOTIFICATIONS
+// =============================================================================
+
+enum NotificationChannel {
+  SMS
+  WHATSAPP // Future
+  EMAIL    // Future
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENDING
+  SENT
+  FAILED
+  RETRYING
+  ABANDONED
+}
+
+model Notification {
+  id          String              @id @default(cuid())
+  tenantId    String
+  channel     NotificationChannel @default(SMS)
+  status      NotificationStatus  @default(QUEUED)
+  recipient   String              // Phone or email
+  templateKey String?
+  body        String
+  relatedType String?             // e.g. "Booking", "Report"
+  relatedId   String?
+  attempts    Int                 @default(0)
+  lastError   String?
+  sentAt      DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([status, createdAt])
+  @@map("notifications")
+}
+
+model SmsTemplate {
+  id        String   @id @default(cuid())
+  tenantId  String
+  key       String   // e.g. booking_confirmation, report_ready
+  name      String
+  body      String   // Supports {{placeholders}}
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, key])
+  @@map("sms_templates")
+}
+
+// =============================================================================
+// SYNC OUTBOX (Offline → Website)
+// =============================================================================
+
+enum SyncJobStatus {
+  QUEUED
+  SYNCING
+  SYNCED
+  FAILED
+  RETRYING
+  ABANDONED
+}
+
+model SyncOutbox {
+  id          String        @id @default(cuid())
+  tenantId    String
+  status      SyncJobStatus @default(QUEUED)
+  eventType   String        // Domain event name
+  aggregateType String
+  aggregateId String
+  payload     Json
+  attempts    Int           @default(0)
+  lastError   String?
+  syncedAt    DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([status, createdAt])
+  @@map("sync_outbox")
+}
+
+// =============================================================================
+// AUDIT LOG (Append-only)
+// =============================================================================
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  tenantId    String
+  actorId     String?  // User who performed the action
+  action      String   // CREATE, UPDATE, DELETE, VOID, REFUND, AMEND, etc.
+  entityType  String
+  entityId    String
+  before      Json?
+  after       Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  actor  User?  @relation("AuditActor", fields: [actorId], references: [id])
+
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, createdAt])
+  @@map("audit_logs")
+}
+
+// =============================================================================
+// CONFIGURATION & FEATURE FLAGS
+// =============================================================================
+
+model FeatureFlag {
+  id        String   @id @default(cuid())
+  tenantId  String
+  key       String
+  enabled   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, key])
+  @@map("feature_flags")
+}
+
+model Configuration {
+  id        String   @id @default(cuid())
+  tenantId  String
+  key       String
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, key])
+  @@map("configurations")
+}

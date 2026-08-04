@@ -1,0 +1,24 @@
+{
+  "name": "lms",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Laboratory Management System — Offline-first LMS + Public Website",
+  "scripts": {
+    "dev:api": "pnpm --filter @lms/api dev",
+    "dev:web": "pnpm --filter @lms/web dev",
+    "dev:website": "pnpm --filter @lms/website dev",
+    "build": "pnpm -r build",
+    "db:generate": "pnpm --filter @lms/database generate",
+    "db:migrate": "pnpm --filter @lms/database migrate",
+    "db:seed": "pnpm --filter @lms/database seed",
+    "db:studio": "pnpm --filter @lms/database studio",
+    "lint": "pnpm -r lint"
+  },
+  "keywords": ["lms", "laboratory", "offline-first"],
+  "author": "Vendor",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@11.18.0"
+}

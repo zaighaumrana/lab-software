@@ -1,0 +1,234 @@
+/* print-document.css
+ * Shared styles for InvoicePrintPage and ReportDocumentPage — anything
+ * printed and handed to a patient (invoice/receipt, lab report).
+ * Screen view shows a clean preview; @media print strips toolbar chrome
+ * and forces sane page margins for a thermal/A4 printer.
+ */
+
+.print-doc-root {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 16px;
+  font-family: Arial, Helvetica, sans-serif;
+  color: #1f2937;
+}
+
+.print-doc-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.print-doc {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 24px 28px;
+  font-size: 11pt;
+  line-height: 1.5;
+}
+
+.print-doc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 2px solid #1f2937;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+}
+
+.print-doc-logo {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+}
+
+.print-doc-lab-name {
+  font-size: 16pt;
+  font-weight: 700;
+  margin: 0 0 2px 0;
+}
+
+.print-doc-meta {
+  font-size: 9pt;
+  color: #4b5563;
+  margin: 0;
+}
+
+.print-doc-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 8pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.print-doc-title {
+  text-align: center;
+  font-size: 12pt;
+  font-weight: 700;
+  margin: 8px 0 16px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.print-doc-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 12px;
+  font-size: 10pt;
+}
+
+.print-doc-label {
+  font-size: 8pt;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 2px;
+}
+
+.print-doc-tracking {
+  margin: 8px 0 16px 0;
+  padding: 8px 12px;
+  background: #f9fafb;
+  border: 1px dashed #d1d5db;
+  border-radius: 6px;
+  display: inline-block;
+}
+
+.print-doc-tracking .code,
+.code {
+  font-family: 'Courier New', monospace;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.print-doc-section {
+  font-size: 9pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #6b7280;
+  margin: 16px 0 6px 0;
+}
+
+.print-doc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10pt;
+  margin-bottom: 8px;
+}
+
+.print-doc-table th,
+.print-doc-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+}
+
+.print-doc-table th {
+  font-size: 8pt;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #6b7280;
+  border-bottom: 2px solid #1f2937;
+}
+
+.print-doc-table td.num,
+.print-doc-table th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.print-doc-totals {
+  margin-left: auto;
+  width: 260px;
+  font-size: 10pt;
+}
+
+.print-doc-totals .row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+}
+
+.print-doc-totals .row.grand {
+  border-top: 1px solid #1f2937;
+  margin-top: 4px;
+  padding-top: 6px;
+  font-weight: 700;
+  font-size: 11pt;
+}
+
+.print-doc-note {
+  margin-top: 16px;
+  padding: 8px 12px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  font-size: 9pt;
+  color: #92400e;
+}
+
+.print-doc-footer {
+  margin-top: 24px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+  font-size: 8pt;
+  color: #9ca3af;
+  text-align: center;
+}
+
+/* Result flag/critical highlighting — for the report page's parameter table */
+.print-doc-critical {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+/* --- Print output --- */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .print-doc-root {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .print-doc {
+    border: none;
+    border-radius: 0;
+    padding: 0;
+  }
+
+  @page {
+    size: A4;
+    margin: 14mm 12mm;
+  }
+
+  /* One page per test — repeats the header/patient block, only the
+   * results table differs. Last page shouldn't force a trailing blank page. */
+  .print-doc-page {
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .print-doc-page:last-of-type {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .print-doc-table,
+  .print-doc-page {
+    break-inside: avoid-page;
+  }
+}
