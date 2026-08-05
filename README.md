@@ -47,6 +47,50 @@ Optional but recommended:
 - **pgAdmin** (bundled with the PostgreSQL installer) — GUI for inspecting the database.
 - **VS Code** — editor, for anyone maintaining the code.
 
+## Database Setup (create the Postgres DB & user)
+
+Prisma doesn't create the database or role for you — do this once, before `pnpm db:migrate`.
+
+**Option 1 — using `psql` (Windows/PowerShell, macOS, Linux — same commands)**
+
+```powershell
+# Open a psql session as the default postgres superuser
+psql -U postgres
+```
+
+Then, inside the `psql` prompt:
+```sql
+CREATE USER lms WITH PASSWORD 'lms';
+CREATE DATABASE lms OWNER lms;
+GRANT ALL PRIVILEGES ON DATABASE lms TO lms;
+\q
+```
+
+**Option 2 — one-liners without opening an interactive session (PowerShell)**
+```powershell
+psql -U postgres -c "CREATE USER lms WITH PASSWORD 'lms';"
+psql -U postgres -c "CREATE DATABASE lms OWNER lms;"
+psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE lms TO lms;"
+```
+
+**Option 3 — pgAdmin (GUI)**
+Right-click **Login/Group Roles → Create → Login/Group Role** (name `lms`, set a password on the Definition tab, enable Login on Privileges), then right-click **Databases → Create → Database** (name `lms`, Owner `lms`).
+
+This must match `packages/database/.env` exactly:
+```
+DATABASE_URL="postgresql://lms:lms@localhost:5432/lms?schema=public"
+#                          ^user ^password  ^host  ^port ^database name
+```
+
+If you're setting this up for a different client/environment, just swap the user, password, and database name consistently in both the `CREATE` commands above and the `DATABASE_URL` — they don't have to be `lms`/`lms`/`lms`.
+
+Once the database and user exist, Prisma takes over from there:
+```powershell
+pnpm db:generate   # generates the Prisma client from schema.prisma
+pnpm db:migrate    # creates all tables inside the new database
+pnpm db:seed       # (optional) loads sample tests/parameters for local dev
+```
+
 ## Quick Start (Development)
 
 ```bash
@@ -55,14 +99,16 @@ pnpm install
 
 # Configure database
 cp packages/database/.env.example packages/database/.env
-# Edit DATABASE_URL as needed
+# Edit DATABASE_URL as needed — see "Database Setup" above to create the DB first
 
 # Generate Prisma client & run migrations
 pnpm db:generate
 pnpm db:migrate
 
-# Start API
-pnpm dev:api
+# Start each app (run each in its own terminal — they run at the same time)
+pnpm dev:api       # NestJS API      → http://localhost:3000
+pnpm dev:web       # Internal LMS UI → http://localhost:5173
+pnpm dev:website   # Public website  → http://localhost:3001
 ```
 
 ## Troubleshooting (Windows / PowerShell)
