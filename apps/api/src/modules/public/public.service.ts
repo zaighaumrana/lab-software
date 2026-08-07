@@ -5,6 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { PatientsService } from '../patients/patients.service';
 import { BookingStatus, BookingSource } from '@lms/database';
 
 function generateBookingCode(): string {
@@ -16,7 +17,10 @@ function generateBookingCode(): string {
 
 @Injectable()
 export class PublicService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly patientsService: PatientsService,
+  ) {}
 
   /** Public rate list — active tests only */
   async listRates(tenantId: string) {
@@ -165,10 +169,14 @@ export class PublicService {
     });
 
     if (!patient) {
+      const { labNumber, mrcNumber } =
+        await this.patientsService.generatePatientIdentifiers(tenantId);
       patient = await this.prisma.patient.create({
         data: {
           tenantId,
           branchId,
+          labNumber,
+          mrcNumber,
           fullName: dto.fullName.trim(),
           phone: dto.phone.trim(),
           smsConsent: true,

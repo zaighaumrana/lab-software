@@ -20,6 +20,16 @@ export class PatientsService {
    * rate; a DB sequence would be the next step up if concurrency ever becomes
    * a real issue.
    */
+  /** Public wrapper so other modules (e.g. online booking) can generate the
+   * same identifiers without duplicating the retry-on-conflict logic. */
+  async generatePatientIdentifiers(tenantId: string) {
+    const [labNumber, mrcNumber] = await Promise.all([
+      this.nextSequentialNumber(tenantId, 'labNumber', 'LAB'),
+      this.nextSequentialNumber(tenantId, 'mrcNumber', 'MRC'),
+    ]);
+    return { labNumber, mrcNumber };
+  }
+
   private async nextSequentialNumber(
     tenantId: string,
     field: 'labNumber' | 'mrcNumber',
