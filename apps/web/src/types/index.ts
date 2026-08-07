@@ -9,6 +9,8 @@ export interface AuthUser {
 
 export interface Patient {
   id: string;
+  labNumber: string;
+  mrcNumber: string;
   fullName: string;
   phone: string;
   phoneAlt?: string | null;

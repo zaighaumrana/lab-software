@@ -14,6 +14,10 @@ export interface PrintLayout {
   phone: string;
   email: string;
   footerText: string;
+  printMode: 'PLAIN' | 'LETTERHEAD';
+  marginTopMm: number;
+  marginBottomMm: number;
+  reportPagination: 'CONTINUOUS' | 'ONE_TEST_PER_PAGE';
 }
 
 export interface StaffUser {

@@ -1,4 +1,4 @@
-import { IsString, IsOptional, MaxLength } from 'class-validator';
+import { IsString, IsOptional, MaxLength, IsEnum, IsInt, Min, Max } from 'class-validator';
 
 export class BrandingDto {
   @IsString()
@@ -19,6 +19,16 @@ export class BrandingDto {
   @IsOptional()
   @IsString()
   logoDataUrl?: string | null;
+}
+
+export enum PrintModeDto {
+  PLAIN = 'PLAIN',
+  LETTERHEAD = 'LETTERHEAD',
+}
+
+export enum ReportPaginationDto {
+  CONTINUOUS = 'CONTINUOUS',
+  ONE_TEST_PER_PAGE = 'ONE_TEST_PER_PAGE',
 }
 
 export class PrintLayoutDto {
@@ -50,4 +60,28 @@ export class PrintLayoutDto {
   @IsString()
   @MaxLength(300)
   footerText?: string;
+
+  /** Plain paper (prints logo/header/footer) vs pre-printed letterhead (dynamic content only). */
+  @IsOptional()
+  @IsEnum(PrintModeDto)
+  printMode?: PrintModeDto;
+
+  /** Top margin in mm, applied to @page — matters most in letterhead mode. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(80)
+  marginTopMm?: number;
+
+  /** Bottom margin in mm, applied to @page — matters most in letterhead mode. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(80)
+  marginBottomMm?: number;
+
+  /** Continuous flow vs one test per printed page. */
+  @IsOptional()
+  @IsEnum(ReportPaginationDto)
+  reportPagination?: ReportPaginationDto;
 }

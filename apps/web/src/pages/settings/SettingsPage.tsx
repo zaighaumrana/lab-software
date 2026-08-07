@@ -6,7 +6,7 @@ import type { StaffUser } from '../../api/settings';
 import { Loading } from '../../components/Loading';
 import { Navigate } from 'react-router-dom';
 
-type Tab = 'users' | 'branding' | 'print';
+type Tab = 'users' | 'branding' | 'print' | 'report-layout';
 
 const ROLES = [
   { value: 'ADMIN', label: 'Admin' },
@@ -147,6 +147,7 @@ export function SettingsPage() {
             ['users', 'Users'],
             ['branding', 'Branding'],
             ['print', 'Print layout'],
+            ['report-layout', 'Report Print Layout'],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -401,6 +402,122 @@ export function SettingsPage() {
           </div>
           <button type="submit" className="btn-primary">
             Save print layout
+          </button>
+        </form>
+      )}
+
+      {tab === 'report-layout' && (
+        <form onSubmit={handlePrint} className="card max-w-xl space-y-5">
+          <div>
+            <h2 className="font-semibold">Report Print Layout</h2>
+            <p className="text-xs text-slate-500">
+              Controls how lab reports (and invoices) are physically printed —
+              independent of what appears on screen.
+            </p>
+          </div>
+
+          <div>
+            <label className="label">Printing mode</label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label
+                className={`cursor-pointer rounded-lg border p-3 text-sm ${
+                  pForm.printMode === 'PLAIN'
+                    ? 'border-brand-500 bg-brand-50'
+                    : 'border-slate-200'
+                }`}
+              >
+                <input
+                  type="radio"
+                  className="mr-2"
+                  checked={pForm.printMode === 'PLAIN'}
+                  onChange={() => setPForm({ ...pForm, printMode: 'PLAIN' })}
+                />
+                <strong>Plain paper</strong>
+                <p className="mt-1 text-xs text-slate-500">
+                  Prints the lab logo, name, header, and footer on every page.
+                </p>
+              </label>
+              <label
+                className={`cursor-pointer rounded-lg border p-3 text-sm ${
+                  pForm.printMode === 'LETTERHEAD'
+                    ? 'border-brand-500 bg-brand-50'
+                    : 'border-slate-200'
+                }`}
+              >
+                <input
+                  type="radio"
+                  className="mr-2"
+                  checked={pForm.printMode === 'LETTERHEAD'}
+                  onChange={() => setPForm({ ...pForm, printMode: 'LETTERHEAD' })}
+                />
+                <strong>Letterhead paper</strong>
+                <p className="mt-1 text-xs text-slate-500">
+                  Skips the logo/header/footer — only patient info, tests, and
+                  results print, positioned inside your pre-printed margins.
+                </p>
+              </label>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="label">Top margin (mm)</label>
+              <input
+                className="input"
+                type="number"
+                min={0}
+                max={80}
+                value={pForm.marginTopMm}
+                onChange={(e) =>
+                  setPForm({ ...pForm, marginTopMm: Number(e.target.value) })
+                }
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Space left blank at the top of every printed page — set this to
+                clear your letterhead's logo/header area.
+              </p>
+            </div>
+            <div>
+              <label className="label">Bottom margin (mm)</label>
+              <input
+                className="input"
+                type="number"
+                min={0}
+                max={80}
+                value={pForm.marginBottomMm}
+                onChange={(e) =>
+                  setPForm({ ...pForm, marginBottomMm: Number(e.target.value) })
+                }
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Space left blank at the bottom — clear your letterhead's footer.
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <label className="label">Report pagination</label>
+            <select
+              className="input"
+              value={pForm.reportPagination}
+              onChange={(e) =>
+                setPForm({
+                  ...pForm,
+                  reportPagination: e.target.value as typeof pForm.reportPagination,
+                })
+              }
+            >
+              <option value="CONTINUOUS">
+                Continuous — tests flow together, new page only when full
+              </option>
+              <option value="ONE_TEST_PER_PAGE">
+                One test per page — each test always starts on its own page
+              </option>
+            </select>
+          </div>
+
+          <button type="submit" className="btn-primary">
+            Save report print layout
           </button>
         </form>
       )}

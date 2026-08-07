@@ -29,6 +29,10 @@ const defaultPrint: PrintLayout = {
   phone: '',
   email: '',
   footerText: 'This document is computer generated.',
+  printMode: 'PLAIN',
+  marginTopMm: 14,
+  marginBottomMm: 14,
+  reportPagination: 'CONTINUOUS',
 };
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);

@@ -29,6 +29,10 @@ const DEFAULT_PRINT = {
   email: '',
   footerText:
     'This document is computer generated. Keep your tracking ID for future reference.',
+  printMode: 'PLAIN' as 'PLAIN' | 'LETTERHEAD',
+  marginTopMm: 14,
+  marginBottomMm: 14,
+  reportPagination: 'CONTINUOUS' as 'CONTINUOUS' | 'ONE_TEST_PER_PAGE',
 };
 
 @Injectable()
@@ -194,6 +198,10 @@ export class SettingsService {
       phone: dto.phone?.trim() || '',
       email: dto.email?.trim() || '',
       footerText: dto.footerText?.trim() || DEFAULT_PRINT.footerText,
+      printMode: dto.printMode || DEFAULT_PRINT.printMode,
+      marginTopMm: dto.marginTopMm ?? DEFAULT_PRINT.marginTopMm,
+      marginBottomMm: dto.marginBottomMm ?? DEFAULT_PRINT.marginBottomMm,
+      reportPagination: dto.reportPagination || DEFAULT_PRINT.reportPagination,
     };
 
     await this.prisma.configuration.upsert({

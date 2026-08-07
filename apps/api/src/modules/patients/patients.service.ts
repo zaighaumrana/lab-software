@@ -14,6 +14,34 @@ export class PatientsService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
+   * Generates a sequential, human-friendly identifier (e.g. LAB-000123) unique
+   * per tenant. Same retry-on-conflict approach as booking code generation
+   * elsewhere in this codebase — fine for a single front-desk's registration
+   * rate; a DB sequence would be the next step up if concurrency ever becomes
+   * a real issue.
+   */
+  private async nextSequentialNumber(
+    tenantId: string,
+    field: 'labNumber' | 'mrcNumber',
+    prefix: string,
+  ): Promise<string> {
+    const count = await this.prisma.patient.count({ where: { tenantId } });
+    let seq = count + 1;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const candidate = `${prefix}-${String(seq).padStart(6, '0')}`;
+      const exists = await this.prisma.patient.findFirst({
+        where: { tenantId, [field]: candidate },
+        select: { id: true },
+      });
+      if (!exists) return candidate;
+      seq++;
+    }
+    throw new ConflictException(
+      `Could not generate a unique ${field === 'labNumber' ? 'lab' : 'MRC'} number, please retry`,
+    );
+  }
+
+  /**
    * Search patients by phone, CNIC, or name.
    * Phone and CNIC are preferred match keys (typo-tolerant name is secondary).
    */
@@ -23,7 +51,7 @@ export class PatientsService {
       throw new BadRequestException('Search query must be at least 2 characters');
     }
 
-    // Exact-ish matches first (phone / CNIC), then fuzzy name
+    // Exact-ish matches first (phone / CNIC / lab / MRC), then fuzzy name
     const patients = await this.prisma.patient.findMany({
       where: {
         tenantId,
@@ -33,6 +61,8 @@ export class PatientsService {
           { cnic: { contains: q } },
           { fullName: { contains: q, mode: 'insensitive' } },
           { mrn: { equals: q } },
+          { labNumber: { contains: q, mode: 'insensitive' } },
+          { mrcNumber: { contains: q, mode: 'insensitive' } },
         ],
       },
       orderBy: [{ updatedAt: 'desc' }],
@@ -100,10 +130,30 @@ export class PatientsService {
       }
     }
 
+    if (dto.mrcNumber) {
+      const existingMrc = await this.prisma.patient.findFirst({
+        where: { tenantId, mrcNumber: dto.mrcNumber.trim() },
+      });
+      if (existingMrc) {
+        throw new ConflictException(
+          `MRC number ${dto.mrcNumber} is already assigned to another patient.`,
+        );
+      }
+    }
+
+    const [labNumber, mrcNumber] = await Promise.all([
+      this.nextSequentialNumber(tenantId, 'labNumber', 'LAB'),
+      dto.mrcNumber
+        ? Promise.resolve(dto.mrcNumber.trim())
+        : this.nextSequentialNumber(tenantId, 'mrcNumber', 'MRC'),
+    ]);
+
     const patient = await this.prisma.patient.create({
       data: {
         tenantId,
         branchId: branchId ?? null,
+        labNumber,
+        mrcNumber,
         fullName: dto.fullName.trim(),
         phone: dto.phone,
         phoneAlt: dto.phoneAlt,
@@ -151,11 +201,27 @@ export class PatientsService {
       }
     }
 
+    if (dto.mrcNumber) {
+      const conflict = await this.prisma.patient.findFirst({
+        where: {
+          tenantId,
+          mrcNumber: dto.mrcNumber.trim(),
+          NOT: { id },
+        },
+      });
+      if (conflict) {
+        throw new ConflictException(
+          `MRC number ${dto.mrcNumber} is already assigned to another patient`,
+        );
+      }
+    }
+
     const data: Prisma.PatientUpdateInput = {};
     if (dto.fullName !== undefined) data.fullName = dto.fullName.trim();
     if (dto.phone !== undefined) data.phone = dto.phone;
     if (dto.phoneAlt !== undefined) data.phoneAlt = dto.phoneAlt;
     if (dto.cnic !== undefined) data.cnic = dto.cnic;
+    if (dto.mrcNumber !== undefined) data.mrcNumber = dto.mrcNumber.trim();
     if (dto.dateOfBirth !== undefined)
       data.dateOfBirth = dto.dateOfBirth ? new Date(dto.dateOfBirth) : null;
     if (dto.gender !== undefined) data.gender = dto.gender;

@@ -23,7 +23,22 @@ export async function createPatient(payload: {
   bloodGroup?: string;
   notes?: string;
   smsConsent?: boolean;
+  mrcNumber?: string;
 }) {
   const { data } = await api.post<Patient>('/patients', payload);
+  return data;
+}
+
+export async function updatePatient(
+  id: string,
+  payload: Partial<{
+    fullName: string;
+    phone: string;
+    phoneAlt: string;
+    cnic: string;
+    mrcNumber: string;
+  }>,
+) {
+  const { data } = await api.patch<Patient>(`/patients/${id}`, payload);
   return data;
 }

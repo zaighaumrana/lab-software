@@ -122,7 +122,9 @@ model Patient {
   id          String    @id @default(cuid())
   tenantId    String
   branchId    String?   // Preferential home branch (optional)
-  mrn         String?   // Medical Record Number (optional internal)
+  mrn         String?   // Medical Record Number (legacy/optional, unused by UI)
+  labNumber   String    // Permanent internal lab ID, e.g. LAB-000123 (visible in-app; never printed)
+  mrcNumber   String    // External outsourcing reference, e.g. MRC-000123 (visible in-app; never printed)
   fullName    String
   phone       String
   phoneAlt    String?
@@ -143,8 +145,12 @@ model Patient {
   companyLinks PatientCompany[]
 
   @@unique([tenantId, phone])
+  @@unique([tenantId, labNumber])
+  @@unique([tenantId, mrcNumber])
   @@index([tenantId, cnic])
   @@index([tenantId, fullName])
+  @@index([tenantId, labNumber])
+  @@index([tenantId, mrcNumber])
   @@index([tenantId])
   @@map("patients")
 }

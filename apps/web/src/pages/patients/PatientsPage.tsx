@@ -48,7 +48,7 @@ export function PatientsPage() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             className="input pl-10"
-            placeholder="Phone, CNIC, or name…"
+            placeholder="Phone, CNIC, name, Lab #, or MRC #…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -76,6 +76,8 @@ export function PatientsPage() {
           <table className="w-full text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
+                <th className="px-4 py-3">Lab #</th>
+                <th className="px-4 py-3">MRC #</th>
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Phone</th>
                 <th className="px-4 py-3">CNIC</th>
@@ -86,6 +88,8 @@ export function PatientsPage() {
             <tbody className="divide-y divide-slate-100">
               {results.map((p) => (
                 <tr key={p.id} className="hover:bg-slate-50">
+                  <td className="px-4 py-3 font-mono text-xs text-slate-600">{p.labNumber}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-slate-600">{p.mrcNumber}</td>
                   <td className="px-4 py-3 font-medium text-slate-900">{p.fullName}</td>
                   <td className="px-4 py-3">{p.phone}</td>
                   <td className="px-4 py-3">{p.cnic || '—'}</td>

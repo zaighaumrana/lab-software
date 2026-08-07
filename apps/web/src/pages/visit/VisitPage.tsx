@@ -352,6 +352,9 @@ export function VisitPage() {
                       <div className="text-xs text-slate-500">
                         {p.phone} {p.cnic ? `· ${p.cnic}` : ''}
                       </div>
+                      <div className="mt-0.5 font-mono text-xs text-slate-400">
+                        Lab #{p.labNumber} · MRC #{p.mrcNumber}
+                      </div>
                     </div>
                     <span className="text-xs text-brand-700">Use this patient →</span>
                   </button>
@@ -472,6 +475,9 @@ export function VisitPage() {
                     <div>
                       <div className="font-medium">{p.fullName}</div>
                       <div className="text-xs text-slate-500">{p.phone}</div>
+                      <div className="mt-0.5 font-mono text-xs text-slate-400">
+                        Lab #{p.labNumber} · MRC #{p.mrcNumber}
+                      </div>
                     </div>
                     <span className="text-xs text-brand-600">Select →</span>
                   </button>
@@ -489,6 +495,9 @@ export function VisitPage() {
             <div>
               <div className="font-medium">{patient.fullName}</div>
               <div className="text-sm text-slate-500">{patient.phone}</div>
+              <div className="font-mono text-xs text-slate-400">
+                Lab #{patient.labNumber} · MRC #{patient.mrcNumber}
+              </div>
             </div>
             <button className="btn-secondary text-xs" onClick={() => setStep('patient')}>
               Change

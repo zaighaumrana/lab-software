@@ -73,4 +73,9 @@ export class CreatePatientDto {
   @IsOptional()
   @IsBoolean()
   smsConsent?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  mrcNumber?: string;
 }
