@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import * as doctorsApi from '../../api/doctors';
 import type { Doctor } from '../../types';
 import { Loading } from '../../components/Loading';
@@ -11,16 +12,16 @@ const emptyForm = {
   email: '',
   specialty: '',
   clinicName: '',
-  commissionType: 'PERCENTAGE' as 'PERCENTAGE' | 'FIXED_AMOUNT' | 'PER_TEST_FIXED',
-  commissionValue: '',
+  shareType: 'PERCENTAGE' as 'PERCENTAGE' | 'FIXED_AMOUNT' | 'PER_TEST_FIXED',
+  shareValue: '',
   notes: '',
   isActive: true,
 };
 
-function commissionLabel(d: Doctor) {
-  if (d.commissionType === 'PERCENTAGE') return `${d.commissionValue}%`;
-  if (d.commissionType === 'PER_TEST_FIXED') return `Rs ${d.commissionValue} / test`;
-  return `Rs ${d.commissionValue} / invoice`;
+function shareLabel(d: Doctor) {
+  if (d.shareType === 'PERCENTAGE') return `${d.shareValue}%`;
+  if (d.shareType === 'PER_TEST_FIXED') return `Rs ${d.shareValue} / test`;
+  return `Rs ${d.shareValue} / invoice`;
 }
 
 export function DoctorsPage() {
@@ -57,8 +58,8 @@ export function DoctorsPage() {
       email: d.email ?? '',
       specialty: d.specialty ?? '',
       clinicName: d.clinicName ?? '',
-      commissionType: d.commissionType as typeof emptyForm.commissionType,
-      commissionValue: String(d.commissionValue ?? ''),
+      shareType: d.shareType as typeof emptyForm.shareType,
+      shareValue: String(d.shareValue ?? ''),
       notes: d.notes ?? '',
       isActive: d.isActive,
     });
@@ -77,8 +78,8 @@ export function DoctorsPage() {
         email: form.email || undefined,
         specialty: form.specialty || undefined,
         clinicName: form.clinicName || undefined,
-        commissionType: form.commissionType,
-        commissionValue: Number(form.commissionValue || 0),
+        shareType: form.shareType,
+        shareValue: Number(form.shareValue || 0),
         notes: form.notes || undefined,
         isActive: form.isActive,
       };
@@ -106,7 +107,7 @@ export function DoctorsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Doctors</h1>
-          <p className="text-sm text-slate-500">Referring doctors & commission rates</p>
+          <p className="text-sm text-slate-500">Referring doctors & share rates</p>
         </div>
         <button className="btn-primary" onClick={showForm ? () => setShowForm(false) : startNew}>
           <Plus className="h-4 w-4" />
@@ -168,14 +169,14 @@ export function DoctorsPage() {
             </div>
             <div />
             <div>
-              <label className="label">Commission model *</label>
+              <label className="label">Share model *</label>
               <select
                 className="input"
-                value={form.commissionType}
+                value={form.shareType}
                 onChange={(e) =>
                   setForm({
                     ...form,
-                    commissionType: e.target.value as typeof emptyForm.commissionType,
+                    shareType: e.target.value as typeof emptyForm.shareType,
                   })
                 }
               >
@@ -186,10 +187,7 @@ export function DoctorsPage() {
             </div>
             <div>
               <label className="label">
-                {form.commissionType === 'PERCENTAGE'
-                  ? 'Commission (%)'
-                  : 'Commission (Rs)'}{' '}
-                *
+                {form.shareType === 'PERCENTAGE' ? 'Share (%)' : 'Share (Rs)'} *
               </label>
               <input
                 className="input"
@@ -197,8 +195,8 @@ export function DoctorsPage() {
                 min={0}
                 step="0.01"
                 required
-                value={form.commissionValue}
-                onChange={(e) => setForm({ ...form, commissionValue: e.target.value })}
+                value={form.shareValue}
+                onChange={(e) => setForm({ ...form, shareValue: e.target.value })}
               />
             </div>
             <div className="sm:col-span-2">
@@ -215,11 +213,11 @@ export function DoctorsPage() {
                 checked={form.isActive}
                 onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
               />
-              Active (eligible for new referrals & commission)
+              Active (eligible for new referrals & share)
             </label>
           </div>
           <p className="text-xs text-slate-500">
-            Commission is calculated automatically whenever an invoice is created for a
+            Share is calculated automatically whenever an invoice is created for a
             booking referred by this doctor, using the model above.
           </p>
           <button type="submit" className="btn-primary" disabled={saving}>
@@ -240,7 +238,7 @@ export function DoctorsPage() {
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Phone</th>
                 <th className="px-4 py-3">Specialty</th>
-                <th className="px-4 py-3">Commission</th>
+                <th className="px-4 py-3">Share</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3"></th>
               </tr>
@@ -251,7 +249,7 @@ export function DoctorsPage() {
                   <td className="px-4 py-3 font-medium">{d.fullName}</td>
                   <td className="px-4 py-3">{d.phone || '—'}</td>
                   <td className="px-4 py-3">{d.specialty || '—'}</td>
-                  <td className="px-4 py-3">{commissionLabel(d)}</td>
+                  <td className="px-4 py-3">{shareLabel(d)}</td>
                   <td className="px-4 py-3">
                     {d.isActive ? (
                       <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">
@@ -264,9 +262,14 @@ export function DoctorsPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button className="btn-secondary text-xs" onClick={() => startEdit(d)}>
-                      Edit
-                    </button>
+                    <div className="flex justify-end gap-2">
+                      <Link to={`/doctors/${d.id}`} className="btn-secondary text-xs">
+                        Dashboard
+                      </Link>
+                      <button className="btn-secondary text-xs" onClick={() => startEdit(d)}>
+                        Edit
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

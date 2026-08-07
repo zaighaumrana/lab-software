@@ -8,7 +8,7 @@ import {
   MaxLength,
 } from 'class-validator';
 
-export enum CommissionTypeDto {
+export enum ShareTypeDto {
   PERCENTAGE = 'PERCENTAGE',
   FIXED_AMOUNT = 'FIXED_AMOUNT',
   PER_TEST_FIXED = 'PER_TEST_FIXED',
@@ -36,13 +36,13 @@ export class CreateDoctorDto {
   clinicName?: string;
 
   @IsOptional()
-  @IsEnum(CommissionTypeDto)
-  commissionType?: CommissionTypeDto;
+  @IsEnum(ShareTypeDto)
+  shareType?: ShareTypeDto;
 
   @IsOptional()
   @IsNumber()
   @Min(0)
-  commissionValue?: number;
+  shareValue?: number;
 
   @IsOptional()
   @IsString()

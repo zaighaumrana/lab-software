@@ -3,7 +3,7 @@
  * Run: pnpm db:seed
  */
 
-import { PrismaClient, Role, CommissionType, ParameterValueType } from '@prisma/client';
+import { PrismaClient, Role, ShareType, ParameterValueType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -260,8 +260,8 @@ async function main() {
       fullName: 'Dr. Ahmed Khan',
       phone: '03009876543',
       specialty: 'General Physician',
-      commissionType: CommissionType.PERCENTAGE,
-      commissionValue: 10,
+      shareType: ShareType.PERCENTAGE,
+      shareValue: 10,
       isActive: true,
     },
   });

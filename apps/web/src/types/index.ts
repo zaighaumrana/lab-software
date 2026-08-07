@@ -80,8 +80,8 @@ export interface Doctor {
   email?: string | null;
   specialty?: string | null;
   clinicName?: string | null;
-  commissionType: string;
-  commissionValue: number | string;
+  shareType: string;
+  shareValue: number | string;
   notes?: string | null;
   isActive: boolean;
 }

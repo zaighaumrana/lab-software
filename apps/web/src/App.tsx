@@ -9,6 +9,8 @@ import { VisitPage } from './pages/visit/VisitPage';
 import { LaboratoryPage } from './pages/laboratory/LaboratoryPage';
 import { CatalogPage } from './pages/catalog/CatalogPage';
 import { DoctorsPage } from './pages/doctors/DoctorsPage';
+import { DoctorDashboardPage } from './pages/doctors/DoctorDashboardPage';
+import { DoctorStatementPrintPage } from './pages/doctors/DoctorStatementPrintPage';
 import { InvoicesPage } from './pages/billing/InvoicesPage';
 import { InvoiceDetailPage } from './pages/billing/InvoiceDetailPage';
 import { InvoicePrintPage } from './pages/billing/InvoicePrintPage';
@@ -48,6 +50,14 @@ function AppRoutes() {
           </Protected>
         }
       />
+      <Route
+        path="/doctors/:id/statement/print"
+        element={
+          <Protected>
+            <DoctorStatementPrintPage />
+          </Protected>
+        }
+      />
 
       <Route
         path="/"
@@ -67,6 +77,7 @@ function AppRoutes() {
         <Route path="reports/:id" element={<ReportPrintPage />} />
         <Route path="catalog" element={<CatalogPage />} />
         <Route path="doctors" element={<DoctorsPage />} />
+        <Route path="doctors/:id" element={<DoctorDashboardPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

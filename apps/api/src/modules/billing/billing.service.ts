@@ -12,8 +12,8 @@ import {
   PaymentStatus,
   PaymentMethod,
   BookingStatus,
-  CommissionType,
-  CommissionStatus,
+  ShareType,
+  ShareStatus,
   Prisma,
   Decimal,
 } from '@lms/database';
@@ -233,33 +233,33 @@ export class BillingService {
         data: { status: BookingStatus.CONVERTED },
       });
 
-      // Doctor commission — calculated once per invoice, snapshotting the
+      // Doctor share — calculated once per invoice, snapshotting the
       // doctor's rate/model at the time of billing so later rate changes
-      // don't retroactively alter historical commissions.
+      // don't retroactively alter historical shares.
       if (booking.doctorId && booking.doctor?.isActive) {
         const doctor = booking.doctor;
         const testLineCount = resolvedLines.filter((l) => l.testId).length;
 
         let calculatedAmount = new Decimal(0);
-        if (doctor.commissionType === CommissionType.PERCENTAGE) {
-          calculatedAmount = grandTotal.mul(doctor.commissionValue).div(100);
-        } else if (doctor.commissionType === CommissionType.FIXED_AMOUNT) {
-          calculatedAmount = new Decimal(doctor.commissionValue);
-        } else if (doctor.commissionType === CommissionType.PER_TEST_FIXED) {
-          calculatedAmount = new Decimal(doctor.commissionValue).mul(
+        if (doctor.shareType === ShareType.PERCENTAGE) {
+          calculatedAmount = grandTotal.mul(doctor.shareValue).div(100);
+        } else if (doctor.shareType === ShareType.FIXED_AMOUNT) {
+          calculatedAmount = new Decimal(doctor.shareValue);
+        } else if (doctor.shareType === ShareType.PER_TEST_FIXED) {
+          calculatedAmount = new Decimal(doctor.shareValue).mul(
             testLineCount || 1,
           );
         }
 
         if (calculatedAmount.greaterThan(0)) {
-          await tx.doctorCommission.create({
+          await tx.doctorShare.create({
             data: {
               tenantId,
               doctorId: doctor.id,
               invoiceId: inv.id,
-              status: CommissionStatus.CALCULATED,
-              commissionType: doctor.commissionType,
-              rateOrAmount: doctor.commissionValue,
+              status: ShareStatus.CALCULATED,
+              shareType: doctor.shareType,
+              rateOrAmount: doctor.shareValue,
               calculatedAmount,
             },
           });
@@ -269,7 +269,7 @@ export class BillingService {
       return inv;
     });
 
-    // TODO: raise InvoiceIssued domain event (commission calculation is done above)
+    // TODO: raise InvoiceIssued domain event (doctor share calculation is done above)
     return invoice;
   }
 

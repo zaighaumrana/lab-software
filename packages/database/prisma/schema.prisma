@@ -37,7 +37,7 @@ model Tenant {
   results  Result[]
   reports  Report[]
   notifications Notification[]
-  commissions DoctorCommission[]
+  shares DoctorShare[]
   auditLogs AuditLog[]
   syncOutbox SyncOutbox[]
   featureFlags FeatureFlag[]
@@ -174,8 +174,8 @@ model Doctor {
   email           String?
   specialty       String?
   clinicName      String?
-  commissionType  CommissionType @default(PERCENTAGE)
-  commissionValue Decimal  @db.Decimal(10, 2) // % or fixed amount
+  shareType       ShareType @default(PERCENTAGE)
+  shareValue      Decimal  @db.Decimal(10, 2) // % or fixed amount
   isActive        Boolean  @default(true)
   notes           String?
   createdAt       DateTime @default(now())
@@ -183,13 +183,13 @@ model Doctor {
 
   tenant      Tenant             @relation(fields: [tenantId], references: [id])
   bookings    Booking[]
-  commissions DoctorCommission[]
+  shares DoctorShare[]
 
   @@index([tenantId])
   @@map("doctors")
 }
 
-enum CommissionType {
+enum ShareType {
   PERCENTAGE
   FIXED_AMOUNT
   PER_TEST_FIXED
@@ -484,7 +484,7 @@ model Invoice {
   payments Payment[]
   samples  Sample[]
   report   Report?
-  commissions DoctorCommission[]
+  shares DoctorShare[]
 
   @@unique([tenantId, invoiceNumber])
   @@index([tenantId, status])
@@ -716,10 +716,10 @@ model Report {
 }
 
 // =============================================================================
-// DOCTOR COMMISSION
+// DOCTOR SHARE
 // =============================================================================
 
-enum CommissionStatus {
+enum ShareStatus {
   CALCULATED
   PAYABLE
   PAID
@@ -728,13 +728,13 @@ enum CommissionStatus {
   SETTLED
 }
 
-model DoctorCommission {
+model DoctorShare {
   id              String           @id @default(cuid())
   tenantId        String
   doctorId        String
   invoiceId       String
-  status          CommissionStatus @default(CALCULATED)
-  commissionType  CommissionType
+  status          ShareStatus @default(CALCULATED)
+  shareType       ShareType
   rateOrAmount    Decimal          @db.Decimal(10, 2) // Snapshotted
   calculatedAmount Decimal         @db.Decimal(12, 2)
   paidAmount      Decimal?         @db.Decimal(12, 2)
@@ -752,7 +752,7 @@ model DoctorCommission {
 
   @@index([tenantId, doctorId])
   @@index([invoiceId])
-  @@map("doctor_commissions")
+  @@map("doctor_shares")
 }
 
 // =============================================================================
