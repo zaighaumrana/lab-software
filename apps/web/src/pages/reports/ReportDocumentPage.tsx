@@ -4,6 +4,7 @@ import * as reportsApi from '../../api/reports';
 import * as billingApi from '../../api/billing';
 import type { Report, Patient } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';
+import { PrintFrame, useIsLetterhead, useReportPagination } from '../../print/PrintFrame';
 import { Loading } from '../../components/Loading';
 import '../../styles/print-document.css';
 
@@ -17,6 +18,11 @@ type PrintLayout = ReturnType<typeof useSettings>['printLayout'];
 /**
  * Header + patient/payment strip repeated at the top of every printed page.
  * Only the results table below it changes page to page.
+ *
+ * In Letterhead mode the lab's own logo/name/address/contact block is
+ * skipped entirely (that's already printed on the physical paper) — only
+ * dynamic, per-report content (tracking ID, report number, patient/payment
+ * info) still renders.
  */
 function ReportPageHeader({
   report,
@@ -26,6 +32,7 @@ function ReportPageHeader({
   labName,
   branding,
   printLayout,
+  letterhead,
 }: {
   report: Report;
   inv: Report['invoice'];
@@ -34,25 +41,30 @@ function ReportPageHeader({
   labName: string;
   branding: Branding;
   printLayout: PrintLayout;
+  letterhead: boolean;
 }) {
   return (
     <>
       <header className="print-doc-header">
-        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-          {branding.logoDataUrl && (
-            <img src={branding.logoDataUrl} alt="" className="print-doc-logo" />
-          )}
-          <div>
-            <h1 className="print-doc-lab-name">{labName}</h1>
-            {printLayout.labNumber && (
-              <p className="print-doc-meta">Lab / Reg. No: {printLayout.labNumber}</p>
+        {letterhead ? (
+          <div />
+        ) : (
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            {branding.logoDataUrl && (
+              <img src={branding.logoDataUrl} alt="" className="print-doc-logo" />
             )}
-            {printLayout.address && <p className="print-doc-meta">{printLayout.address}</p>}
-            <p className="print-doc-meta">
-              {[printLayout.phone, printLayout.email].filter(Boolean).join('  ·  ')}
-            </p>
+            <div>
+              <h1 className="print-doc-lab-name">{labName}</h1>
+              {printLayout.labNumber && (
+                <p className="print-doc-meta">Lab / Reg. No: {printLayout.labNumber}</p>
+              )}
+              {printLayout.address && <p className="print-doc-meta">{printLayout.address}</p>}
+              <p className="print-doc-meta">
+                {[printLayout.phone, printLayout.email].filter(Boolean).join('  ·  ')}
+              </p>
+            </div>
           </div>
-        </div>
+        )}
         <div style={{ textAlign: 'right' }}>
           <div className="print-doc-label">Tracking ID</div>
           <div className="code" style={{ fontSize: '14pt', fontWeight: 700, letterSpacing: '0.1em' }}>
@@ -104,10 +116,24 @@ function ReportPageHeader({
   );
 }
 
-function ReportPageFooter({ printLayout, due }: { printLayout: PrintLayout; due: number }) {
+/**
+ * In Letterhead mode the boilerplate disclaimer text is skipped (the
+ * physical letterhead already has its own footer) — only the outstanding
+ * balance note, which is dynamic per-report content, still prints.
+ */
+function ReportPageFooter({
+  printLayout,
+  due,
+  letterhead,
+}: {
+  printLayout: PrintLayout;
+  due: number;
+  letterhead: boolean;
+}) {
   return (
     <footer className="print-doc-footer">
-      {printLayout.footerText || 'Computer-generated report. Quote tracking ID for any enquiry.'}
+      {!letterhead &&
+        (printLayout.footerText || 'Computer-generated report. Quote tracking ID for any enquiry.')}
       {due > 0 && (
         <div style={{ marginTop: 6, fontWeight: 600 }}>Outstanding balance: {money(due)}</div>
       )}
@@ -118,6 +144,8 @@ function ReportPageFooter({ printLayout, due }: { printLayout: PrintLayout; due:
 export function ReportDocumentPage() {
   const { id } = useParams<{ id: string }>();
   const { branding, printLayout } = useSettings();
+  const letterhead = useIsLetterhead();
+  const pagination = useReportPagination();
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -183,6 +211,7 @@ export function ReportDocumentPage() {
     inv?.samples?.flatMap((s) => s.results ?? []).filter((r) => r.status === 'RELEASED') ?? [];
 
   return (
+    <PrintFrame>
     <div className="print-doc-root">
       <div className="print-doc-toolbar no-print">
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -267,16 +296,70 @@ export function ReportDocumentPage() {
             labName={labName}
             branding={branding}
             printLayout={printLayout}
+            letterhead={letterhead}
           />
           <p style={{ fontSize: '10pt', color: '#555' }}>No released results yet.</p>
-          <ReportPageFooter printLayout={printLayout} due={due} />
+          <ReportPageFooter printLayout={printLayout} due={due} letterhead={letterhead} />
         </article>
       )}
 
-      {/* One full page per test — header/patient/payment strip repeats on every
-       * page, only the parameter table below it changes. */}
-      {results.map((r) => (
-        <article key={r.id} className="print-doc print-doc-page">
+      {results.length > 0 && pagination === 'ONE_TEST_PER_PAGE' && (
+        // One full page per test — header/patient/payment strip repeats on
+        // every page, only the parameter table below it changes.
+        results.map((r) => (
+          <article key={r.id} className="print-doc print-doc-page">
+            <ReportPageHeader
+              report={report}
+              inv={inv}
+              patient={patient}
+              due={due}
+              labName={labName}
+              branding={branding}
+              printLayout={printLayout}
+              letterhead={letterhead}
+            />
+            <div className="print-doc-test-block">
+              <div className="print-doc-section">
+                {r.test?.code} — {r.test?.name}
+                {r.isCritical && (
+                  <span className="print-doc-critical" style={{ marginLeft: 8, fontSize: '9pt' }}>
+                    CRITICAL
+                  </span>
+                )}
+              </div>
+              <table className="print-doc-table">
+                <thead>
+                  <tr>
+                    <th>Parameter</th>
+                    <th>Result</th>
+                    <th>Unit</th>
+                    <th>Flag</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(r.values ?? [])
+                    .slice()
+                    .sort((a, b) => (a.parameter?.sortOrder ?? 0) - (b.parameter?.sortOrder ?? 0))
+                    .map((v) => (
+                      <tr key={v.id} className={v.isCritical ? 'print-doc-critical' : undefined}>
+                        <td>{v.parameter?.name ?? v.parameter?.code ?? '—'}</td>
+                        <td>{v.valueNumeric != null ? String(v.valueNumeric) : v.valueText ?? '—'}</td>
+                        <td>{v.unit ?? v.parameter?.unit ?? ''}</td>
+                        <td style={{ fontSize: '8pt' }}>{v.flag ? v.flag.replace(/_/g, ' ') : ''}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+            <ReportPageFooter printLayout={printLayout} due={due} letterhead={letterhead} />
+          </article>
+        ))
+      )}
+
+      {results.length > 0 && pagination === 'CONTINUOUS' && (
+        // Header once, then every test flows continuously — a new physical
+        // page only starts once the current one is full.
+        <article className="print-doc">
           <ReportPageHeader
             report={report}
             inv={inv}
@@ -285,45 +368,47 @@ export function ReportDocumentPage() {
             labName={labName}
             branding={branding}
             printLayout={printLayout}
+            letterhead={letterhead}
           />
-
-          <div style={{ marginBottom: 16 }}>
-            <div className="print-doc-section">
-              {r.test?.code} — {r.test?.name}
-              {r.isCritical && (
-                <span className="print-doc-critical" style={{ marginLeft: 8, fontSize: '9pt' }}>
-                  CRITICAL
-                </span>
-              )}
+          {results.map((r) => (
+            <div key={r.id} className="print-doc-test-block">
+              <div className="print-doc-section">
+                {r.test?.code} — {r.test?.name}
+                {r.isCritical && (
+                  <span className="print-doc-critical" style={{ marginLeft: 8, fontSize: '9pt' }}>
+                    CRITICAL
+                  </span>
+                )}
+              </div>
+              <table className="print-doc-table">
+                <thead>
+                  <tr>
+                    <th>Parameter</th>
+                    <th>Result</th>
+                    <th>Unit</th>
+                    <th>Flag</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(r.values ?? [])
+                    .slice()
+                    .sort((a, b) => (a.parameter?.sortOrder ?? 0) - (b.parameter?.sortOrder ?? 0))
+                    .map((v) => (
+                      <tr key={v.id} className={v.isCritical ? 'print-doc-critical' : undefined}>
+                        <td>{v.parameter?.name ?? v.parameter?.code ?? '—'}</td>
+                        <td>{v.valueNumeric != null ? String(v.valueNumeric) : v.valueText ?? '—'}</td>
+                        <td>{v.unit ?? v.parameter?.unit ?? ''}</td>
+                        <td style={{ fontSize: '8pt' }}>{v.flag ? v.flag.replace(/_/g, ' ') : ''}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
             </div>
-            <table className="print-doc-table">
-              <thead>
-                <tr>
-                  <th>Parameter</th>
-                  <th>Result</th>
-                  <th>Unit</th>
-                  <th>Flag</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(r.values ?? [])
-                  .slice()
-                  .sort((a, b) => (a.parameter?.sortOrder ?? 0) - (b.parameter?.sortOrder ?? 0))
-                  .map((v) => (
-                    <tr key={v.id} className={v.isCritical ? 'print-doc-critical' : undefined}>
-                      <td>{v.parameter?.name ?? v.parameter?.code ?? '—'}</td>
-                      <td>{v.valueNumeric != null ? String(v.valueNumeric) : v.valueText ?? '—'}</td>
-                      <td>{v.unit ?? v.parameter?.unit ?? ''}</td>
-                      <td style={{ fontSize: '8pt' }}>{v.flag ? v.flag.replace(/_/g, ' ') : ''}</td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-
-          <ReportPageFooter printLayout={printLayout} due={due} />
+          ))}
+          <ReportPageFooter printLayout={printLayout} due={due} letterhead={letterhead} />
         </article>
-      ))}
+      )}
     </div>
+    </PrintFrame>
   );
 }

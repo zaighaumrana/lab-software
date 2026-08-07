@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import * as billingApi from '../../api/billing';
 import type { Invoice } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';
+import { PrintFrame, useIsLetterhead } from '../../print/PrintFrame';
 import { Loading } from '../../components/Loading';
 import '../../styles/print-document.css';
 
@@ -13,6 +14,7 @@ function money(n: number | string | undefined) {
 export function InvoicePrintPage() {
   const { id } = useParams<{ id: string }>();
   const { branding, printLayout } = useSettings();
+  const letterhead = useIsLetterhead();
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -41,6 +43,7 @@ export function InvoicePrintPage() {
   const labName = printLayout.labName || branding.labName;
 
   return (
+    <PrintFrame>
     <div className="print-doc-root">
       <div className="print-doc-toolbar no-print">
         <Link to={`/invoices/${invoice.id}`} className="btn-secondary text-sm">
@@ -53,23 +56,27 @@ export function InvoicePrintPage() {
 
       <article className="print-doc">
         <header className="print-doc-header">
-          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-            {branding.logoDataUrl && (
-              <img src={branding.logoDataUrl} alt="" className="print-doc-logo" />
-            )}
-            <div>
-              <h1 className="print-doc-lab-name">{labName}</h1>
-              {printLayout.labNumber && (
-                <p className="print-doc-meta">Lab / Reg. No: {printLayout.labNumber}</p>
+          {letterhead ? (
+            <div />
+          ) : (
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              {branding.logoDataUrl && (
+                <img src={branding.logoDataUrl} alt="" className="print-doc-logo" />
               )}
-              {printLayout.address && (
-                <p className="print-doc-meta">{printLayout.address}</p>
-              )}
-              <p className="print-doc-meta">
-                {[printLayout.phone, printLayout.email].filter(Boolean).join('  ·  ')}
-              </p>
+              <div>
+                <h1 className="print-doc-lab-name">{labName}</h1>
+                {printLayout.labNumber && (
+                  <p className="print-doc-meta">Lab / Reg. No: {printLayout.labNumber}</p>
+                )}
+                {printLayout.address && (
+                  <p className="print-doc-meta">{printLayout.address}</p>
+                )}
+                <p className="print-doc-meta">
+                  {[printLayout.phone, printLayout.email].filter(Boolean).join('  ·  ')}
+                </p>
+              </div>
             </div>
-          </div>
+          )}
           <div style={{ textAlign: 'right', fontSize: '10pt' }}>
             <div style={{ fontWeight: 700 }}>{invoice.invoiceNumber}</div>
             <div>
@@ -188,10 +195,12 @@ export function InvoicePrintPage() {
         )}
 
         <footer className="print-doc-footer">
-          {printLayout.footerText ||
-            'Computer-generated receipt. Present this for report collection.'}
+          {!letterhead &&
+            (printLayout.footerText ||
+              'Computer-generated receipt. Present this for report collection.')}
         </footer>
       </article>
     </div>
+    </PrintFrame>
   );
 }

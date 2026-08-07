@@ -210,10 +210,9 @@
     padding: 0;
   }
 
-  @page {
-    size: A4;
-    margin: 14mm 12mm;
-  }
+  /* Page size/margins are injected at runtime by <PrintFrame> from admin
+   * settings (Report Print Layout) — not hardcoded here, since they're
+   * configurable per-lab (plain paper vs letterhead). */
 
   /* One page per test — repeats the header/patient block, only the
    * results table differs. Last page shouldn't force a trailing blank page. */
@@ -225,6 +224,13 @@
   .print-doc-page:last-of-type {
     break-after: auto;
     page-break-after: auto;
+  }
+
+  /* Continuous pagination mode: each test's block stays together where
+   * possible, but does not force a new physical page. */
+  .print-doc-test-block {
+    break-inside: avoid-page;
+    margin-bottom: 16px;
   }
 
   .print-doc-table,
