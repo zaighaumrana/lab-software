@@ -5,7 +5,7 @@ CREATE TYPE "Role" AS ENUM ('ADMIN', 'RECEPTION', 'SAMPLE_COLLECTOR', 'LAB_TECH'
 CREATE TYPE "Gender" AS ENUM ('MALE', 'FEMALE', 'OTHER', 'UNKNOWN');
 
 -- CreateEnum
-CREATE TYPE "CommissionType" AS ENUM ('PERCENTAGE', 'FIXED_AMOUNT', 'PER_TEST_FIXED');
+CREATE TYPE "ShareType" AS ENUM ('PERCENTAGE', 'FIXED_AMOUNT', 'PER_TEST_FIXED');
 
 -- CreateEnum
 CREATE TYPE "CorporateBillingMode" AS ENUM ('COMPANY_PAYS_ALL', 'SPLIT_COPAY', 'EMPLOYEE_PAYS');
@@ -44,7 +44,7 @@ CREATE TYPE "ResultFlag" AS ENUM ('NORMAL', 'LOW', 'HIGH', 'CRITICAL_LOW', 'CRIT
 CREATE TYPE "ReportStatus" AS ENUM ('PENDING', 'PARTIAL_READY', 'COMPLETE', 'AMENDED', 'ARCHIVED');
 
 -- CreateEnum
-CREATE TYPE "CommissionStatus" AS ENUM ('CALCULATED', 'PAYABLE', 'PAID', 'REVERSED', 'CLAWBACK_PENDING', 'SETTLED');
+CREATE TYPE "ShareStatus" AS ENUM ('CALCULATED', 'PAYABLE', 'PAID', 'REVERSED', 'CLAWBACK_PENDING', 'SETTLED');
 
 -- CreateEnum
 CREATE TYPE "NotificationChannel" AS ENUM ('SMS', 'WHATSAPP', 'EMAIL');
@@ -134,8 +134,8 @@ CREATE TABLE "doctors" (
     "email" TEXT,
     "specialty" TEXT,
     "clinicName" TEXT,
-    "commissionType" "CommissionType" NOT NULL DEFAULT 'PERCENTAGE',
-    "commissionValue" DECIMAL(10,2) NOT NULL,
+    "shareType" "ShareType" NOT NULL DEFAULT 'PERCENTAGE',
+    "shareValue" DECIMAL(10,2) NOT NULL,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "notes" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -445,13 +445,13 @@ CREATE TABLE "reports" (
 );
 
 -- CreateTable
-CREATE TABLE "doctor_commissions" (
+CREATE TABLE "doctor_shares" (
     "id" TEXT NOT NULL,
     "tenantId" TEXT NOT NULL,
     "doctorId" TEXT NOT NULL,
     "invoiceId" TEXT NOT NULL,
-    "status" "CommissionStatus" NOT NULL DEFAULT 'CALCULATED',
-    "commissionType" "CommissionType" NOT NULL,
+    "status" "ShareStatus" NOT NULL DEFAULT 'CALCULATED',
+    "shareType" "ShareType" NOT NULL,
     "rateOrAmount" DECIMAL(10,2) NOT NULL,
     "calculatedAmount" DECIMAL(12,2) NOT NULL,
     "paidAmount" DECIMAL(12,2),
@@ -463,7 +463,7 @@ CREATE TABLE "doctor_commissions" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "doctor_commissions_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "doctor_shares_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -713,10 +713,10 @@ CREATE UNIQUE INDEX "reports_tenantId_reportNumber_key" ON "reports"("tenantId",
 CREATE UNIQUE INDEX "reports_tenantId_trackingId_key" ON "reports"("tenantId", "trackingId");
 
 -- CreateIndex
-CREATE INDEX "doctor_commissions_tenantId_doctorId_idx" ON "doctor_commissions"("tenantId", "doctorId");
+CREATE INDEX "doctor_shares_tenantId_doctorId_idx" ON "doctor_shares"("tenantId", "doctorId");
 
 -- CreateIndex
-CREATE INDEX "doctor_commissions_invoiceId_idx" ON "doctor_commissions"("invoiceId");
+CREATE INDEX "doctor_shares_invoiceId_idx" ON "doctor_shares"("invoiceId");
 
 -- CreateIndex
 CREATE INDEX "notifications_tenantId_status_idx" ON "notifications"("tenantId", "status");
@@ -869,13 +869,13 @@ ALTER TABLE "reports" ADD CONSTRAINT "reports_branchId_fkey" FOREIGN KEY ("branc
 ALTER TABLE "reports" ADD CONSTRAINT "reports_invoiceId_fkey" FOREIGN KEY ("invoiceId") REFERENCES "invoices"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "doctor_commissions" ADD CONSTRAINT "doctor_commissions_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "doctor_shares" ADD CONSTRAINT "doctor_shares_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "doctor_commissions" ADD CONSTRAINT "doctor_commissions_doctorId_fkey" FOREIGN KEY ("doctorId") REFERENCES "doctors"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "doctor_shares" ADD CONSTRAINT "doctor_shares_doctorId_fkey" FOREIGN KEY ("doctorId") REFERENCES "doctors"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "doctor_commissions" ADD CONSTRAINT "doctor_commissions_invoiceId_fkey" FOREIGN KEY ("invoiceId") REFERENCES "invoices"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "doctor_shares" ADD CONSTRAINT "doctor_shares_invoiceId_fkey" FOREIGN KEY ("invoiceId") REFERENCES "invoices"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "notifications" ADD CONSTRAINT "notifications_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
