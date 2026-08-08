@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { UserPlus, FlaskConical, TestTube, BookOpen } from 'lucide-react';
 import * as analyticsApi from '../../api/analytics';
-import type { FinancialOverview, OperationalOverview } from '../../api/analytics';
+import type { FinancialOverview, OperationalOverview, DoctorShareOverview } from '../../api/analytics';
 import { KpiCard } from '../../dashboard/widgets/KpiCard';
+import { TopDoctorsTable } from '../../dashboard/widgets/TopDoctorsTable';
 import { DateRangeFilter, presetToRange } from '../../dashboard/DateRangeFilter';
 import type { DateRangeValue } from '../../dashboard/DateRangeFilter';
 
@@ -24,6 +25,7 @@ export function DashboardPage() {
   const [range, setRange] = useState<DateRangeValue>({ preset: 'month', ...presetToRange('month') });
   const [financial, setFinancial] = useState<FinancialOverview | null>(null);
   const [operational, setOperational] = useState<OperationalOverview | null>(null);
+  const [doctorShare, setDoctorShare] = useState<DoctorShareOverview | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,10 +33,12 @@ export function DashboardPage() {
     Promise.all([
       analyticsApi.getFinancialOverview({ from: range.from, to: range.to }),
       analyticsApi.getOperationalOverview({ from: range.from, to: range.to }),
+      analyticsApi.getDoctorShareOverview({ from: range.from, to: range.to }),
     ])
-      .then(([f, o]) => {
+      .then(([f, o, d]) => {
         setFinancial(f);
         setOperational(o);
+        setDoctorShare(d);
       })
       .finally(() => setLoading(false));
   }, [range.from, range.to]);
@@ -126,6 +130,25 @@ export function DashboardPage() {
             loading={loading}
           />
         </div>
+      </div>
+
+      {/* Doctor Share — same date filter as Financial Overview */}
+      <div className="space-y-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+          Doctor Share
+        </h2>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <KpiCard label="Total Share Payable" value={money(doctorShare?.totalSharePayable)} loading={loading} />
+          <KpiCard label="Total Share Paid" value={money(doctorShare?.totalSharePaid)} tone="good" loading={loading} />
+          <KpiCard
+            label="Pending Share"
+            value={money(doctorShare?.pendingShare)}
+            tone={doctorShare && doctorShare.pendingShare > 0 ? 'warning' : 'default'}
+            hint="Snapshot as of now, not date-filtered"
+            loading={loading}
+          />
+        </div>
+        <TopDoctorsTable rows={doctorShare?.topReferringDoctors ?? []} loading={loading} />
       </div>
 
       <div className="card">

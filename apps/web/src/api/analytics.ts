@@ -38,6 +38,34 @@ export async function getOperationalOverview(params: DateRangeParams = {}) {
   return data;
 }
 
+export interface TopDoctorRow {
+  doctorId: string;
+  doctorName: string;
+  patientsReferred: number;
+  revenueGenerated: number;
+  totalShare: number;
+}
+
+export interface ShareTrendPoint {
+  date: string;
+  totalShare: number;
+}
+
+export interface DoctorShareOverview {
+  totalSharePayable: number;
+  totalSharePaid: number;
+  pendingShare: number;
+  topReferringDoctors: TopDoctorRow[];
+  shareTrend: ShareTrendPoint[];
+}
+
+export async function getDoctorShareOverview(params: DateRangeParams = {}) {
+  const { data } = await api.get<DoctorShareOverview>('/analytics/dashboard/doctor-share', {
+    params,
+  });
+  return data;
+}
+
 export async function getWidget(widgetId: string, params: DateRangeParams = {}) {
   const { data } = await api.get(`/analytics/widgets/${widgetId}`, { params });
   return data as { widgetId: string; range: DateRangeParams; value: unknown };

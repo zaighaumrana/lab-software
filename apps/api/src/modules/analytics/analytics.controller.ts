@@ -57,4 +57,13 @@ export class AnalyticsController {
   ) {
     return this.analyticsService.getOperationalOverview(user.tenantId, parseRange(from, to));
   }
+
+  @Get('dashboard/doctor-share')
+  async doctorShare(
+    @CurrentUser() user: AuthUser,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.analyticsService.getDoctorShareOverview(user.tenantId, parseRange(from, to));
+  }
 }

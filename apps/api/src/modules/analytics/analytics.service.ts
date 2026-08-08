@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import * as financial from './queries/financial.queries';
 import * as operational from './queries/operational.queries';
+import * as doctorShare from './queries/doctor-share.queries';
 import type { DateRange } from './queries/financial.queries';
 
 /**
@@ -27,6 +28,12 @@ const WIDGETS: Record<string, WidgetFn> = {
   'ops.reportsReady': (p, t) => operational.getReportsReady(p, t),
   'ops.criticalAwaitingReview': (p, t) => operational.getCriticalAwaitingReview(p, t),
   'ops.avgTurnaroundTimeHours': (p, t, r) => operational.getAvgTurnaroundTimeHours(p, t, r),
+
+  'doctorShare.totalPayable': (p, t, r) => doctorShare.getTotalSharePayable(p, t, r),
+  'doctorShare.totalPaid': (p, t, r) => doctorShare.getTotalSharePaid(p, t, r),
+  'doctorShare.pending': (p, t) => doctorShare.getPendingShare(p, t),
+  'doctorShare.topReferring': (p, t, r) => doctorShare.getTopReferringDoctors(p, t, r),
+  'doctorShare.trend': (p, t, r) => doctorShare.getDoctorShareTrend(p, t, r),
 };
 
 @Injectable()
@@ -50,5 +57,9 @@ export class AnalyticsService {
 
   async getOperationalOverview(tenantId: string, range: DateRange) {
     return operational.getOperationalOverview(this.prisma, tenantId, range);
+  }
+
+  async getDoctorShareOverview(tenantId: string, range: DateRange) {
+    return doctorShare.getDoctorShareOverview(this.prisma, tenantId, range);
   }
 }
