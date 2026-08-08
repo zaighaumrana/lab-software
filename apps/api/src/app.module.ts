@@ -12,6 +12,7 @@ import { DoctorsModule } from './modules/doctors/doctors.module';
 import { PublicModule } from './modules/public/public.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     PublicModule,
     SettingsModule,
     NotificationsModule,
+    AnalyticsModule,
   ],
 })
 export class AppModule {}

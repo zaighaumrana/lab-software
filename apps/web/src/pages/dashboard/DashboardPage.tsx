@@ -1,6 +1,12 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { UserPlus, FlaskConical, TestTube, BookOpen } from 'lucide-react';
+import * as analyticsApi from '../../api/analytics';
+import type { FinancialOverview, OperationalOverview } from '../../api/analytics';
+import { KpiCard } from '../../dashboard/widgets/KpiCard';
+import { DateRangeFilter, presetToRange } from '../../dashboard/DateRangeFilter';
+import type { DateRangeValue } from '../../dashboard/DateRangeFilter';
 
 const QUICK = [
   { to: '/patients', label: 'Find / Register Patient', icon: UserPlus, color: 'bg-blue-50 text-blue-700' },
@@ -9,11 +15,32 @@ const QUICK = [
   { to: '/catalog', label: 'Test Catalog', icon: BookOpen, color: 'bg-amber-50 text-amber-700' },
 ];
 
+function money(n: number | undefined) {
+  return `Rs ${Number(n ?? 0).toLocaleString('en-PK')}`;
+}
+
 export function DashboardPage() {
   const { user } = useAuth();
+  const [range, setRange] = useState<DateRangeValue>({ preset: 'month', ...presetToRange('month') });
+  const [financial, setFinancial] = useState<FinancialOverview | null>(null);
+  const [operational, setOperational] = useState<OperationalOverview | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([
+      analyticsApi.getFinancialOverview({ from: range.from, to: range.to }),
+      analyticsApi.getOperationalOverview({ from: range.from, to: range.to }),
+    ])
+      .then(([f, o]) => {
+        setFinancial(f);
+        setOperational(o);
+      })
+      .finally(() => setLoading(false));
+  }, [range.from, range.to]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
         <p className="text-sm text-slate-500">
@@ -34,6 +61,71 @@ export function DashboardPage() {
             <span className="font-medium text-slate-800">{item.label}</span>
           </Link>
         ))}
+      </div>
+
+      {/* Operational — point-in-time queue depths, always "right now" regardless of the date filter below */}
+      <div className="space-y-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+          Operational — right now
+        </h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <KpiCard label="Today's Patients" value={String(operational?.todayPatients ?? 0)} loading={loading} />
+          <KpiCard label="Samples Collected Today" value={String(operational?.samplesCollected ?? 0)} loading={loading} />
+          <KpiCard label="Tests In Progress" value={String(operational?.testsInProgress ?? 0)} loading={loading} />
+          <KpiCard
+            label="Pending Verification"
+            value={String(operational?.pendingVerification ?? 0)}
+            tone={operational && operational.pendingVerification > 0 ? 'warning' : 'default'}
+            loading={loading}
+          />
+          <KpiCard label="Reports Ready" value={String(operational?.reportsReady ?? 0)} tone="good" loading={loading} />
+          <KpiCard
+            label="Critical Awaiting Review"
+            value={String(operational?.criticalAwaitingReview ?? 0)}
+            tone={operational && operational.criticalAwaitingReview > 0 ? 'bad' : 'default'}
+            loading={loading}
+          />
+          <KpiCard
+            label="Avg. Turnaround Time"
+            value={
+              operational?.avgTurnaroundTimeHours != null
+                ? `${operational.avgTurnaroundTimeHours} hrs`
+                : '—'
+            }
+            hint="Invoice creation → report generated, for reports in the selected range"
+            loading={loading}
+          />
+        </div>
+      </div>
+
+      {/* Financial Overview — respects the date filter */}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+            Financial Overview
+          </h2>
+          <DateRangeFilter value={range} onChange={setRange} />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <KpiCard label="Invoiced Revenue" value={money(financial?.invoicedRevenue)} loading={loading} />
+          <KpiCard label="Cash Received" value={money(financial?.cashReceived)} tone="good" loading={loading} />
+          <KpiCard
+            label="Outstanding"
+            value={money(financial?.outstanding)}
+            tone={financial && financial.outstanding > 0 ? 'warning' : 'default'}
+            hint="Snapshot as of now, not date-filtered"
+            loading={loading}
+          />
+          <KpiCard label="Discount Given" value={money(financial?.discountGiven)} loading={loading} />
+          <KpiCard label="Refunds" value={money(financial?.refunds)} tone={financial && financial.refunds > 0 ? 'bad' : 'default'} loading={loading} />
+          <KpiCard
+            label="Net Revenue"
+            value={money(financial?.netRevenue)}
+            tone="good"
+            hint="Cash received − refunds − doctor share paid"
+            loading={loading}
+          />
+        </div>
       </div>
 
       <div className="card">
