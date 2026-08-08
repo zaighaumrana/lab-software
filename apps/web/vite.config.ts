@@ -10,6 +10,7 @@ export default defineConfig({
     },
   },
   server: {
+    host: true, // listen on 0.0.0.0 so other computers on the LAN can reach it
     port: 5173,
     proxy: {
       '/api': {

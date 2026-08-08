@@ -19,9 +19,9 @@ async function bootstrap() {
   });
 
   const port = process.env.PORT || 3000;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
 
-  console.log(`LMS API running on http://localhost:${port}`);
+  console.log(`LMS API running on http://0.0.0.0:${port} (reachable on your LAN IP too)`);
   console.log(`Offline-first mode: all core operations use local PostgreSQL`);
 }
 
