@@ -4,6 +4,7 @@ import { SettingsProvider } from './contexts/SettingsContext';
 import { AppLayout } from './layouts/AppLayout';
 import { LoginPage } from './pages/auth/LoginPage';
 import { DashboardPage } from './pages/dashboard/DashboardPage';
+import { InsightsPage } from './pages/insights/InsightsPage';
 import { PatientsPage } from './pages/patients/PatientsPage';
 import { VisitPage } from './pages/visit/VisitPage';
 import { LaboratoryPage } from './pages/laboratory/LaboratoryPage';
@@ -68,6 +69,7 @@ function AppRoutes() {
         }
       >
         <Route index element={<DashboardPage />} />
+        <Route path="insights" element={<InsightsPage />} />
         <Route path="patients" element={<PatientsPage />} />
         <Route path="visit" element={<VisitPage />} />
         <Route path="laboratory" element={<LaboratoryPage />} />

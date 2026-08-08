@@ -10,6 +10,7 @@ import {
   Stethoscope,
   FileText,
   Receipt,
+  BarChart3,
   Settings,
   LogOut,
   Menu,
@@ -19,6 +20,7 @@ import { useState } from 'react';
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/insights', label: 'Insights', icon: BarChart3 },
   { to: '/patients', label: 'Patients', icon: UserPlus },
   { to: '/visit', label: 'New Registration', icon: FlaskConical },
   { to: '/laboratory', label: 'Laboratory', icon: TestTube },

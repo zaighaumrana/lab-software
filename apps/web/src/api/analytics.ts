@@ -66,6 +66,97 @@ export async function getDoctorShareOverview(params: DateRangeParams = {}) {
   return data;
 }
 
+export interface TestVolumeRow {
+  testId: string;
+  testName: string;
+  testCode: string;
+  count: number;
+}
+
+export interface TestRevenueRow {
+  testId: string;
+  testName: string;
+  testCode: string;
+  revenue: number;
+}
+
+export interface NewVsRepeatResult {
+  repeatPatients: number;
+  newPatients: number;
+  repeatPercentage: number;
+  newPercentage: number;
+}
+
+export interface TestAnalyticsOverview {
+  mostPerformed: TestVolumeRow[];
+  leastPerformed: TestVolumeRow[];
+  highestRevenue: TestRevenueRow[];
+  averageTestPrice: number;
+  averageDailyTests: number;
+  averagePatientsPerDay: number;
+  newVsRepeat: NewVsRepeatResult;
+}
+
+export async function getTestAnalyticsOverview(params: DateRangeParams = {}) {
+  const { data } = await api.get<TestAnalyticsOverview>('/analytics/dashboard/test-analytics', {
+    params,
+  });
+  return data;
+}
+
+export interface PatientRevenueRow {
+  patientId: string;
+  patientName: string;
+  invoiceCount: number;
+  totalRevenue: number;
+}
+
+export interface PackagePopularityRow {
+  packageId: string;
+  packageName: string;
+  count: number;
+}
+
+export interface HourlyVisitRow {
+  hour: number;
+  count: number;
+}
+
+export interface TrendPoint {
+  period: string;
+  patientCount: number;
+  revenue: number;
+}
+
+export interface GrowthRateResult {
+  currentRevenue: number;
+  previousRevenue: number;
+  revenueGrowthPercent: number | null;
+  currentPatients: number;
+  previousPatients: number;
+  patientGrowthPercent: number | null;
+}
+
+export interface BusinessInsightsOverview {
+  highestRevenuePatients: PatientRevenueRow[];
+  mostPopularPackages: PackagePopularityRow[];
+  peakVisitHours: HourlyVisitRow[];
+  weeklyTrend: TrendPoint[];
+  monthlyTrend: TrendPoint[];
+  seasonalTrend: TrendPoint[];
+  growthRate: GrowthRateResult | null;
+  repeatPatientRate: number;
+  cancellationRate: number;
+}
+
+export async function getBusinessInsightsOverview(params: DateRangeParams = {}) {
+  const { data } = await api.get<BusinessInsightsOverview>(
+    '/analytics/dashboard/business-insights',
+    { params },
+  );
+  return data;
+}
+
 export async function getWidget(widgetId: string, params: DateRangeParams = {}) {
   const { data } = await api.get(`/analytics/widgets/${widgetId}`, { params });
   return data as { widgetId: string; range: DateRangeParams; value: unknown };

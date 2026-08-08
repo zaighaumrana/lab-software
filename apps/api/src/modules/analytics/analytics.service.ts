@@ -3,6 +3,8 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import * as financial from './queries/financial.queries';
 import * as operational from './queries/operational.queries';
 import * as doctorShare from './queries/doctor-share.queries';
+import * as testAnalytics from './queries/test-analytics.queries';
+import * as businessInsights from './queries/business-insights.queries';
 import type { DateRange } from './queries/financial.queries';
 
 /**
@@ -34,6 +36,24 @@ const WIDGETS: Record<string, WidgetFn> = {
   'doctorShare.pending': (p, t) => doctorShare.getPendingShare(p, t),
   'doctorShare.topReferring': (p, t, r) => doctorShare.getTopReferringDoctors(p, t, r),
   'doctorShare.trend': (p, t, r) => doctorShare.getDoctorShareTrend(p, t, r),
+
+  'tests.mostPerformed': (p, t, r) => testAnalytics.getMostPerformedTests(p, t, r),
+  'tests.leastPerformed': (p, t, r) => testAnalytics.getLeastPerformedTests(p, t, r),
+  'tests.highestRevenue': (p, t, r) => testAnalytics.getHighestRevenueTests(p, t, r),
+  'tests.averagePrice': (p, t, r) => testAnalytics.getAverageTestPrice(p, t, r),
+  'tests.averageDailyTests': (p, t, r) => testAnalytics.getAverageDailyTests(p, t, r),
+  'tests.averagePatientsPerDay': (p, t, r) => testAnalytics.getAveragePatientsPerDay(p, t, r),
+  'tests.newVsRepeat': (p, t, r) => testAnalytics.getNewVsRepeatPatients(p, t, r),
+
+  'insights.highestRevenuePatients': (p, t, r) =>
+    businessInsights.getHighestRevenuePatients(p, t, r),
+  'insights.mostPopularPackages': (p, t, r) => businessInsights.getMostPopularPackages(p, t, r),
+  'insights.peakVisitHours': (p, t, r) => businessInsights.getPeakVisitHours(p, t, r),
+  'insights.weeklyTrend': (p, t, r) => businessInsights.getBookingTrend(p, t, r, 'week'),
+  'insights.monthlyTrend': (p, t, r) => businessInsights.getBookingTrend(p, t, r, 'month'),
+  'insights.seasonalTrend': (p, t, r) => businessInsights.getBookingTrend(p, t, r, 'quarter'),
+  'insights.growthRate': (p, t, r) => businessInsights.getGrowthRate(p, t, r),
+  'insights.cancellationRate': (p, t, r) => testAnalytics.getCancellationRate(p, t, r),
 };
 
 @Injectable()
@@ -61,5 +81,13 @@ export class AnalyticsService {
 
   async getDoctorShareOverview(tenantId: string, range: DateRange) {
     return doctorShare.getDoctorShareOverview(this.prisma, tenantId, range);
+  }
+
+  async getTestAnalyticsOverview(tenantId: string, range: DateRange) {
+    return testAnalytics.getTestAnalyticsOverview(this.prisma, tenantId, range);
+  }
+
+  async getBusinessInsightsOverview(tenantId: string, range: DateRange) {
+    return businessInsights.getBusinessInsightsOverview(this.prisma, tenantId, range);
   }
 }

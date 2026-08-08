@@ -66,4 +66,22 @@ export class AnalyticsController {
   ) {
     return this.analyticsService.getDoctorShareOverview(user.tenantId, parseRange(from, to));
   }
+
+  @Get('dashboard/test-analytics')
+  async testAnalytics(
+    @CurrentUser() user: AuthUser,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.analyticsService.getTestAnalyticsOverview(user.tenantId, parseRange(from, to));
+  }
+
+  @Get('dashboard/business-insights')
+  async businessInsights(
+    @CurrentUser() user: AuthUser,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.analyticsService.getBusinessInsightsOverview(user.tenantId, parseRange(from, to));
+  }
 }
