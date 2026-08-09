@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import * as analyticsApi from '../../api/analytics';
 import type { TestAnalyticsOverview, BusinessInsightsOverview } from '../../api/analytics';
 import { KpiCard } from '../../dashboard/widgets/KpiCard';
+import { LineChartWidget } from '../../dashboard/widgets/LineChartWidget';
+import { BarChartWidget } from '../../dashboard/widgets/BarChartWidget';
+import { PieChartWidget } from '../../dashboard/widgets/PieChartWidget';
 import { DateRangeFilter, presetToRange } from '../../dashboard/DateRangeFilter';
 import type { DateRangeValue } from '../../dashboard/DateRangeFilter';
 import { Loading } from '../../components/Loading';
@@ -142,6 +145,25 @@ export function InsightsPage() {
             ]}
           />
         </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <BarChartWidget
+            title="Most Performed Tests"
+            data={(tests?.mostPerformed ?? []).map((r) => ({ ...r, label: `${r.testCode} — ${r.testName}` }))}
+            xKey="label"
+            valueKey="count"
+            valueLabel="Count"
+            loading={loading}
+            emptyLabel="No tests billed in this range."
+          />
+          <PieChartWidget
+            title="Test Category Distribution"
+            data={tests?.categoryDistribution ?? []}
+            nameKey="category"
+            valueKey="revenue"
+            loading={loading}
+            emptyLabel="No tests billed in this range."
+          />
+        </div>
       </div>
 
       {/* Business Insights */}
@@ -219,10 +241,28 @@ export function InsightsPage() {
           />
         </div>
 
-        {/* Trend data (weekly/monthly/seasonal) is fetched and available above
-         * (insights.weeklyTrend / .monthlyTrend / .seasonalTrend) but not yet
-         * charted here — that's the line/bar chart pass (needs recharts),
-         * not part of this step. */}
+        <div className="grid gap-4 lg:grid-cols-2">
+          <LineChartWidget
+            title="Revenue Trend (Monthly)"
+            data={insights?.monthlyTrend ?? []}
+            xKey="period"
+            series={[{ key: 'revenue', label: 'Revenue', color: '#0284c7' }]}
+            loading={loading}
+          />
+          <LineChartWidget
+            title="Daily Patient Count"
+            data={insights?.dailyTrend ?? []}
+            xKey="period"
+            series={[{ key: 'patientCount', label: 'Patients', color: '#16a34a' }]}
+            loading={loading}
+          />
+        </div>
+
+        {/* Weekly and seasonal (quarterly) trend data is also available above
+         * (insights.weeklyTrend / .seasonalTrend) via the same shape as the
+         * two charts above — not rendered as separate charts here to avoid
+         * redundant views of the same underlying series; wire in if a
+         * dedicated weekly/quarterly view is wanted later. */}
       </div>
     </div>
   );

@@ -135,20 +135,97 @@ export async function getNetRevenue(
   return cashReceived - refunds - doctorSharePaid;
 }
 
+export interface PaymentStatusRow {
+  status: InvoiceStatus;
+  count: number;
+  amount: number;
+}
+
+/** Invoice count/amount grouped by status — backs the Payment Status donut
+ * chart. Snapshot as of now (like Outstanding), not date-ranged: "how many
+ * invoices are currently sitting in each status" is a point-in-time
+ * question, not a period one. */
+export async function getPaymentStatusBreakdown(
+  prisma: PrismaClient,
+  tenantId: string,
+): Promise<PaymentStatusRow[]> {
+  const grouped = await prisma.invoice.groupBy({
+    by: ['status'],
+    where: { tenantId },
+    _count: { _all: true },
+    _sum: { grandTotal: true },
+  });
+
+  return grouped.map((g) => ({
+    status: g.status,
+    count: g._count._all,
+    amount: Number(g._sum.grandTotal ?? 0),
+  }));
+}
+
+export interface MonthlyRevenueComparisonPoint {
+  month: string; // yyyy-mm
+  cashReceived: number;
+  outstanding: number;
+}
+
+/**
+ * Per invoicing month: of what was billed, how much has been collected so
+ * far vs. how much is still outstanding — backs the Monthly Revenue
+ * Comparison stacked bar. Uses each invoice's current amountPaid/amountDue
+ * bucketed by the month it was *created* in, so an invoice created in
+ * March but paid off in April still shows under March (billing month, not
+ * payment month) — this is "how did March's billing perform", not a cash
+ * ledger by payment date.
+ */
+export async function getMonthlyRevenueComparison(
+  prisma: PrismaClient,
+  tenantId: string,
+  range: DateRange,
+): Promise<MonthlyRevenueComparisonPoint[]> {
+  const invoices = await prisma.invoice.findMany({
+    where: { tenantId, status: { in: BILLED_STATUSES }, createdAt: rangeWhere(range) },
+    select: { createdAt: true, amountPaid: true, amountDue: true },
+  });
+
+  const byMonth = new Map<string, { cashReceived: number; outstanding: number }>();
+  for (const inv of invoices) {
+    const month = `${inv.createdAt.getFullYear()}-${String(inv.createdAt.getMonth() + 1).padStart(2, '0')}`;
+    const entry = byMonth.get(month) ?? { cashReceived: 0, outstanding: 0 };
+    entry.cashReceived += Number(inv.amountPaid);
+    entry.outstanding += Number(inv.amountDue);
+    byMonth.set(month, entry);
+  }
+
+  return Array.from(byMonth.entries())
+    .map(([month, v]) => ({ month, ...v }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+}
+
 /** Everything a "Financial Overview" widget page needs, in one round trip. */
 export async function getFinancialOverview(
   prisma: PrismaClient,
   tenantId: string,
   range: DateRange,
 ) {
-  const [invoicedRevenue, cashReceived, outstanding, discountGiven, refunds, netRevenue] =
-    await Promise.all([
+  const [
+    invoicedRevenue,
+    cashReceived,
+    outstanding,
+    discountGiven,
+    refunds,
+    netRevenue,
+    paymentStatusBreakdown,
+    monthlyRevenueComparison,
+  ] = await Promise.all([
       getInvoicedRevenue(prisma, tenantId, range),
       getCashReceived(prisma, tenantId, range),
       getOutstanding(prisma, tenantId),
       getDiscountGiven(prisma, tenantId, range),
       getRefunds(prisma, tenantId, range),
       getNetRevenue(prisma, tenantId, range),
+      getPaymentStatusBreakdown(prisma, tenantId),
+      getMonthlyRevenueComparison(prisma, tenantId, range),
     ]);
 
   return {
@@ -158,5 +235,7 @@ export async function getFinancialOverview(
     discountGiven,
     refunds,
     netRevenue,
+    paymentStatusBreakdown,
+    monthlyRevenueComparison,
   };
 }

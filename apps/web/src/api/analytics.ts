@@ -12,6 +12,8 @@ export interface FinancialOverview {
   discountGiven: number;
   refunds: number;
   netRevenue: number;
+  paymentStatusBreakdown: { status: string; count: number; amount: number }[];
+  monthlyRevenueComparison: { month: string; cashReceived: number; outstanding: number }[];
 }
 
 export interface OperationalOverview {
@@ -95,6 +97,7 @@ export interface TestAnalyticsOverview {
   averageDailyTests: number;
   averagePatientsPerDay: number;
   newVsRepeat: NewVsRepeatResult;
+  categoryDistribution: { category: string; count: number; revenue: number }[];
 }
 
 export async function getTestAnalyticsOverview(params: DateRangeParams = {}) {
@@ -141,6 +144,7 @@ export interface BusinessInsightsOverview {
   highestRevenuePatients: PatientRevenueRow[];
   mostPopularPackages: PackagePopularityRow[];
   peakVisitHours: HourlyVisitRow[];
+  dailyTrend: TrendPoint[];
   weeklyTrend: TrendPoint[];
   monthlyTrend: TrendPoint[];
   seasonalTrend: TrendPoint[];

@@ -251,6 +251,42 @@ export async function getCancellationRate(
   return total === 0 ? 0 : Math.round((cancelled / total) * 1000) / 10;
 }
 
+export interface CategoryDistributionRow {
+  category: string;
+  count: number;
+  revenue: number;
+}
+
+/** Test volume/revenue grouped by Test.category — backs the Test Category
+ * Distribution pie chart. Tests with no category set are bucketed under
+ * "Uncategorized" rather than dropped, so the pie always sums to 100%. */
+export async function getTestCategoryDistribution(
+  prisma: PrismaClient,
+  tenantId: string,
+  range: DateRange,
+): Promise<CategoryDistributionRow[]> {
+  const lines = await prisma.invoiceLine.findMany({
+    where: {
+      testId: { not: null },
+      invoice: { tenantId, createdAt: rangeWhere(range) },
+    },
+    select: { quantity: true, lineTotal: true, test: { select: { category: true } } },
+  });
+
+  const byCategory = new Map<string, { count: number; revenue: number }>();
+  for (const l of lines) {
+    const category = l.test?.category?.trim() || 'Uncategorized';
+    const entry = byCategory.get(category) ?? { count: 0, revenue: 0 };
+    entry.count += l.quantity;
+    entry.revenue += Number(l.lineTotal);
+    byCategory.set(category, entry);
+  }
+
+  return Array.from(byCategory.entries())
+    .map(([category, v]) => ({ category, ...v }))
+    .sort((a, b) => b.revenue - a.revenue);
+}
+
 export async function getTestAnalyticsOverview(
   prisma: PrismaClient,
   tenantId: string,
@@ -264,6 +300,7 @@ export async function getTestAnalyticsOverview(
     averageDailyTests,
     averagePatientsPerDay,
     newVsRepeat,
+    categoryDistribution,
   ] = await Promise.all([
     getMostPerformedTests(prisma, tenantId, range),
     getLeastPerformedTests(prisma, tenantId, range),
@@ -272,6 +309,7 @@ export async function getTestAnalyticsOverview(
     getAverageDailyTests(prisma, tenantId, range),
     getAveragePatientsPerDay(prisma, tenantId, range),
     getNewVsRepeatPatients(prisma, tenantId, range),
+    getTestCategoryDistribution(prisma, tenantId, range),
   ]);
 
   return {
@@ -282,5 +320,6 @@ export async function getTestAnalyticsOverview(
     averageDailyTests,
     averagePatientsPerDay,
     newVsRepeat,
+    categoryDistribution,
   };
 }

@@ -6,6 +6,9 @@ import * as analyticsApi from '../../api/analytics';
 import type { FinancialOverview, OperationalOverview, DoctorShareOverview } from '../../api/analytics';
 import { KpiCard } from '../../dashboard/widgets/KpiCard';
 import { TopDoctorsTable } from '../../dashboard/widgets/TopDoctorsTable';
+import { PieChartWidget } from '../../dashboard/widgets/PieChartWidget';
+import { StackedBarChartWidget } from '../../dashboard/widgets/StackedBarChartWidget';
+import { BarChartWidget } from '../../dashboard/widgets/BarChartWidget';
 import { DateRangeFilter, presetToRange } from '../../dashboard/DateRangeFilter';
 import type { DateRangeValue } from '../../dashboard/DateRangeFilter';
 
@@ -130,6 +133,26 @@ export function DashboardPage() {
             loading={loading}
           />
         </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <PieChartWidget
+            title="Payment Status"
+            data={financial?.paymentStatusBreakdown ?? []}
+            nameKey="status"
+            valueKey="count"
+            donut
+            loading={loading}
+          />
+          <StackedBarChartWidget
+            title="Monthly Revenue Comparison"
+            data={financial?.monthlyRevenueComparison ?? []}
+            xKey="month"
+            series={[
+              { key: 'cashReceived', label: 'Cash Received', color: '#16a34a' },
+              { key: 'outstanding', label: 'Outstanding', color: '#d97706' },
+            ]}
+            loading={loading}
+          />
+        </div>
       </div>
 
       {/* Doctor Share — same date filter as Financial Overview */}
@@ -148,7 +171,18 @@ export function DashboardPage() {
             loading={loading}
           />
         </div>
-        <TopDoctorsTable rows={doctorShare?.topReferringDoctors ?? []} loading={loading} />
+        <div className="grid gap-4 lg:grid-cols-2">
+          <TopDoctorsTable rows={doctorShare?.topReferringDoctors ?? []} loading={loading} />
+          <BarChartWidget
+            title="Doctor Referral Contribution"
+            data={doctorShare?.topReferringDoctors ?? []}
+            xKey="doctorName"
+            valueKey="totalShare"
+            valueLabel="Share"
+            color="#7c3aed"
+            loading={loading}
+          />
+        </div>
       </div>
 
       <div className="card">

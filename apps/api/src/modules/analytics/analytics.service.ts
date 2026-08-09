@@ -22,6 +22,9 @@ const WIDGETS: Record<string, WidgetFn> = {
   'financial.discountGiven': (p, t, r) => financial.getDiscountGiven(p, t, r),
   'financial.refunds': (p, t, r) => financial.getRefunds(p, t, r),
   'financial.netRevenue': (p, t, r) => financial.getNetRevenue(p, t, r),
+  'financial.paymentStatusBreakdown': (p, t) => financial.getPaymentStatusBreakdown(p, t),
+  'financial.monthlyRevenueComparison': (p, t, r) =>
+    financial.getMonthlyRevenueComparison(p, t, r),
 
   'ops.todayPatients': (p, t, r) => operational.getPatientCount(p, t, r),
   'ops.samplesCollected': (p, t, r) => operational.getSamplesCollected(p, t, r),
@@ -44,12 +47,14 @@ const WIDGETS: Record<string, WidgetFn> = {
   'tests.averageDailyTests': (p, t, r) => testAnalytics.getAverageDailyTests(p, t, r),
   'tests.averagePatientsPerDay': (p, t, r) => testAnalytics.getAveragePatientsPerDay(p, t, r),
   'tests.newVsRepeat': (p, t, r) => testAnalytics.getNewVsRepeatPatients(p, t, r),
+  'tests.categoryDistribution': (p, t, r) => testAnalytics.getTestCategoryDistribution(p, t, r),
 
   'insights.highestRevenuePatients': (p, t, r) =>
     businessInsights.getHighestRevenuePatients(p, t, r),
   'insights.mostPopularPackages': (p, t, r) => businessInsights.getMostPopularPackages(p, t, r),
   'insights.peakVisitHours': (p, t, r) => businessInsights.getPeakVisitHours(p, t, r),
   'insights.weeklyTrend': (p, t, r) => businessInsights.getBookingTrend(p, t, r, 'week'),
+  'insights.dailyTrend': (p, t, r) => businessInsights.getBookingTrend(p, t, r, 'day'),
   'insights.monthlyTrend': (p, t, r) => businessInsights.getBookingTrend(p, t, r, 'month'),
   'insights.seasonalTrend': (p, t, r) => businessInsights.getBookingTrend(p, t, r, 'quarter'),
   'insights.growthRate': (p, t, r) => businessInsights.getGrowthRate(p, t, r),

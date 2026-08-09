@@ -144,7 +144,7 @@ export async function getBookingTrend(
   prisma: PrismaClient,
   tenantId: string,
   range: DateRange,
-  granularity: 'week' | 'month' | 'quarter',
+  granularity: 'day' | 'week' | 'month' | 'quarter',
 ): Promise<TrendPoint[]> {
   const bookings = await prisma.booking.findMany({
     where: { tenantId, createdAt: rangeWhere(range) },
@@ -154,7 +154,9 @@ export async function getBookingTrend(
   const buckets = new Map<string, { patients: Set<string>; revenue: number }>();
   for (const b of bookings) {
     let label: string;
-    if (granularity === 'week') {
+    if (granularity === 'day') {
+      label = b.createdAt.toISOString().slice(0, 10);
+    } else if (granularity === 'week') {
       label = isoWeekLabel(b.createdAt);
     } else if (granularity === 'month') {
       label = `${b.createdAt.getFullYear()}-${String(b.createdAt.getMonth() + 1).padStart(2, '0')}`;
@@ -236,6 +238,7 @@ export async function getBusinessInsightsOverview(
     highestRevenuePatients,
     mostPopularPackages,
     peakVisitHours,
+    dailyTrend,
     weeklyTrend,
     monthlyTrend,
     seasonalTrend,
@@ -246,6 +249,7 @@ export async function getBusinessInsightsOverview(
     getHighestRevenuePatients(prisma, tenantId, range),
     getMostPopularPackages(prisma, tenantId, range),
     getPeakVisitHours(prisma, tenantId, range),
+    getBookingTrend(prisma, tenantId, range, 'day'),
     getBookingTrend(prisma, tenantId, range, 'week'),
     getBookingTrend(prisma, tenantId, range, 'month'),
     getBookingTrend(prisma, tenantId, range, 'quarter'),
@@ -258,6 +262,7 @@ export async function getBusinessInsightsOverview(
     highestRevenuePatients,
     mostPopularPackages,
     peakVisitHours,
+    dailyTrend,
     weeklyTrend,
     monthlyTrend,
     seasonalTrend,
