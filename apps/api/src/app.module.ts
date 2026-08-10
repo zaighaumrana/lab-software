@@ -13,6 +13,7 @@ import { PublicModule } from './modules/public/public.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { PrintingModule } from './modules/printing/printing.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
     SettingsModule,
     NotificationsModule,
     AnalyticsModule,
+    PrintingModule,
   ],
 })
 export class AppModule {}

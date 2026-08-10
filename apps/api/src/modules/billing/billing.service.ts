@@ -51,11 +51,30 @@ export class BillingService {
     return invoice;
   }
 
-  async listInvoices(tenantId: string, branchId?: string, q?: string) {
+  async listInvoices(
+    tenantId: string,
+    branchId?: string,
+    q?: string,
+    from?: string,
+    to?: string,
+    status?: string,
+  ) {
+    const createdAt =
+      from || to
+        ? {
+            ...(from ? { gte: new Date(from) } : {}),
+            ...(to
+              ? { lte: (() => { const d = new Date(to); d.setHours(23, 59, 59, 999); return d; })() }
+              : {}),
+          }
+        : undefined;
+
     return this.prisma.invoice.findMany({
       where: {
         tenantId,
         ...(branchId ? { branchId } : {}),
+        ...(status ? { status: status as InvoiceStatus } : {}),
+        ...(createdAt ? { createdAt } : {}),
         ...(q
           ? {
               OR: [
@@ -68,7 +87,7 @@ export class BillingService {
           : {}),
       },
       orderBy: { createdAt: 'desc' },
-      take: 50,
+      take: 200,
       include: {
         booking: { include: { patient: true } },
         report: { select: { id: true, trackingId: true, status: true, reportNumber: true } },

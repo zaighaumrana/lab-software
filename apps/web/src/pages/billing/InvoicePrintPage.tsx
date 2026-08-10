@@ -4,6 +4,7 @@ import * as billingApi from '../../api/billing';
 import type { Invoice } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';
 import { PrintFrame, useIsLetterhead } from '../../print/PrintFrame';
+import { openPdf } from '../../print/openPdf';
 import { Loading } from '../../components/Loading';
 import '../../styles/print-document.css';
 
@@ -18,6 +19,19 @@ export function InvoicePrintPage() {
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  async function handleOpenPdf() {
+    if (!id) return;
+    setPdfLoading(true);
+    try {
+      await openPdf(`/printing/invoices/${id}`);
+    } catch {
+      setError('Could not generate PDF. Please try again.');
+    } finally {
+      setPdfLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!id) return;
@@ -49,10 +63,15 @@ export function InvoicePrintPage() {
         <Link to={`/invoices/${invoice.id}`} className="btn-secondary text-sm">
           ← Back to invoice
         </Link>
-        <button type="button" className="btn-primary text-sm" onClick={() => window.print()}>
-          Print / Save as PDF
+        <button type="button" className="btn-primary text-sm" onClick={handleOpenPdf} disabled={pdfLoading}>
+          {pdfLoading ? 'Generating PDF…' : 'Open / Print PDF'}
         </button>
       </div>
+      {error && (
+        <div className="no-print" style={{ maxWidth: '210mm', margin: '0 auto 12px', padding: '10px 14px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, fontSize: 14, color: '#b91c1c' }}>
+          {error}
+        </div>
+      )}
 
       <article className="print-doc">
         <header className="print-doc-header">

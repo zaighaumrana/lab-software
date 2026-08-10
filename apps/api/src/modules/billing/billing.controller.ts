@@ -27,17 +27,20 @@ export class BillingController {
 
 
   /**
-   * GET /billing/invoices?q=
+   * GET /billing/invoices?q=&from=&to=&status=
    */
   @Get('invoices')
   async listInvoices(
     @Query('q') q?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('status') status?: string,
     @Headers('x-tenant-id') tenantHeader?: string,
     @Headers('x-branch-id') branchHeader?: string,
   ) {
     const tenantId = resolveTenantId(tenantHeader);
     const branchId = resolveBranchId(branchHeader);
-    return this.billingService.listInvoices(tenantId, branchId, q);
+    return this.billingService.listInvoices(tenantId, branchId, q, from, to, status);
   }
 
   /**

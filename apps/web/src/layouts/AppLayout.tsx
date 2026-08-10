@@ -1,40 +1,132 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import clsx from 'clsx';
 import {
   LayoutDashboard,
   UserPlus,
-  FlaskConical,
   TestTube,
   BookOpen,
-  Stethoscope,
   FileText,
   Receipt,
-  BarChart3,
   Settings,
   LogOut,
+  ChevronDown,
   Menu,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-const NAV = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/insights', label: 'Insights', icon: BarChart3 },
-  { to: '/patients', label: 'Patients', icon: UserPlus },
-  { to: '/visit', label: 'New Registration', icon: FlaskConical },
-  { to: '/laboratory', label: 'Laboratory', icon: TestTube },
-  { to: '/invoices', label: 'Invoices', icon: Receipt },
-  { to: '/reports', label: 'Reports', icon: FileText },
-  { to: '/catalog', label: 'Catalog', icon: BookOpen },
-  { to: '/doctors', label: 'Doctors', icon: Stethoscope },
-  { to: '/settings', label: 'Settings', icon: Settings },
+interface NavLeaf {
+  to: string;
+  label: string;
+  end?: boolean;
+}
+
+interface NavItem {
+  label: string;
+  icon: typeof LayoutDashboard;
+  to?: string;
+  end?: boolean;
+  children?: NavLeaf[];
+}
+
+/**
+ * Primary nav is a small set of modules, not a flat list of every route —
+ * routes that logically belong together (e.g. invoices + doctor shares are
+ * both "money", lab reports + insights are both "reporting") group under
+ * one item with a dropdown, so the bar stays short regardless of how many
+ * pages the app grows to have.
+ */
+const NAV: NavItem[] = [
+  { label: 'Dashboard', icon: LayoutDashboard, to: '/', end: true },
+  {
+    label: 'Patients',
+    icon: UserPlus,
+    children: [
+      { to: '/patients', label: 'Find / Directory' },
+      { to: '/visit', label: 'New Registration' },
+    ],
+  },
+  { label: 'Laboratory', icon: TestTube, to: '/laboratory' },
+  {
+    label: 'Finance',
+    icon: Receipt,
+    children: [
+      { to: '/invoices', label: 'Invoices' },
+      { to: '/doctors', label: 'Doctor Shares' },
+    ],
+  },
+  {
+    label: 'Reports',
+    icon: FileText,
+    children: [
+      { to: '/reports', label: 'Lab Reports' },
+      { to: '/insights', label: 'Insights' },
+    ],
+  },
+  { label: 'Catalog', icon: BookOpen, to: '/catalog' },
 ];
+
+function isGroupActive(item: NavItem, pathname: string): boolean {
+  if (item.to) return item.end ? pathname === item.to : pathname.startsWith(item.to);
+  return (item.children ?? []).some((c) => pathname.startsWith(c.to));
+}
+
+function NavDropdown({ item, active }: { item: NavItem; active: boolean }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={clsx(
+          'flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+          active ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+        )}
+      >
+        <item.icon className="h-4 w-4" />
+        {item.label}
+        <ChevronDown className={clsx('h-3.5 w-3.5 transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-40 mt-1 w-56 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+          {(item.children ?? []).map((leaf) => (
+            <NavLink
+              key={leaf.to}
+              to={leaf.to}
+              onClick={() => setOpen(false)}
+              className={({ isActive }) =>
+                clsx(
+                  'block px-3.5 py-2 text-sm transition-colors',
+                  isActive
+                    ? 'bg-brand-50 font-medium text-brand-700'
+                    : 'text-slate-700 hover:bg-slate-50',
+                )
+              }
+            >
+              {leaf.label}
+            </NavLink>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function AppLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
+  const location = useLocation();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   async function handleLogout() {
     await logout();
@@ -42,68 +134,121 @@ export function AppLayout() {
   }
 
   return (
-    <div className="flex min-h-screen">
-      {/* Sidebar */}
-      <aside
-        className={clsx(
-          'fixed inset-y-0 left-0 z-30 w-64 transform border-r border-slate-200 bg-white transition print:hidden md:static md:translate-x-0',
-          open ? 'translate-x-0' : '-translate-x-full',
-        )}
-      >
-        <div className="flex h-14 items-center justify-between border-b border-slate-200 px-4">
-          <span className="text-lg font-semibold text-brand-700">LMS</span>
-          <button className="md:hidden" onClick={() => setOpen(false)}>
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <nav className="space-y-1 p-3">
-          {NAV.map((item) => (
+    <div className="flex min-h-screen flex-col bg-slate-50">
+      {/* Primary horizontal nav */}
+      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white print:hidden">
+        <div className="flex h-14 items-center gap-2 px-4">
+          <span className="mr-2 shrink-0 text-lg font-bold tracking-tight text-brand-700">LMS</span>
+
+          {/* Desktop nav */}
+          <nav className="hidden flex-1 items-center gap-1 md:flex">
+            {NAV.map((item) =>
+              item.children ? (
+                <NavDropdown key={item.label} item={item} active={isGroupActive(item, location.pathname)} />
+              ) : (
+                <NavLink
+                  key={item.label}
+                  to={item.to!}
+                  end={item.end}
+                  className={({ isActive }) =>
+                    clsx(
+                      'flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                      isActive
+                        ? 'bg-brand-50 text-brand-700'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                    )
+                  }
+                >
+                  <item.icon className="h-4 w-4" />
+                  {item.label}
+                </NavLink>
+              ),
+            )}
+          </nav>
+
+          <div className="flex-1 md:hidden" />
+
+          {/* Right side: settings, user, logout */}
+          <div className="hidden items-center gap-1 md:flex">
             <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              onClick={() => setOpen(false)}
+              to="/settings"
               className={({ isActive }) =>
                 clsx(
-                  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition',
-                  isActive
-                    ? 'bg-brand-50 text-brand-700'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+                  'rounded-md p-2 transition-colors',
+                  isActive ? 'bg-brand-50 text-brand-700' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900',
                 )
               }
+              title="Settings"
             >
-              <item.icon className="h-4 w-4" />
-              {item.label}
+              <Settings className="h-4 w-4" />
             </NavLink>
-          ))}
-        </nav>
-        <div className="absolute bottom-0 left-0 right-0 border-t border-slate-200 p-3">
-          <div className="mb-2 px-3 text-xs text-slate-500">
-            <div className="font-medium text-slate-700">{user?.fullName}</div>
-            <div>{user?.role?.replace(/_/g, ' ')}</div>
+            <div className="mx-1 h-6 w-px bg-slate-200" />
+            <div className="px-1 text-right leading-tight">
+              <div className="text-xs font-medium text-slate-800">{user?.fullName}</div>
+              <div className="text-[11px] text-slate-400">{user?.role?.replace(/_/g, ' ')}</div>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="rounded-md p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-red-600"
+              title="Logout"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
           </div>
-          <button
-            onClick={handleLogout}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
-          >
-            <LogOut className="h-4 w-4" />
-            Logout
+
+          {/* Mobile toggle */}
+          <button className="md:hidden" onClick={() => setMobileOpen((v) => !v)}>
+            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
-      </aside>
 
-      {/* Main */}
-      <div className="flex flex-1 flex-col">
-        <header className="flex h-14 items-center gap-3 border-b border-slate-200 bg-white px-4 print:hidden md:hidden">
-          <button onClick={() => setOpen(true)}>
-            <Menu className="h-5 w-5" />
-          </button>
-          <span className="font-semibold text-brand-700">LMS</span>
-        </header>
-        <main className="flex-1 overflow-auto p-4 print:overflow-visible print:p-0 md:p-6">
+        {/* Mobile menu */}
+        {mobileOpen && (
+          <nav className="space-y-0.5 border-t border-slate-200 p-2 md:hidden">
+            {NAV.flatMap((item) =>
+              item.children
+                ? item.children.map((leaf) => ({ to: leaf.to, label: `${item.label} · ${leaf.label}`, icon: item.icon }))
+                : [{ to: item.to!, label: item.label, icon: item.icon }],
+            ).map((leaf) => (
+              <NavLink
+                key={leaf.to}
+                to={leaf.to}
+                onClick={() => setMobileOpen(false)}
+                className={({ isActive }) =>
+                  clsx(
+                    'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium',
+                    isActive ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50',
+                  )
+                }
+              >
+                <leaf.icon className="h-4 w-4" />
+                {leaf.label}
+              </NavLink>
+            ))}
+            <NavLink
+              to="/settings"
+              onClick={() => setMobileOpen(false)}
+              className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            >
+              <Settings className="h-4 w-4" />
+              Settings
+            </NavLink>
+            <button
+              onClick={handleLogout}
+              className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium text-slate-600 hover:bg-slate-50"
+            >
+              <LogOut className="h-4 w-4" />
+              Logout
+            </button>
+          </nav>
+        )}
+      </header>
+
+      <main className="flex-1 overflow-auto p-4 print:overflow-visible print:p-0 lg:p-6">
+        <div className="mx-auto w-full max-w-[1600px]">
           <Outlet />
-        </main>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }

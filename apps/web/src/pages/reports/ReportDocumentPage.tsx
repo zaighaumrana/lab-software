@@ -5,6 +5,7 @@ import * as billingApi from '../../api/billing';
 import type { Report, Patient } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';
 import { PrintFrame, useIsLetterhead, useReportPagination } from '../../print/PrintFrame';
+import { openPdf } from '../../print/openPdf';
 import { Loading } from '../../components/Loading';
 import '../../styles/print-document.css';
 
@@ -153,6 +154,19 @@ export function ReportDocumentPage() {
   const [payMethod, setPayMethod] = useState('CASH');
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState('');
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  async function handleOpenPdf() {
+    if (!id) return;
+    setPdfLoading(true);
+    try {
+      await openPdf(`/printing/reports/${id}`);
+    } catch {
+      setError('Could not generate PDF. Please try again.');
+    } finally {
+      setPdfLoading(false);
+    }
+  }
 
   function load() {
     if (!id) return;
@@ -224,10 +238,19 @@ export function ReportDocumentPage() {
             </Link>
           )}
         </div>
-        <button type="button" className="btn-primary text-sm" onClick={() => window.print()}>
-          Print / Save as PDF
+        <button type="button" className="btn-primary text-sm" onClick={handleOpenPdf} disabled={pdfLoading}>
+          {pdfLoading ? 'Generating PDF…' : 'Open / Print PDF'}
         </button>
       </div>
+
+      {error && (
+        <div
+          className="no-print"
+          style={{ maxWidth: '210mm', margin: '0 auto 12px', padding: '10px 14px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, fontSize: 14, color: '#b91c1c' }}
+        >
+          {error}
+        </div>
+      )}
 
       {due > 0 && (
         <div

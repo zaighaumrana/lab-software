@@ -8,6 +8,7 @@ import { PieChartWidget } from '../../dashboard/widgets/PieChartWidget';
 import { DateRangeFilter, presetToRange } from '../../dashboard/DateRangeFilter';
 import type { DateRangeValue } from '../../dashboard/DateRangeFilter';
 import { Loading } from '../../components/Loading';
+import { Receipt, TestTube, Users, UserPlus, TrendingUp } from 'lucide-react';
 
 function money(n: number | undefined) {
   return `Rs ${Number(n ?? 0).toLocaleString('en-PK')}`;
@@ -102,13 +103,15 @@ export function InsightsPage() {
           Test Analytics
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <KpiCard label="Average Test Price" value={money(tests?.averageTestPrice)} loading={loading} />
-          <KpiCard label="Average Daily Tests" value={String(tests?.averageDailyTests ?? 0)} loading={loading} />
-          <KpiCard label="Average Patients / Day" value={String(tests?.averagePatientsPerDay ?? 0)} loading={loading} />
+          <KpiCard label="Average Test Price" value={money(tests?.averageTestPrice)} icon={Receipt} to="/catalog" loading={loading} />
+          <KpiCard label="Average Daily Tests" value={String(tests?.averageDailyTests ?? 0)} icon={TestTube} to="/catalog" loading={loading} />
+          <KpiCard label="Average Patients / Day" value={String(tests?.averagePatientsPerDay ?? 0)} icon={Users} to="/patients" loading={loading} />
           <KpiCard
             label="Repeat Patients"
             value={`${tests?.newVsRepeat.repeatPercentage ?? 0}%`}
             hint={`${tests?.newVsRepeat.repeatPatients ?? 0} of ${(tests?.newVsRepeat.repeatPatients ?? 0) + (tests?.newVsRepeat.newPatients ?? 0)} patients`}
+            icon={Users}
+            to="/patients"
             loading={loading}
           />
           <KpiCard
@@ -116,6 +119,8 @@ export function InsightsPage() {
             value={`${tests?.newVsRepeat.newPercentage ?? 0}%`}
             tone="good"
             hint={`${tests?.newVsRepeat.newPatients ?? 0} patients`}
+            icon={UserPlus}
+            to="/patients"
             loading={loading}
           />
         </div>
@@ -190,6 +195,8 @@ export function InsightsPage() {
                   : 'bad'
                 : 'default'
             }
+            icon={TrendingUp}
+            to="/invoices"
             loading={loading}
           />
           <KpiCard
@@ -207,6 +214,8 @@ export function InsightsPage() {
                   : 'bad'
                 : 'default'
             }
+            icon={Users}
+            to="/patients"
             loading={loading}
           />
           <KpiCard
@@ -274,9 +283,9 @@ export function InsightsPage() {
           Outsourced Tests
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <KpiCard label="Total Outsourced Tests" value={String(outsourcing?.totalOutsourcedTests ?? 0)} loading={loading} />
-          <KpiCard label="Outsourcing Cost" value={money(outsourcing?.outsourcingCost)} loading={loading} />
-          <KpiCard label="Revenue Generated" value={money(outsourcing?.revenue)} loading={loading} />
+          <KpiCard label="Total Outsourced Tests" value={String(outsourcing?.totalOutsourcedTests ?? 0)} icon={TestTube} to="/laboratory" loading={loading} />
+          <KpiCard label="Outsourcing Cost" value={money(outsourcing?.outsourcingCost)} icon={Receipt} to="/laboratory" loading={loading} />
+          <KpiCard label="Revenue Generated" value={money(outsourcing?.revenue)} icon={TrendingUp} to="/laboratory" loading={loading} />
           <KpiCard
             label="Net Margin"
             value={money(outsourcing?.netMargin)}

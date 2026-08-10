@@ -1,10 +1,16 @@
 import { api } from './client';
 import type { Invoice } from '../types';
 
-export async function listInvoices(q?: string) {
-  const { data } = await api.get<Invoice[]>('/billing/invoices', {
-    params: q ? { q } : undefined,
-  });
+export interface InvoiceListParams {
+  q?: string;
+  from?: string;
+  to?: string;
+  status?: string;
+}
+
+export async function listInvoices(params?: string | InvoiceListParams) {
+  const query = typeof params === 'string' ? { q: params } : params;
+  const { data } = await api.get<Invoice[]>('/billing/invoices', { params: query });
   return data;
 }
 

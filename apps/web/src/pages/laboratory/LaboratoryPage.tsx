@@ -20,6 +20,8 @@ export function LaboratoryPage() {
   const [outsourceLab, setOutsourceLab] = useState('');
   const [outsourceCost, setOutsourceCost] = useState('');
   const [outsourcing, setOutsourcing] = useState(false);
+  const [q, setQ] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
 
   async function refresh() {
     setLoading(true);
@@ -159,6 +161,30 @@ export function LaboratoryPage() {
     }
   }
 
+  const STATUS_LABELS: Record<string, string> = {
+    PENDING_COLLECTION: 'Pending Collection',
+    COLLECTED: 'Collected',
+    IN_TRANSIT: 'In Transit',
+    RECEIVED_AT_LAB: 'Received',
+    ACCEPTED: 'Accepted',
+    IN_TESTING: 'In Testing',
+  };
+
+  const statusCounts = samples.reduce<Record<string, number>>((acc, s) => {
+    acc[s.status] = (acc[s.status] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  const filteredSamples = samples.filter((s) => {
+    if (statusFilter !== 'ALL' && s.status !== statusFilter) return false;
+    if (q.trim()) {
+      const needle = q.trim().toLowerCase();
+      const haystack = `${s.invoice?.booking?.patient?.fullName ?? ''} ${s.sampleCode}`.toLowerCase();
+      if (!haystack.includes(needle)) return false;
+    }
+    return true;
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -191,38 +217,73 @@ export function LaboratoryPage() {
 
       {!loading && samples.length > 0 && (
         <div className="grid gap-4 lg:grid-cols-2">
-          <div className="card space-y-2 p-0 overflow-hidden">
-            <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase text-slate-500">
-              Queue
+          <div className="card flex flex-col gap-3 p-0 overflow-hidden">
+            <div className="space-y-2 border-b border-slate-200 bg-slate-50 p-3">
+              <input
+                className="input"
+                placeholder="Search patient or sample code…"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                    statusFilter === 'ALL' ? 'bg-brand-600 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                  }`}
+                  onClick={() => setStatusFilter('ALL')}
+                >
+                  All ({samples.length})
+                </button>
+                {Object.entries(STATUS_LABELS).map(([status, label]) =>
+                  statusCounts[status] ? (
+                    <button
+                      key={status}
+                      className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                        statusFilter === status
+                          ? 'bg-brand-600 text-white'
+                          : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                      }`}
+                      onClick={() => setStatusFilter(status)}
+                    >
+                      {label} ({statusCounts[status]})
+                    </button>
+                  ) : null,
+                )}
+              </div>
             </div>
-            {samples.map((s) => (
-              <button
-                key={s.id}
-                className={`flex w-full items-center justify-between px-4 py-3 text-left hover:bg-slate-50 ${
-                  selected?.id === s.id ? 'bg-brand-50' : ''
-                }`}
-                onClick={() => {
-                  setSelected(s);
-                  setActiveTest(null);
-                  setShowOutsourceForm(false);
-                }}
-              >
-                <div>
-                  <div className="text-sm font-medium">
-                    {s.invoice?.booking?.patient?.fullName ?? s.sampleCode}
+            <div className="max-h-[560px] divide-y divide-slate-100 overflow-y-auto">
+              {filteredSamples.length === 0 && (
+                <p className="p-4 text-sm text-slate-400">No samples match this filter.</p>
+              )}
+              {filteredSamples.map((s) => (
+                <button
+                  key={s.id}
+                  className={`flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-slate-50 ${
+                    selected?.id === s.id ? 'bg-brand-50' : ''
+                  }`}
+                  onClick={() => {
+                    setSelected(s);
+                    setActiveTest(null);
+                    setShowOutsourceForm(false);
+                  }}
+                >
+                  <div>
+                    <div className="text-sm font-medium">
+                      {s.invoice?.booking?.patient?.fullName ?? s.sampleCode}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {s.sampleCode}
+                      {s.isOutsourced && (
+                        <span className="ml-2 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700">
+                          Outsourced
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-xs text-slate-500">
-                    {s.sampleCode}
-                    {s.isOutsourced && (
-                      <span className="ml-2 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700">
-                        Outsourced
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <StatusBadge status={s.status} />
-              </button>
-            ))}
+                  <StatusBadge status={s.status} />
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="card space-y-4">
