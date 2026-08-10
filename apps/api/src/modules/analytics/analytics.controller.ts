@@ -84,4 +84,13 @@ export class AnalyticsController {
   ) {
     return this.analyticsService.getBusinessInsightsOverview(user.tenantId, parseRange(from, to));
   }
+
+  @Get('dashboard/outsourcing')
+  async outsourcing(
+    @CurrentUser() user: AuthUser,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.analyticsService.getOutsourcingOverview(user.tenantId, parseRange(from, to));
+  }
 }

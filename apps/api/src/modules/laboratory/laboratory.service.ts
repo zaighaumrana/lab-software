@@ -78,6 +78,39 @@ export class LaboratoryService {
     });
   }
 
+  async markOutsourced(
+    tenantId: string,
+    sampleId: string,
+    externalLabName: string,
+    outsourcingCost?: number,
+  ) {
+    const sample = await this.prisma.sample.findFirst({
+      where: { id: sampleId, tenantId },
+    });
+    if (!sample) throw new NotFoundException('Sample not found');
+
+    return this.prisma.sample.update({
+      where: { id: sampleId },
+      data: {
+        isOutsourced: true,
+        externalLabName,
+        outsourcingCost: outsourcingCost != null ? new Decimal(outsourcingCost) : null,
+      },
+    });
+  }
+
+  async unmarkOutsourced(tenantId: string, sampleId: string) {
+    const sample = await this.prisma.sample.findFirst({
+      where: { id: sampleId, tenantId },
+    });
+    if (!sample) throw new NotFoundException('Sample not found');
+
+    return this.prisma.sample.update({
+      where: { id: sampleId },
+      data: { isOutsourced: false, externalLabName: null, outsourcingCost: null },
+    });
+  }
+
   async receiveSample(tenantId: string, sampleId: string) {
     const sample = await this.getSample(tenantId, sampleId);
     const allowed: SampleStatus[] = [SampleStatus.COLLECTED, SampleStatus.IN_TRANSIT];

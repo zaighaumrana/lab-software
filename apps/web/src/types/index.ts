@@ -150,6 +150,9 @@ export interface Sample {
   status: string;
   sampleType?: string | null;
   collectedAt?: string | null;
+  isOutsourced?: boolean;
+  externalLabName?: string | null;
+  outsourcingCost?: number | string | null;
   invoice?: Invoice & {
     booking?: Booking & { patient?: Patient };
     lines?: InvoiceLine[];

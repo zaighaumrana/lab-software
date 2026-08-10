@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import * as analyticsApi from '../../api/analytics';
-import type { TestAnalyticsOverview, BusinessInsightsOverview } from '../../api/analytics';
+import type { TestAnalyticsOverview, BusinessInsightsOverview, OutsourcingOverview } from '../../api/analytics';
 import { KpiCard } from '../../dashboard/widgets/KpiCard';
 import { LineChartWidget } from '../../dashboard/widgets/LineChartWidget';
 import { BarChartWidget } from '../../dashboard/widgets/BarChartWidget';
@@ -61,6 +61,7 @@ export function InsightsPage() {
   const [range, setRange] = useState<DateRangeValue>({ preset: 'month', ...presetToRange('month') });
   const [tests, setTests] = useState<TestAnalyticsOverview | null>(null);
   const [insights, setInsights] = useState<BusinessInsightsOverview | null>(null);
+  const [outsourcing, setOutsourcing] = useState<OutsourcingOverview | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -68,10 +69,12 @@ export function InsightsPage() {
     Promise.all([
       analyticsApi.getTestAnalyticsOverview({ from: range.from, to: range.to }),
       analyticsApi.getBusinessInsightsOverview({ from: range.from, to: range.to }),
+      analyticsApi.getOutsourcingOverview({ from: range.from, to: range.to }),
     ])
-      .then(([t, i]) => {
+      .then(([t, i, o]) => {
         setTests(t);
         setInsights(i);
+        setOutsourcing(o);
       })
       .finally(() => setLoading(false));
   }, [range.from, range.to]);
@@ -263,6 +266,54 @@ export function InsightsPage() {
          * two charts above — not rendered as separate charts here to avoid
          * redundant views of the same underlying series; wire in if a
          * dedicated weekly/quarterly view is wanted later. */}
+      </div>
+
+      {/* Outsourced Tests */}
+      <div className="space-y-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+          Outsourced Tests
+        </h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <KpiCard label="Total Outsourced Tests" value={String(outsourcing?.totalOutsourcedTests ?? 0)} loading={loading} />
+          <KpiCard label="Outsourcing Cost" value={money(outsourcing?.outsourcingCost)} loading={loading} />
+          <KpiCard label="Revenue Generated" value={money(outsourcing?.revenue)} loading={loading} />
+          <KpiCard
+            label="Net Margin"
+            value={money(outsourcing?.netMargin)}
+            tone={outsourcing && outsourcing.netMargin >= 0 ? 'good' : 'bad'}
+            loading={loading}
+          />
+        </div>
+        <div className="grid gap-4 lg:grid-cols-3">
+          <RankedTable
+            title="Top Outsourced Tests"
+            rows={outsourcing?.topOutsourcedTests ?? []}
+            emptyLabel="No outsourced tests in this range."
+            columns={[
+              { label: 'Test', render: (r) => `${r.testCode} — ${r.testName}` },
+              { label: 'Count', render: (r) => r.count, align: 'right' },
+            ]}
+          />
+          <RankedTable
+            title="Top External Labs"
+            rows={outsourcing?.topExternalLabs ?? []}
+            emptyLabel="No outsourced tests in this range."
+            columns={[
+              { label: 'Lab', render: (r) => r.labName },
+              { label: 'Samples', render: (r) => r.sampleCount, align: 'right' },
+              { label: 'Cost', render: (r) => money(r.totalCost), align: 'right' },
+            ]}
+          />
+          <PieChartWidget
+            title="Outsourced vs In-House Tests"
+            data={outsourcing?.inHouseVsOutsourced ?? []}
+            nameKey="label"
+            valueKey="count"
+            donut
+            loading={loading}
+            emptyLabel="No samples in this range."
+          />
+        </div>
       </div>
     </div>
   );

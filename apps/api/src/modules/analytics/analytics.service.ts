@@ -5,6 +5,7 @@ import * as operational from './queries/operational.queries';
 import * as doctorShare from './queries/doctor-share.queries';
 import * as testAnalytics from './queries/test-analytics.queries';
 import * as businessInsights from './queries/business-insights.queries';
+import * as outsourcing from './queries/outsourcing.queries';
 import type { DateRange } from './queries/financial.queries';
 
 /**
@@ -59,6 +60,13 @@ const WIDGETS: Record<string, WidgetFn> = {
   'insights.seasonalTrend': (p, t, r) => businessInsights.getBookingTrend(p, t, r, 'quarter'),
   'insights.growthRate': (p, t, r) => businessInsights.getGrowthRate(p, t, r),
   'insights.cancellationRate': (p, t, r) => testAnalytics.getCancellationRate(p, t, r),
+
+  'outsourcing.totalTests': (p, t, r) => outsourcing.getTotalOutsourcedTests(p, t, r),
+  'outsourcing.cost': (p, t, r) => outsourcing.getOutsourcingCost(p, t, r),
+  'outsourcing.revenue': (p, t, r) => outsourcing.getOutsourcedRevenue(p, t, r),
+  'outsourcing.topTests': (p, t, r) => outsourcing.getTopOutsourcedTests(p, t, r),
+  'outsourcing.topLabs': (p, t, r) => outsourcing.getTopExternalLabs(p, t, r),
+  'outsourcing.inHouseVsOutsourced': (p, t, r) => outsourcing.getInHouseVsOutsourced(p, t, r),
 };
 
 @Injectable()
@@ -94,5 +102,9 @@ export class AnalyticsService {
 
   async getBusinessInsightsOverview(tenantId: string, range: DateRange) {
     return businessInsights.getBusinessInsightsOverview(this.prisma, tenantId, range);
+  }
+
+  async getOutsourcingOverview(tenantId: string, range: DateRange) {
+    return outsourcing.getOutsourcingOverview(this.prisma, tenantId, range);
   }
 }

@@ -37,6 +37,19 @@ export async function rejectSample(id: string, rejectionReason: string) {
   return data;
 }
 
+export async function outsourceSample(
+  id: string,
+  payload: { externalLabName: string; outsourcingCost?: number },
+) {
+  const { data } = await api.patch<Sample>(`/laboratory/samples/${id}/outsource`, payload);
+  return data;
+}
+
+export async function unOutsourceSample(id: string) {
+  const { data } = await api.patch<Sample>(`/laboratory/samples/${id}/un-outsource`, {});
+  return data;
+}
+
 export async function enterResult(payload: {
   sampleId: string;
   invoiceLineId: string;

@@ -13,6 +13,7 @@ import {
 import { LaboratoryService } from './laboratory.service';
 import { CollectSampleDto } from './dto/collect-sample.dto';
 import { AcceptSampleDto, RejectSampleDto } from './dto/sample-action.dto';
+import { OutsourceSampleDto } from './dto/outsource-sample.dto';
 import { EnterResultDto } from './dto/enter-result.dto';
 import { AmendResultDto } from './dto/amend-result.dto';
 
@@ -119,6 +120,36 @@ export class LaboratoryController {
   ) {
     const tenantId = resolveTenantId(tenantHeader);
     return this.laboratoryService.startTesting(tenantId, id);
+  }
+
+  /**
+   * PATCH /laboratory/samples/:id/outsource
+   */
+  @Patch('samples/:id/outsource')
+  async outsourceSample(
+    @Param('id') id: string,
+    @Body() dto: OutsourceSampleDto,
+    @Headers('x-tenant-id') tenantHeader?: string,
+  ) {
+    const tenantId = resolveTenantId(tenantHeader);
+    return this.laboratoryService.markOutsourced(
+      tenantId,
+      id,
+      dto.externalLabName,
+      dto.outsourcingCost,
+    );
+  }
+
+  /**
+   * PATCH /laboratory/samples/:id/un-outsource
+   */
+  @Patch('samples/:id/un-outsource')
+  async unOutsourceSample(
+    @Param('id') id: string,
+    @Headers('x-tenant-id') tenantHeader?: string,
+  ) {
+    const tenantId = resolveTenantId(tenantHeader);
+    return this.laboratoryService.unmarkOutsourced(tenantId, id);
   }
 
   // ----- Results -----

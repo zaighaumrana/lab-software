@@ -161,6 +161,41 @@ export async function getBusinessInsightsOverview(params: DateRangeParams = {}) 
   return data;
 }
 
+export interface OutsourcedTestRow {
+  testId: string;
+  testName: string;
+  testCode: string;
+  count: number;
+}
+
+export interface ExternalLabRow {
+  labName: string;
+  sampleCount: number;
+  totalCost: number;
+}
+
+export interface InHouseVsOutsourcedRow {
+  label: 'In-House' | 'Outsourced';
+  count: number;
+}
+
+export interface OutsourcingOverview {
+  totalOutsourcedTests: number;
+  outsourcingCost: number;
+  revenue: number;
+  netMargin: number;
+  topOutsourcedTests: OutsourcedTestRow[];
+  topExternalLabs: ExternalLabRow[];
+  inHouseVsOutsourced: InHouseVsOutsourcedRow[];
+}
+
+export async function getOutsourcingOverview(params: DateRangeParams = {}) {
+  const { data } = await api.get<OutsourcingOverview>('/analytics/dashboard/outsourcing', {
+    params,
+  });
+  return data;
+}
+
 export async function getWidget(widgetId: string, params: DateRangeParams = {}) {
   const { data } = await api.get(`/analytics/widgets/${widgetId}`, { params });
   return data as { widgetId: string; range: DateRangeParams; value: unknown };

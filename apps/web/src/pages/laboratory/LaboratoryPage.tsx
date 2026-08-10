@@ -16,6 +16,10 @@ export function LaboratoryPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [showOutsourceForm, setShowOutsourceForm] = useState(false);
+  const [outsourceLab, setOutsourceLab] = useState('');
+  const [outsourceCost, setOutsourceCost] = useState('');
+  const [outsourcing, setOutsourcing] = useState(false);
 
   async function refresh() {
     setLoading(true);
@@ -45,6 +49,46 @@ export function LaboratoryPage() {
         (err as { response?: { data?: { message?: string } } })?.response?.data
           ?.message || 'Action failed';
       setError(msg);
+    }
+  }
+
+  async function submitOutsource() {
+    if (!selected || !outsourceLab.trim()) return;
+    setOutsourcing(true);
+    setError('');
+    try {
+      const updated = await labApi.outsourceSample(selected.id, {
+        externalLabName: outsourceLab.trim(),
+        outsourcingCost: outsourceCost ? Number(outsourceCost) : undefined,
+      });
+      setSelected(updated);
+      setShowOutsourceForm(false);
+      setOutsourceLab('');
+      setOutsourceCost('');
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message || 'Could not mark as outsourced';
+      setError(msg);
+    } finally {
+      setOutsourcing(false);
+    }
+  }
+
+  async function removeOutsource() {
+    if (!selected) return;
+    setOutsourcing(true);
+    setError('');
+    try {
+      const updated = await labApi.unOutsourceSample(selected.id);
+      setSelected(updated);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message || 'Could not remove outsourcing';
+      setError(msg);
+    } finally {
+      setOutsourcing(false);
     }
   }
 
@@ -160,13 +204,21 @@ export function LaboratoryPage() {
                 onClick={() => {
                   setSelected(s);
                   setActiveTest(null);
+                  setShowOutsourceForm(false);
                 }}
               >
                 <div>
                   <div className="text-sm font-medium">
                     {s.invoice?.booking?.patient?.fullName ?? s.sampleCode}
                   </div>
-                  <div className="text-xs text-slate-500">{s.sampleCode}</div>
+                  <div className="text-xs text-slate-500">
+                    {s.sampleCode}
+                    {s.isOutsourced && (
+                      <span className="ml-2 rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700">
+                        Outsourced
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <StatusBadge status={s.status} />
               </button>
@@ -188,6 +240,72 @@ export function LaboratoryPage() {
                     <div className="text-xs text-slate-500">{selected.sampleCode}</div>
                   </div>
                   <StatusBadge status={selected.status} />
+                </div>
+
+                <div className="rounded-lg border border-slate-200 p-3 text-sm">
+                  {selected.isOutsourced ? (
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="rounded bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+                          Outsourced
+                        </span>
+                        <span className="ml-2 text-slate-700">{selected.externalLabName}</span>
+                        {selected.outsourcingCost != null && (
+                          <span className="ml-2 text-xs text-slate-500">
+                            Cost: Rs {Number(selected.outsourcingCost).toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        className="btn-secondary text-xs"
+                        onClick={removeOutsource}
+                        disabled={outsourcing}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : showOutsourceForm ? (
+                    <div className="flex flex-wrap items-end gap-2">
+                      <div>
+                        <label className="label text-xs">External lab *</label>
+                        <input
+                          className="input"
+                          value={outsourceLab}
+                          onChange={(e) => setOutsourceLab(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="label text-xs">Cost (Rs)</label>
+                        <input
+                          className="input w-28"
+                          type="number"
+                          min={0}
+                          value={outsourceCost}
+                          onChange={(e) => setOutsourceCost(e.target.value)}
+                        />
+                      </div>
+                      <button
+                        className="btn-primary text-xs"
+                        onClick={submitOutsource}
+                        disabled={outsourcing || !outsourceLab.trim()}
+                      >
+                        {outsourcing ? 'Saving…' : 'Save'}
+                      </button>
+                      <button
+                        className="btn-secondary text-xs"
+                        onClick={() => setShowOutsourceForm(false)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className="text-xs text-brand-600 hover:underline"
+                      onClick={() => setShowOutsourceForm(true)}
+                    >
+                      Send this sample to an external lab
+                    </button>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap gap-2">

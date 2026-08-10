@@ -593,6 +593,9 @@ model Sample {
   rejectionReason String?
   discardedAt     DateTime?
   notes           String?
+  isOutsourced      Boolean  @default(false)
+  externalLabName   String?
+  outsourcingCost   Decimal? @db.Decimal(10, 2) // What we pay the external lab
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
@@ -603,6 +606,7 @@ model Sample {
 
   @@unique([tenantId, sampleCode])
   @@index([tenantId, status])
+  @@index([tenantId, isOutsourced])
   @@index([invoiceId])
   @@map("samples")
 }
