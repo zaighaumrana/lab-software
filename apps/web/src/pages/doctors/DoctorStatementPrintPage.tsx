@@ -4,6 +4,7 @@ import * as doctorsApi from '../../api/doctors';
 import type { DoctorDashboard } from '../../api/doctors';
 import { useSettings } from '../../contexts/SettingsContext';
 import { PrintFrame, useIsLetterhead } from '../../print/PrintFrame';
+import { openPdf } from '../../print/openPdf';
 import { Loading } from '../../components/Loading';
 import '../../styles/print-document.css';
 
@@ -26,6 +27,24 @@ export function DoctorStatementPrintPage() {
   const letterhead = useIsLetterhead();
   const [data, setData] = useState<DoctorDashboard | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState('');
+
+  async function handleOpenPdf() {
+    if (!id) return;
+    setPdfLoading(true);
+    setPdfError('');
+    try {
+      const params = new URLSearchParams();
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+      await openPdf(`/printing/doctors/${id}/statement?${params.toString()}`);
+    } catch {
+      setPdfError('Could not generate PDF. Please try again.');
+    } finally {
+      setPdfLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!id) return;
@@ -49,10 +68,18 @@ export function DoctorStatementPrintPage() {
       <div className="print-doc-root">
         <div className="print-doc-toolbar no-print">
           <span />
-          <button type="button" className="btn-primary text-sm" onClick={() => window.print()}>
-            Print / Save as PDF
+          <button type="button" className="btn-primary text-sm" onClick={handleOpenPdf} disabled={pdfLoading}>
+            {pdfLoading ? 'Generating PDF…' : 'Open / Print PDF'}
           </button>
         </div>
+        {pdfError && (
+          <div
+            className="no-print"
+            style={{ maxWidth: '210mm', margin: '0 auto 12px', padding: '10px 14px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, fontSize: 14, color: '#b91c1c' }}
+          >
+            {pdfError}
+          </div>
+        )}
 
         <article className="print-doc">
           <header className="print-doc-header">

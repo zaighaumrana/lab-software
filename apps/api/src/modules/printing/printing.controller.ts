@@ -1,13 +1,15 @@
-import { Controller, Get, Param, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { PrintingService } from './printing.service';
 import { BillingService } from '../billing/billing.service';
 import { ReportingService } from '../reporting/reporting.service';
 import { SettingsService } from '../settings/settings.service';
+import { DoctorsService } from '../doctors/doctors.service';
 import { SessionGuard } from '../../common/guards/session.guard';
 import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
 import { buildInvoiceHtml } from './templates/invoice.template';
 import { buildReportHtml } from './templates/report.template';
+import { buildDoctorStatementHtml } from './templates/doctor-statement.template';
 import type { PrintSettings } from './templates/shared';
 
 @Controller('printing')
@@ -18,6 +20,7 @@ export class PrintingController {
     private readonly billingService: BillingService,
     private readonly reportingService: ReportingService,
     private readonly settingsService: SettingsService,
+    private readonly doctorsService: DoctorsService,
   ) {}
 
   private async resolvePrintSettings(tenantId: string): Promise<PrintSettings> {
@@ -68,6 +71,37 @@ export class PrintingController {
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="report-${report.trackingId}.pdf"`,
+    });
+    res.send(pdf);
+  }
+
+  @Get('doctors/:id/statement')
+  async doctorStatementPdf(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Query('from') from: string | undefined,
+    @Query('to') to: string | undefined,
+    @Res() res: Response,
+  ) {
+    const [dashboard, settings] = await Promise.all([
+      this.doctorsService.dashboard(user.tenantId, id, {
+        from,
+        to,
+        sortBy: 'date',
+        sortDir: 'asc',
+        page: 1,
+        pageSize: 1000,
+      }),
+      this.resolvePrintSettings(user.tenantId),
+    ]);
+    const html = buildDoctorStatementHtml(dashboard, settings);
+    const pdf = await this.printingService.renderPdf(html, {
+      marginTopMm: settings.marginTopMm,
+      marginBottomMm: settings.marginBottomMm,
+    });
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="doctor-statement-${dashboard.doctor.fullName.replace(/\s+/g, '-')}.pdf"`,
     });
     res.send(pdf);
   }
