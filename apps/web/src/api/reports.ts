@@ -1,9 +1,9 @@
 import { api } from './client';
 import type { Report } from '../types';
 
-export async function listReports(q?: string) {
+export async function listReports(q?: string, status?: string) {
   const { data } = await api.get<Report[]>('/reports', {
-    params: q ? { q } : undefined,
+    params: { q: q || undefined, status: status || undefined },
   });
   return data;
 }

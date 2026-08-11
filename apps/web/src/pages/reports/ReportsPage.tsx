@@ -9,13 +9,14 @@ import { Search } from 'lucide-react';
 
 export function ReportsPage() {
   const [q, setQ] = useState('');
+  const [status, setStatus] = useState('');
   const [items, setItems] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
 
-  async function load(query?: string) {
+  async function load(query?: string, statusFilter?: string) {
     setLoading(true);
     try {
-      const data = await reportsApi.listReports(query);
+      const data = await reportsApi.listReports(query, statusFilter);
       setItems(data);
     } finally {
       setLoading(false);
@@ -23,13 +24,16 @@ export function ReportsPage() {
   }
 
   useEffect(() => {
-    load();
-  }, []);
+    load(undefined, status);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   function handleSearch(e: FormEvent) {
     e.preventDefault();
-    load(q.trim() || undefined);
+    load(q.trim() || undefined, status);
   }
+
+  const STATUS_OPTIONS = ['', 'PENDING', 'PARTIAL_READY', 'COMPLETE', 'AMENDED', 'ARCHIVED'];
 
   return (
     <div className="space-y-6">
@@ -40,8 +44,8 @@ export function ReportsPage() {
         </p>
       </div>
 
-      <form onSubmit={handleSearch} className="flex gap-2">
-        <div className="relative flex-1">
+      <form onSubmit={handleSearch} className="flex flex-wrap gap-2">
+        <div className="relative flex-1 min-w-[220px]">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             className="input pl-10"
@@ -50,6 +54,13 @@ export function ReportsPage() {
             onChange={(e) => setQ(e.target.value)}
           />
         </div>
+        <select className="input w-44" value={status} onChange={(e) => setStatus(e.target.value)}>
+          {STATUS_OPTIONS.map((s) => (
+            <option key={s} value={s}>
+              {s ? s.replace(/_/g, ' ') : 'All statuses'}
+            </option>
+          ))}
+        </select>
         <button type="submit" className="btn-primary">
           Search
         </button>
@@ -120,6 +131,9 @@ export function ReportsPage() {
               })}
             </tbody>
           </table>
+          <div className="border-t border-slate-100 px-4 py-2 text-xs text-slate-400">
+            Showing {items.length} most recent match{items.length === 1 ? '' : 'es'} (up to 200)
+          </div>
         </div>
       )}
     </div>

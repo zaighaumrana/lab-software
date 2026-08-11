@@ -14,18 +14,19 @@ export class ReportingController {
   constructor(private readonly reportingService: ReportingService) {}
 
   /**
-   * GET /reports?q=
+   * GET /reports?q=&status=
    * Must be declared before :id routes.
    */
   @Get()
   async list(
     @Query('q') q?: string,
+    @Query('status') status?: string,
     @Headers('x-tenant-id') tenantHeader?: string,
     @Headers('x-branch-id') branchHeader?: string,
   ) {
     const tenantId = resolveTenantId(tenantHeader);
     const branchId = resolveBranchId(branchHeader);
-    return this.reportingService.list(tenantId, branchId, q);
+    return this.reportingService.list(tenantId, branchId, q, status);
   }
 
   /**

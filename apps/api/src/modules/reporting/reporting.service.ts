@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { ReportStatus } from '@lms/database';
 
 @Injectable()
 export class ReportingService {
@@ -77,11 +78,12 @@ export class ReportingService {
     });
   }
 
-  async list(tenantId: string, branchId?: string, q?: string) {
+  async list(tenantId: string, branchId?: string, q?: string, status?: string) {
     return this.prisma.report.findMany({
       where: {
         tenantId,
         ...(branchId ? { branchId } : {}),
+        ...(status ? { status: status as ReportStatus } : {}),
         ...(q
           ? {
               OR: [
@@ -106,7 +108,7 @@ export class ReportingService {
           : {}),
       },
       orderBy: { createdAt: 'desc' },
-      take: 50,
+      take: 200,
       include: {
         invoice: {
           include: {
