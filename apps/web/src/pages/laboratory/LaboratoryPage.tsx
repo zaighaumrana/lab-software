@@ -33,9 +33,37 @@ export function LaboratoryPage() {
     }
   }
 
+  // Same fetch as refresh(), but doesn't toggle the full-page loading
+  // spinner — used for background polling so the screen doesn't flash
+  // every few seconds.
+  async function silentRefresh() {
+    try {
+      const data = await labApi.listPendingSamples();
+      setSamples(data);
+    } catch {
+      // transient polling error — next tick will retry
+    }
+  }
+
   useEffect(() => {
     refresh();
     catalogApi.listTests().then(setTests);
+  }, []);
+
+  // Poll for changes made by other technicians (e.g. someone else entering
+  // or finalizing a result on the currently selected sample) so the screen
+  // stays current without requiring a manual refresh.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      silentRefresh();
+      setSelected((current) => {
+        if (current) {
+          labApi.getSample(current.id).then((s) => setSelected(s as Sample));
+        }
+        return current;
+      });
+    }, 15000);
+    return () => clearInterval(interval);
   }, []);
 
   async function advanceSample(sample: Sample, action: 'receive' | 'accept') {
@@ -151,6 +179,7 @@ export function LaboratoryPage() {
       return;
     }
 
+    const scrollY = window.scrollY;
     setSaving(true);
     setError('');
     try {
@@ -177,10 +206,18 @@ export function LaboratoryPage() {
       setError(msg);
     } finally {
       setSaving(false);
+      // Closing the entry form / refreshing the list changes the page's
+      // height, which makes the browser yank the scroll position back to
+      // the top. Restore where the technician was looking after the DOM
+      // settles.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => window.scrollTo(0, scrollY));
+      });
     }
   }
 
   async function finalizeExisting(resultId: string) {
+    const scrollY = window.scrollY;
     setFinalizing(true);
     setError('');
     try {
@@ -198,11 +235,15 @@ export function LaboratoryPage() {
       setError(msg);
     } finally {
       setFinalizing(false);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => window.scrollTo(0, scrollY));
+      });
     }
   }
 
   async function submitReopen() {
     if (!reopenTarget || !reopenReason.trim()) return;
+    const scrollY = window.scrollY;
     setFinalizing(true);
     setError('');
     try {
@@ -222,6 +263,9 @@ export function LaboratoryPage() {
       setError(msg);
     } finally {
       setFinalizing(false);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => window.scrollTo(0, scrollY));
+      });
     }
   }
 
@@ -325,10 +369,17 @@ export function LaboratoryPage() {
                   className={`flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-slate-50 ${
                     selected?.id === s.id ? 'bg-brand-50' : ''
                   }`}
-                  onClick={() => {
+                  onClick={async () => {
+                    // `s` comes from listPendingSamples(), which omits
+                    // `results` for list-payload size — using it directly
+                    // is what made previously entered/finalized values
+                    // disappear on reselect. Fetch the full sample (which
+                    // does include results) instead.
                     setSelected(s);
                     setActiveTest(null);
                     setShowOutsourceForm(false);
+                    const full = await labApi.getSample(s.id);
+                    setSelected(full as Sample);
                   }}
                 >
                   <div>
@@ -528,59 +579,60 @@ export function LaboratoryPage() {
                                 </button>
                               )}
                             </div>
+
+                            {/* Entry form renders right inside this test's
+                                own row instead of in a separate box at the
+                                bottom of the card, so it's obvious which
+                                test you're editing and there's no jump. */}
+                            {activeTest?.id === test.id && (
+                              <div className="mt-3 space-y-3 rounded-lg border border-brand-200 bg-brand-50/50 p-3">
+                                {activeTest.parameters
+                                  .sort((a, b) => a.sortOrder - b.sortOrder)
+                                  .map((p) => (
+                                    <div key={p.id}>
+                                      <label className="label">
+                                        {p.name}
+                                        {p.unit ? ` (${p.unit})` : ''}
+                                        {p.isRequired ? ' *' : ''}
+                                      </label>
+                                      <input
+                                        className="input"
+                                        type={p.valueType === 'TEXT' ? 'text' : 'number'}
+                                        step="any"
+                                        value={values[p.id] ?? ''}
+                                        onChange={(e) =>
+                                          setValues({ ...values, [p.id]: e.target.value })
+                                        }
+                                      />
+                                    </div>
+                                  ))}
+                                <div className="flex gap-2">
+                                  <button
+                                    className="btn-secondary flex-1"
+                                    onClick={() => submitResult(false)}
+                                    disabled={saving}
+                                  >
+                                    {saving ? 'Saving…' : 'Save'}
+                                  </button>
+                                  <button
+                                    className="btn-primary flex-1"
+                                    onClick={() => submitResult(true)}
+                                    disabled={saving}
+                                  >
+                                    {saving ? 'Saving…' : 'Save & Finalize'}
+                                  </button>
+                                </div>
+                                <button
+                                  className="w-full text-center text-xs text-slate-400 hover:text-slate-600"
+                                  onClick={() => setActiveTest(null)}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
-                  </div>
-                )}
-
-                {activeTest && (
-                  <div className="space-y-3 rounded-lg border border-brand-200 bg-brand-50/50 p-4">
-                    <h3 className="font-semibold">
-                      {activeTest.code} — {activeTest.name}
-                    </h3>
-                    {activeTest.parameters
-                      .sort((a, b) => a.sortOrder - b.sortOrder)
-                      .map((p) => (
-                        <div key={p.id}>
-                          <label className="label">
-                            {p.name}
-                            {p.unit ? ` (${p.unit})` : ''}
-                            {p.isRequired ? ' *' : ''}
-                          </label>
-                          <input
-                            className="input"
-                            type={p.valueType === 'TEXT' ? 'text' : 'number'}
-                            step="any"
-                            value={values[p.id] ?? ''}
-                            onChange={(e) =>
-                              setValues({ ...values, [p.id]: e.target.value })
-                            }
-                          />
-                        </div>
-                      ))}
-                    <div className="flex gap-2">
-                      <button
-                        className="btn-secondary flex-1"
-                        onClick={() => submitResult(false)}
-                        disabled={saving}
-                      >
-                        {saving ? 'Saving…' : 'Save'}
-                      </button>
-                      <button
-                        className="btn-primary flex-1"
-                        onClick={() => submitResult(true)}
-                        disabled={saving}
-                      >
-                        {saving ? 'Saving…' : 'Save & Finalize'}
-                      </button>
-                    </div>
-                    <button
-                      className="w-full text-center text-xs text-slate-400 hover:text-slate-600"
-                      onClick={() => setActiveTest(null)}
-                    >
-                      Cancel
-                    </button>
                   </div>
                 )}
 
