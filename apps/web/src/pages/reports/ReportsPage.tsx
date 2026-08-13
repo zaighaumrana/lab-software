@@ -112,7 +112,23 @@ export function ReportsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <StatusBadge status={r.status} />
+                      {/* A COMPLETE report is "ready for collection" — but
+                          whether the patient can actually walk out with it
+                          depends on payment too, so surface that instead of
+                          the raw lifecycle status once it's finalized. */}
+                      {['COMPLETE', 'AMENDED', 'ARCHIVED'].includes(r.status) ? (
+                        due > 0 ? (
+                          <span className="rounded px-2 py-0.5 text-[11px] font-medium bg-amber-100 text-amber-700">
+                            Ready — Payment Pending
+                          </span>
+                        ) : (
+                          <span className="rounded px-2 py-0.5 text-[11px] font-medium bg-green-100 text-green-700">
+                            Ready for Collection
+                          </span>
+                        )
+                      ) : (
+                        <StatusBadge status={r.status} />
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-2">
