@@ -14,9 +14,11 @@ import {
   BookingStatus,
   ShareType,
   ShareStatus,
+  ReportStatus,
   Prisma,
   Decimal,
 } from '@lms/database';
+import { generateReportNumber, generateTrackingId } from '../../common/id-generators.util';
 
 function generateInvoiceNumber(): string {
   const now = new Date();
@@ -245,6 +247,25 @@ export class BillingService {
           booking: { include: { patient: true } },
         },
       });
+
+      // A trackingId must exist the moment the invoice is printed —
+      // otherwise a patient has no way to look up their results until the
+      // lab happens to finalize a test, which can be days later. Create
+      // the Report row now, in PENDING status; laboratory.service.ts's
+      // recomputeReportStatus() updates this same row as results come in.
+      const hasTestLines = resolvedLines.some((l) => l.testId);
+      if (hasTestLines) {
+        await tx.report.create({
+          data: {
+            tenantId,
+            branchId,
+            invoiceId: inv.id,
+            status: ReportStatus.PENDING,
+            reportNumber: generateReportNumber(),
+            trackingId: generateTrackingId(),
+          },
+        });
+      }
 
       // Mark booking as CONVERTED
       await tx.booking.update({
