@@ -169,6 +169,35 @@ export class LaboratoryController {
   }
 
   /**
+   * PATCH /laboratory/results/:id/finalize
+   * Explicit finalization: ENTERED → RELEASED.
+   */
+  @Patch('results/:id/finalize')
+  async finalizeResult(
+    @Param('id') id: string,
+    @Headers('x-tenant-id') tenantHeader?: string,
+    @Headers('x-user-id') userHeader?: string,
+  ) {
+    const tenantId = resolveTenantId(tenantHeader);
+    return this.laboratoryService.finalizeResult(tenantId, id, userHeader);
+  }
+
+  /**
+   * PATCH /laboratory/results/:id/reopen
+   * Explicit, authorized un-finalize: RELEASED → ENTERED. Requires a reason.
+   */
+  @Patch('results/:id/reopen')
+  async reopenResult(
+    @Param('id') id: string,
+    @Body() dto: { reason: string },
+    @Headers('x-tenant-id') tenantHeader?: string,
+    @Headers('x-user-id') userHeader?: string,
+  ) {
+    const tenantId = resolveTenantId(tenantHeader);
+    return this.laboratoryService.reopenResult(tenantId, id, dto?.reason, userHeader);
+  }
+
+  /**
    * POST /laboratory/results/:id/amend
    * Create a new versioned result; original becomes SUPERSEDED.
    */

@@ -10,5 +10,6 @@ import { DoctorsModule } from '../doctors/doctors.module';
   imports: [BillingModule, ReportingModule, SettingsModule, DoctorsModule],
   controllers: [PrintingController],
   providers: [PrintingService],
+  exports: [PrintingService],
 })
 export class PrintingModule {}

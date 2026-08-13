@@ -94,19 +94,34 @@ export function LaboratoryPage() {
     }
   }
 
+  const [reopenTarget, setReopenTarget] = useState<Result | null>(null);
+  const [reopenReason, setReopenReason] = useState('');
+  const [finalizing, setFinalizing] = useState(false);
+
+  function existingResultFor(sample: Sample, testId: string): Result | undefined {
+    return sample.results?.find(
+      (r) => r.testId === testId && (r.status === 'ENTERED' || r.status === 'RELEASED'),
+    );
+  }
+
   function openResultEntry(sample: Sample, test: Test) {
     setSelected(sample);
     setActiveTest(test);
+    const existing = existingResultFor(sample, test.id);
     const initial: Record<string, string> = {};
     test.parameters.forEach((p) => {
-      initial[p.id] = '';
+      const existingValue = existing?.values.find((v) => v.testParameterId === p.id);
+      initial[p.id] =
+        existingValue?.valueNumeric != null
+          ? String(existingValue.valueNumeric)
+          : existingValue?.valueText ?? '';
     });
     setValues(initial);
     setMessage('');
     setError('');
   }
 
-  async function submitResult() {
+  async function submitResult(finalize: boolean) {
     if (!selected || !activeTest) return;
     const invoiceLine = selected.invoice?.lines?.find(
       (l) => l.testId === activeTest.id,
@@ -144,13 +159,17 @@ export function LaboratoryPage() {
         invoiceLineId: invoiceLine.id,
         testId: activeTest.id,
         values: payloadValues,
-        releaseImmediately: true,
+        releaseImmediately: finalize,
       });
       setMessage(
-        `Result released${result.isCritical ? ' — CRITICAL VALUE DETECTED' : ''}`,
+        finalize
+          ? `Result finalized${result.isCritical ? ' — CRITICAL VALUE DETECTED' : ''}`
+          : 'Result saved. Finalize when ready to include it in the report.',
       );
       setActiveTest(null);
       await refresh();
+      const updated = await labApi.getSample(selected.id);
+      setSelected(updated as Sample);
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { message?: string } } })?.response?.data
@@ -158,6 +177,51 @@ export function LaboratoryPage() {
       setError(msg);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function finalizeExisting(resultId: string) {
+    setFinalizing(true);
+    setError('');
+    try {
+      await labApi.finalizeResult(resultId);
+      setMessage('Result finalized.');
+      await refresh();
+      if (selected) {
+        const updated = await labApi.getSample(selected.id);
+        setSelected(updated as Sample);
+      }
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message || 'Failed to finalize result';
+      setError(msg);
+    } finally {
+      setFinalizing(false);
+    }
+  }
+
+  async function submitReopen() {
+    if (!reopenTarget || !reopenReason.trim()) return;
+    setFinalizing(true);
+    setError('');
+    try {
+      await labApi.reopenResult(reopenTarget.id, reopenReason.trim());
+      setMessage('Result reopened for editing.');
+      setReopenTarget(null);
+      setReopenReason('');
+      await refresh();
+      if (selected) {
+        const updated = await labApi.getSample(selected.id);
+        setSelected(updated as Sample);
+      }
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message || 'Failed to reopen result';
+      setError(msg);
+    } finally {
+      setFinalizing(false);
     }
   }
 
@@ -391,23 +455,80 @@ export function LaboratoryPage() {
                 {(selected.status === 'ACCEPTED' ||
                   selected.status === 'IN_TESTING') && (
                   <div className="space-y-2">
-                    <h3 className="text-sm font-semibold">Enter results</h3>
+                    <h3 className="text-sm font-semibold">Tests</h3>
                     {selected.invoice?.lines
                       ?.filter((l) => l.testId)
                       .map((line) => {
                         const test = tests.find((t) => t.id === line.testId);
                         if (!test) return null;
+                        const existing = existingResultFor(selected, test.id);
+                        const isFinalized = existing?.status === 'RELEASED';
+                        const isEntered = existing?.status === 'ENTERED';
+
                         return (
-                          <button
+                          <div
                             key={line.id}
-                            className="flex w-full items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-left text-sm hover:border-brand-400"
-                            onClick={() => openResultEntry(selected, test)}
+                            className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
                           >
-                            <span>
-                              {test.code} — {test.name}
-                            </span>
-                            <span className="text-xs text-brand-600">Enter →</span>
-                          </button>
+                            <div className="flex items-center justify-between gap-2">
+                              <button
+                                className="flex-1 text-left hover:text-brand-700"
+                                onClick={() => !isFinalized && openResultEntry(selected, test)}
+                                disabled={isFinalized}
+                              >
+                                {test.code} — {test.name}
+                              </button>
+                              <span
+                                className={`rounded px-2 py-0.5 text-[11px] font-medium ${
+                                  isFinalized
+                                    ? 'bg-green-100 text-green-700'
+                                    : isEntered
+                                      ? 'bg-amber-100 text-amber-700'
+                                      : 'bg-slate-100 text-slate-500'
+                                }`}
+                              >
+                                {isFinalized ? 'Finalized' : isEntered ? 'Entered' : 'Not entered'}
+                              </span>
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-3">
+                              {!existing && (
+                                <button
+                                  className="text-xs text-brand-600 hover:underline"
+                                  onClick={() => openResultEntry(selected, test)}
+                                >
+                                  Enter result →
+                                </button>
+                              )}
+                              {isEntered && (
+                                <>
+                                  <button
+                                    className="text-xs text-brand-600 hover:underline"
+                                    onClick={() => openResultEntry(selected, test)}
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    className="text-xs text-green-700 hover:underline"
+                                    disabled={finalizing}
+                                    onClick={() => finalizeExisting(existing.id)}
+                                  >
+                                    Finalize
+                                  </button>
+                                </>
+                              )}
+                              {isFinalized && (
+                                <button
+                                  className="text-xs text-amber-700 hover:underline"
+                                  onClick={() => {
+                                    setReopenTarget(existing);
+                                    setReopenReason('');
+                                  }}
+                                >
+                                  Reopen
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         );
                       })}
                   </div>
@@ -438,13 +559,57 @@ export function LaboratoryPage() {
                           />
                         </div>
                       ))}
+                    <div className="flex gap-2">
+                      <button
+                        className="btn-secondary flex-1"
+                        onClick={() => submitResult(false)}
+                        disabled={saving}
+                      >
+                        {saving ? 'Saving…' : 'Save'}
+                      </button>
+                      <button
+                        className="btn-primary flex-1"
+                        onClick={() => submitResult(true)}
+                        disabled={saving}
+                      >
+                        {saving ? 'Saving…' : 'Save & Finalize'}
+                      </button>
+                    </div>
                     <button
-                      className="btn-primary w-full"
-                      onClick={submitResult}
-                      disabled={saving}
+                      className="w-full text-center text-xs text-slate-400 hover:text-slate-600"
+                      onClick={() => setActiveTest(null)}
                     >
-                      {saving ? 'Saving…' : 'Save & Release Result'}
+                      Cancel
                     </button>
+                  </div>
+                )}
+
+                {reopenTarget && (
+                  <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-4">
+                    <h3 className="text-sm font-semibold text-amber-900">
+                      Reopen {reopenTarget.test?.code} — a reason is required
+                    </h3>
+                    <input
+                      className="input"
+                      placeholder="e.g. Value transcribed incorrectly"
+                      value={reopenReason}
+                      onChange={(e) => setReopenReason(e.target.value)}
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        className="btn-secondary flex-1"
+                        onClick={() => setReopenTarget(null)}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        className="btn-primary flex-1"
+                        disabled={finalizing || !reopenReason.trim()}
+                        onClick={submitReopen}
+                      >
+                        {finalizing ? 'Reopening…' : 'Confirm reopen'}
+                      </button>
+                    </div>
                   </div>
                 )}
               </>

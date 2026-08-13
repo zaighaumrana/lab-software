@@ -1,5 +1,6 @@
 import { Controller, Get, Param, Query, Headers } from '@nestjs/common';
 import { ReportingService } from './reporting.service';
+import { canDeliverReport, isReportFinalized } from '../../common/report-eligibility.util';
 
 function resolveTenantId(header?: string): string {
   return header || process.env.DEFAULT_TENANT_ID || 'default-tenant';
@@ -43,6 +44,13 @@ export class ReportingController {
 
   /**
    * GET /reports/:id
+   *
+   * Front-desk report preview. Per the delivery rule, actual result values
+   * are only included once the report is finalized AND the invoice is
+   * fully paid — this is the server enforcing that, not just the frontend
+   * choosing not to render a button. When not deliverable, the caller
+   * still gets patient/status context (so front desk can say "ready,
+   * payment pending") but never the values themselves.
    */
   @Get(':id')
   async findOne(
@@ -50,6 +58,26 @@ export class ReportingController {
     @Headers('x-tenant-id') tenantHeader?: string,
   ) {
     const tenantId = resolveTenantId(tenantHeader);
-    return this.reportingService.findById(tenantId, id);
+    const report = await this.reportingService.findById(tenantId, id);
+    const finalized = isReportFinalized(report);
+    const deliverable = canDeliverReport(report, report.invoice);
+
+    if (deliverable) {
+      return { ...report, finalized, deliverable };
+    }
+
+    // Strip actual result values — only status/payment context goes out.
+    return {
+      ...report,
+      finalized,
+      deliverable,
+      invoice: {
+        ...report.invoice,
+        samples: (report.invoice.samples ?? []).map((s) => ({
+          ...s,
+          results: [],
+        })),
+      },
+    };
   }
 }

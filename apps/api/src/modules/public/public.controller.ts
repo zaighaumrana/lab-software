@@ -5,9 +5,11 @@ import {
   Query,
   Body,
   Headers,
+  Res,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { PublicService } from './public.service';
 
 function resolveTenantId(header?: string): string {
@@ -53,6 +55,30 @@ export class PublicController {
       trackingId,
       verification,
     );
+  }
+
+  /**
+   * GET /public/reports/lookup/pdf?trackingId=XXX&verification=0300...
+   * Same eligibility rule as the JSON lookup — only serves the PDF once
+   * finalized + fully paid, re-checked independently server-side.
+   */
+  @Get('reports/lookup/pdf')
+  async lookupReportPdf(
+    @Query('trackingId') trackingId: string,
+    @Query('verification') verification: string,
+    @Res() res: Response,
+    @Headers('x-tenant-id') tenantHeader?: string,
+  ) {
+    const { pdf, filename } = await this.publicService.lookupReportPdf(
+      resolveTenantId(tenantHeader),
+      trackingId,
+      verification,
+    );
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="${filename}"`,
+    });
+    res.send(pdf);
   }
 
   /**

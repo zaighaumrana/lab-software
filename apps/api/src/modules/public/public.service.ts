@@ -6,6 +6,15 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { PatientsService } from '../patients/patients.service';
+import {
+  isReportFinalized,
+  canDeliverReport,
+  REPORT_NOT_FINALIZED_MESSAGE,
+} from '../../common/report-eligibility.util';
+import { ReportingService } from '../reporting/reporting.service';
+import { SettingsService } from '../settings/settings.service';
+import { PrintingService } from '../printing/printing.service';
+import { buildReportHtml } from '../printing/templates/report.template';
 import { BookingStatus, BookingSource } from '@lms/database';
 
 function generateBookingCode(): string {
@@ -20,6 +29,9 @@ export class PublicService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly patientsService: PatientsService,
+    private readonly reportingService: ReportingService,
+    private readonly settingsService: SettingsService,
+    private readonly printingService: PrintingService,
   ) {}
 
   /** Public rate list — active tests only */
@@ -54,15 +66,11 @@ export class PublicService {
 
   /**
    * Report lookup: tracking ID + secondary verification (phone last digits or full phone).
-   * Verified patients always see released results — outstanding balance is shown as a
-   * notice (settle at collection), it does not hide the report. This matches the
-   * in-lab staff view, which never withheld results for an unpaid balance either.
+   * Result visibility follows the centralized eligibility rule (finalized + fully
+   * paid) — a verified patient with an outstanding balance is told the report is
+   * ready for collection at the lab, but never sees the actual result values.
    */
-  async lookupReport(
-    tenantId: string,
-    trackingId: string,
-    verification: string,
-  ) {
+  private async verifyAndFindReport(tenantId: string, trackingId: string, verification: string) {
     const report = await this.prisma.report.findFirst({
       where: { tenantId, trackingId: trackingId.toUpperCase() },
       include: {
@@ -108,8 +116,43 @@ export class PublicService {
       );
     }
 
+    return report;
+  }
+
+  async lookupReport(
+    tenantId: string,
+    trackingId: string,
+    verification: string,
+  ) {
+    const report = await this.verifyAndFindReport(tenantId, trackingId, verification);
+
     const patientName = report.invoice.booking?.patient?.fullName ?? '';
-    const amountDue = Number(report.invoice.amountDue);
+    const finalized = isReportFinalized(report);
+    const deliverable = canDeliverReport(report, report.invoice);
+
+    // Case A — not finalized: no results, no payment detail, just "still preparing".
+    if (!finalized) {
+      return {
+        trackingId: report.trackingId,
+        patientName,
+        state: 'NOT_READY' as const,
+        message: REPORT_NOT_FINALIZED_MESSAGE,
+      };
+    }
+
+    // Case B — finalized but not fully paid: confirm it's ready for collection,
+    // but never include result values, even a "message" note bundled with them.
+    if (!deliverable) {
+      return {
+        trackingId: report.trackingId,
+        patientName,
+        state: 'READY_FOR_COLLECTION' as const,
+        message:
+          'Your report is ready to be collected at the laboratory. Please clear any pending dues before receiving the report.',
+      };
+    }
+
+    // Case C — finalized and fully paid: full results + PDF download available.
     const results = report.invoice.samples.flatMap((s) =>
       s.results.map((r) => ({
         testCode: r.test?.code,
@@ -128,20 +171,53 @@ export class PublicService {
 
     return {
       trackingId: report.trackingId,
-      status: report.status,
+      reportId: report.id,
       reportNumber: report.reportNumber,
       patientName,
-      access: 'FULL' as const,
+      state: 'AVAILABLE' as const,
       generatedAt: report.generatedAt,
-      amountPaid: report.invoice.amountPaid,
-      amountDue: report.invoice.amountDue,
-      invoiceStatus: report.invoice.status,
-      message:
-        amountDue > 0
-          ? 'Balance due — please settle the remaining amount at the laboratory when collecting your printed report.'
-          : undefined,
       results,
     };
+  }
+
+  /**
+   * Public PDF download — reuses the exact same report template/Puppeteer
+   * pipeline as the front-desk PDF route (see PrintingService), not a
+   * separate implementation, so the physical report and the online PDF
+   * are always identical. Verification + eligibility are re-checked here
+   * independently of lookupReport; this is a separate HTTP request and
+   * must enforce the rule itself, not trust that the caller already saw
+   * the JSON lookup succeed.
+   */
+  async lookupReportPdf(
+    tenantId: string,
+    trackingId: string,
+    verification: string,
+  ): Promise<{ pdf: Buffer; filename: string }> {
+    const report = await this.verifyAndFindReport(tenantId, trackingId, verification);
+
+    if (!isReportFinalized(report)) {
+      throw new ForbiddenException(REPORT_NOT_FINALIZED_MESSAGE);
+    }
+    if (!canDeliverReport(report, report.invoice)) {
+      throw new ForbiddenException(
+        'Report not yet available for download — outstanding balance must be cleared first.',
+      );
+    }
+
+    // Re-fetch through reportingService.findById for the exact same shape
+    // buildReportHtml expects (this endpoint's own query above is scoped
+    // for the lightweight JSON lookup, not full template rendering).
+    const fullReport = await this.reportingService.findById(tenantId, report.id);
+    const settings = await this.settingsService.getPrintLayout(tenantId);
+    const branding = await this.settingsService.getBranding(tenantId);
+    const html = buildReportHtml(fullReport, { ...settings, logoDataUrl: branding.logoDataUrl });
+    const pdf = await this.printingService.renderPdf(html, {
+      marginTopMm: settings.marginTopMm,
+      marginBottomMm: settings.marginBottomMm,
+    });
+
+    return { pdf, filename: `report-${report.trackingId}.pdf` };
   }
 
   /**

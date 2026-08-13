@@ -153,6 +153,7 @@ export interface Sample {
   isOutsourced?: boolean;
   externalLabName?: string | null;
   outsourcingCost?: number | string | null;
+  results?: Result[];
   invoice?: Invoice & {
     booking?: Booking & { patient?: Patient };
     lines?: InvoiceLine[];
@@ -174,10 +175,12 @@ export interface Result {
   id: string;
   status: string;
   isCritical: boolean;
+  testId?: string;
   test?: Test;
   values: ResultValue[];
   enteredAt: string;
   releasedAt?: string | null;
+  notes?: string | null;
 }
 
 export interface Report {
@@ -185,6 +188,8 @@ export interface Report {
   reportNumber: string;
   trackingId: string;
   status: string;
+  finalized?: boolean;
+  deliverable?: boolean;
   generatedAt?: string | null;
   createdAt?: string;
   invoice?: Invoice & {

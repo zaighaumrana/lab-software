@@ -37,10 +37,9 @@ export function buildReportHtml(report: any, settings: PrintSettings): string {
   const results = (inv?.samples ?? []).flatMap((s: any) => s.results ?? []);
 
   const rightBlock = `
-    <div class="doc-label">Tracking ID</div>
-    <div style="font-size:13pt; font-weight:700; letter-spacing:0.08em;">${esc(report.trackingId)}</div>
-    <div style="font-size:8pt; margin-top:2px;">${esc(report.reportNumber)}</div>
-    <div style="font-size:7.5pt; color:#64748b;">
+    <div class="doc-label">Report No.</div>
+    <div style="font-size:12pt; font-weight:700;">${esc(report.reportNumber)}</div>
+    <div style="font-size:7.5pt; color:#64748b; margin-top:2px;">
       ${report.generatedAt ? new Date(report.generatedAt).toLocaleString() : ''}
     </div>
   `;

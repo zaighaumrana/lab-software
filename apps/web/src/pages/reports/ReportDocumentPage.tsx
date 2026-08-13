@@ -67,12 +67,9 @@ function ReportPageHeader({
           </div>
         )}
         <div style={{ textAlign: 'right' }}>
-          <div className="print-doc-label">Tracking ID</div>
-          <div className="code" style={{ fontSize: '14pt', fontWeight: 700, letterSpacing: '0.1em' }}>
-            {report.trackingId}
-          </div>
-          <div style={{ fontSize: '9pt', marginTop: 4 }}>{report.reportNumber}</div>
-          <div style={{ fontSize: '8pt', color: '#555' }}>
+          <div className="print-doc-label">Report No.</div>
+          <div style={{ fontSize: '13pt', fontWeight: 700 }}>{report.reportNumber}</div>
+          <div style={{ fontSize: '8pt', color: '#555', marginTop: 4 }}>
             {report.generatedAt
               ? new Date(report.generatedAt).toLocaleString()
               : report.createdAt
@@ -220,6 +217,8 @@ export function ReportDocumentPage() {
   const inv = report.invoice;
   const patient = inv?.booking?.patient;
   const due = Number(inv?.amountDue ?? 0);
+  const finalized = report.finalized ?? report.status === 'COMPLETE';
+  const deliverable = report.deliverable ?? false;
   const labName = printLayout.labName || branding.labName;
   const results =
     inv?.samples?.flatMap((s) => s.results ?? []).filter((r) => r.status === 'RELEASED') ?? [];
@@ -238,7 +237,19 @@ export function ReportDocumentPage() {
             </Link>
           )}
         </div>
-        <button type="button" className="btn-primary text-sm" onClick={handleOpenPdf} disabled={pdfLoading}>
+        <button
+          type="button"
+          className="btn-primary text-sm"
+          onClick={handleOpenPdf}
+          disabled={pdfLoading || !deliverable}
+          title={
+            !deliverable
+              ? finalized
+                ? 'Please collect the outstanding dues before printing the report.'
+                : 'The laboratory is still completing this report.'
+              : undefined
+          }
+        >
           {pdfLoading ? 'Generating PDF…' : 'Open / Print PDF'}
         </button>
       </div>
@@ -321,7 +332,13 @@ export function ReportDocumentPage() {
             printLayout={printLayout}
             letterhead={letterhead}
           />
-          <p style={{ fontSize: '10pt', color: '#555' }}>No released results yet.</p>
+          <p style={{ fontSize: '10pt', color: '#555' }}>
+            {!finalized
+              ? 'The laboratory is still completing this report — no results are available to preview yet.'
+              : !deliverable
+                ? 'This report is finalized but the outstanding balance must be cleared before results can be shown here.'
+                : 'No released results yet.'}
+          </p>
           <ReportPageFooter printLayout={printLayout} due={due} letterhead={letterhead} />
         </article>
       )}

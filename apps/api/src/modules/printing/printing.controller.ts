@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, Res, UseGuards } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Param, Query, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { PrintingService } from './printing.service';
 import { BillingService } from '../billing/billing.service';
@@ -7,6 +7,7 @@ import { SettingsService } from '../settings/settings.service';
 import { DoctorsService } from '../doctors/doctors.service';
 import { SessionGuard } from '../../common/guards/session.guard';
 import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
+import { canPrintReport, PENDING_PAYMENT_MESSAGE, REPORT_NOT_FINALIZED_MESSAGE, isReportFinalized } from '../../common/report-eligibility.util';
 import { buildInvoiceHtml } from './templates/invoice.template';
 import { buildReportHtml } from './templates/report.template';
 import { buildDoctorStatementHtml } from './templates/doctor-statement.template';
@@ -59,10 +60,14 @@ export class PrintingController {
     @Param('id') id: string,
     @Res() res: Response,
   ) {
-    const [report, settings] = await Promise.all([
-      this.reportingService.findById(user.tenantId, id),
-      this.resolvePrintSettings(user.tenantId),
-    ]);
+    const report = await this.reportingService.findById(user.tenantId, id);
+    if (!isReportFinalized(report)) {
+      throw new ForbiddenException(REPORT_NOT_FINALIZED_MESSAGE);
+    }
+    if (!canPrintReport(report, report.invoice)) {
+      throw new ForbiddenException(PENDING_PAYMENT_MESSAGE);
+    }
+    const settings = await this.resolvePrintSettings(user.tenantId);
     const html = buildReportHtml(report, settings);
     const pdf = await this.printingService.renderPdf(html, {
       marginTopMm: settings.marginTopMm,

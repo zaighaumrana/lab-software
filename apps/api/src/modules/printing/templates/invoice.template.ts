@@ -1,5 +1,24 @@
 import { buildDocHeader, buildDocFooter, wrapHtmlDocument, money, esc, PrintSettings } from './shared';
 
+function ageFromDob(dob: unknown): string {
+  if (!dob) return '';
+  const birth = new Date(dob as string);
+  if (Number.isNaN(birth.getTime())) return '';
+  const now = new Date();
+  let age = now.getFullYear() - birth.getFullYear();
+  const monthDiff = now.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birth.getDate())) age--;
+  return `${age}y`;
+}
+
+function ageFromDob(dob: unknown): string | null {
+  if (!dob) return null;
+  const d = new Date(dob as string);
+  if (Number.isNaN(d.getTime())) return null;
+  const years = Math.floor((Date.now() - d.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+  return `${years}y`;
+}
+
 /** `invoice` is whatever billingService.findInvoiceById(...) returns. */
 export function buildInvoiceHtml(invoice: any, settings: PrintSettings): string {
   const patient = invoice.booking?.patient;
@@ -34,7 +53,13 @@ export function buildInvoiceHtml(invoice: any, settings: PrintSettings): string 
       <div>
         <div class="doc-label">Patient</div>
         <div style="font-weight:600;">${esc(patient?.fullName)}</div>
+        ${
+          patient?.gender || patient?.dateOfBirth
+            ? `<div>${[patient?.gender, ageFromDob(patient?.dateOfBirth)].filter(Boolean).join(' / ')}</div>`
+            : ''
+        }
         <div>${esc(patient?.phone)}</div>
+        ${invoice.report?.trackingId ? `<div>Tracking ID: <strong>${esc(invoice.report.trackingId)}</strong></div>` : ''}
       </div>
       <div>
         <div class="doc-label">Referred by</div>
@@ -62,7 +87,7 @@ export function buildInvoiceHtml(invoice: any, settings: PrintSettings): string 
         <span>Due</span><span>${money(invoice.amountDue)}</span>
       </div>
     </div>
-    ${buildDocFooter(settings, invoice.report?.trackingId ? `<div style="margin-top:4px;">Tracking ID: ${esc(invoice.report.trackingId)}</div>` : '')}
+    ${buildDocFooter(settings)}
   `;
 
   return wrapHtmlDocument(body);

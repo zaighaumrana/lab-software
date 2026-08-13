@@ -66,3 +66,13 @@ export async function enterResult(payload: {
   const { data } = await api.post<Result>('/laboratory/results', payload);
   return data;
 }
+
+export async function finalizeResult(resultId: string) {
+  const { data } = await api.patch<Result>(`/laboratory/results/${resultId}/finalize`, {});
+  return data;
+}
+
+export async function reopenResult(resultId: string, reason: string) {
+  const { data } = await api.patch<Result>(`/laboratory/results/${resultId}/reopen`, { reason });
+  return data;
+}

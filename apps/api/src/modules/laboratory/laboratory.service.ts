@@ -223,6 +223,26 @@ export class LaboratoryService {
       throw new BadRequestException('At least one parameter value is required');
     }
 
+    // An existing RELEASED (finalized) result can't be silently overwritten
+    // by re-submitting the entry form — that's what reopenResult is for.
+    // An existing ENTERED result, though, should be edited in place: the
+    // technician corrected a typo, not created a second result for the
+    // same test.
+    const existing = await this.prisma.result.findFirst({
+      where: {
+        tenantId,
+        sampleId: dto.sampleId,
+        testId: dto.testId,
+        status: { in: [ResultStatus.ENTERED, ResultStatus.RELEASED] },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (existing?.status === ResultStatus.RELEASED) {
+      throw new BadRequestException(
+        'This result is already finalized. Reopen it before editing.',
+      );
+    }
+
     const test = await this.prisma.test.findFirst({
       where: { id: dto.testId, tenantId },
       include: {
@@ -275,7 +295,9 @@ export class LaboratoryService {
     });
 
     const anyCritical = evaluated.some((e) => e.isCritical);
-    const shouldRelease = dto.releaseImmediately !== false;
+    // Saving now only finalizes when explicitly asked to — entering a
+    // value is no longer treated as equivalent to finalizing the report.
+    const shouldRelease = dto.releaseImmediately === true;
 
     const result = await this.prisma.$transaction(async (tx) => {
       if (sample.status === SampleStatus.ACCEPTED) {
@@ -285,42 +307,66 @@ export class LaboratoryService {
         });
       }
 
-      const created = await tx.result.create({
-        data: {
-          tenantId,
-          sampleId: dto.sampleId,
-          invoiceLineId: dto.invoiceLineId,
-          testId: dto.testId,
-          status: shouldRelease ? ResultStatus.RELEASED : ResultStatus.ENTERED,
-          isCritical: anyCritical,
-          enteredById: enteredById ?? null,
-          enteredAt: new Date(),
-          releasedById: shouldRelease ? enteredById ?? null : null,
-          releasedAt: shouldRelease ? new Date() : null,
-          notes: dto.notes,
-          values: {
-            create: evaluated.map((e) => ({
-              testParameterId: e.testParameterId,
-              valueNumeric: e.valueNumeric,
-              valueText: e.valueText,
-              unit: e.unit,
-              flag: e.flag,
-              isCritical: e.isCritical,
-              interpretation: e.interpretation,
-            })),
-          },
-        },
-        include: {
-          test: true,
-          values: { include: { parameter: true } },
-        },
-      });
+      const resultData = {
+        status: shouldRelease ? ResultStatus.RELEASED : ResultStatus.ENTERED,
+        isCritical: anyCritical,
+        enteredById: enteredById ?? null,
+        enteredAt: new Date(),
+        releasedById: shouldRelease ? enteredById ?? null : null,
+        releasedAt: shouldRelease ? new Date() : null,
+        notes: dto.notes,
+      };
+
+      const created = existing
+        ? await tx.result.update({
+            where: { id: existing.id },
+            data: {
+              ...resultData,
+              values: {
+                deleteMany: {},
+                create: evaluated.map((e) => ({
+                  testParameterId: e.testParameterId,
+                  valueNumeric: e.valueNumeric,
+                  valueText: e.valueText,
+                  unit: e.unit,
+                  flag: e.flag,
+                  isCritical: e.isCritical,
+                  interpretation: e.interpretation,
+                })),
+              },
+            },
+            include: { test: true, values: { include: { parameter: true } } },
+          })
+        : await tx.result.create({
+            data: {
+              tenantId,
+              sampleId: dto.sampleId,
+              invoiceLineId: dto.invoiceLineId,
+              testId: dto.testId,
+              ...resultData,
+              values: {
+                create: evaluated.map((e) => ({
+                  testParameterId: e.testParameterId,
+                  valueNumeric: e.valueNumeric,
+                  valueText: e.valueText,
+                  unit: e.unit,
+                  flag: e.flag,
+                  isCritical: e.isCritical,
+                  interpretation: e.interpretation,
+                })),
+              },
+            },
+            include: {
+              test: true,
+              values: { include: { parameter: true } },
+            },
+          });
 
       let reportOutcome: { justCompleted: boolean; trackingId?: string } = {
         justCompleted: false,
       };
       if (shouldRelease) {
-        reportOutcome = await this.ensureReportAfterRelease(
+        reportOutcome = await this.recomputeReportStatus(
           tx,
           tenantId,
           sample.invoiceId,
@@ -340,6 +386,102 @@ export class LaboratoryService {
     }
 
     return result.created;
+  }
+
+  /**
+   * Explicit finalization step: ENTERED → RELEASED. Entering a value no
+   * longer does this automatically (see enterResult) — the lab must take
+   * this separate, intentional action once it has confirmed the result is
+   * correct and ready to count toward report readiness.
+   */
+  async finalizeResult(tenantId: string, resultId: string, actorId?: string) {
+    const existing = await this.prisma.result.findFirst({
+      where: { id: resultId, tenantId },
+    });
+    if (!existing) throw new NotFoundException('Result not found');
+    if (existing.status !== ResultStatus.ENTERED) {
+      throw new BadRequestException(
+        `Cannot finalize a result in status ${existing.status}`,
+      );
+    }
+
+    const sampleForResult = await this.prisma.sample.findUnique({
+      where: { id: existing.sampleId },
+    });
+    if (!sampleForResult) throw new NotFoundException('Sample not found for this result');
+
+    const outcome = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.result.update({
+        where: { id: resultId },
+        data: {
+          status: ResultStatus.RELEASED,
+          releasedById: actorId ?? null,
+          releasedAt: new Date(),
+        },
+        include: { test: true, values: { include: { parameter: true } } },
+      });
+      const reportOutcome = await this.recomputeReportStatus(
+        tx,
+        tenantId,
+        sampleForResult.invoiceId,
+      );
+      return { updated, reportOutcome };
+    });
+
+    if (outcome.reportOutcome.justCompleted) {
+      await this.notifyReportReady(
+        tenantId,
+        sampleForResult.invoiceId,
+        outcome.reportOutcome.trackingId,
+      );
+    }
+
+    return outcome.updated;
+  }
+
+  /**
+   * Explicit, authorized "un-finalize": RELEASED → ENTERED. Intentionally a
+   * separate action from editing — a technician can't silently overwrite a
+   * finalized result by resubmitting the entry form (enterResult rejects
+   * that); they have to reopen it first, which is auditable (reason
+   * required) and walks the report status back down if it had already
+   * reached COMPLETE.
+   */
+  async reopenResult(tenantId: string, resultId: string, reason: string, actorId?: string) {
+    if (!reason?.trim()) {
+      throw new BadRequestException('A reason is required to reopen a finalized result');
+    }
+    const existing = await this.prisma.result.findFirst({
+      where: { id: resultId, tenantId },
+    });
+    if (!existing) throw new NotFoundException('Result not found');
+    if (existing.status !== ResultStatus.RELEASED) {
+      throw new BadRequestException(
+        `Cannot reopen a result in status ${existing.status}`,
+      );
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.result.update({
+        where: { id: resultId },
+        data: {
+          status: ResultStatus.ENTERED,
+          releasedById: null,
+          releasedAt: null,
+          notes: existing.notes
+            ? `${existing.notes}\n[Reopened by ${actorId ?? 'unknown'}: ${reason.trim()}]`
+            : `[Reopened by ${actorId ?? 'unknown'}: ${reason.trim()}]`,
+        },
+        include: { test: true, values: { include: { parameter: true } } },
+      });
+      const sample = await tx.sample.findUnique({ where: { id: existing.sampleId } });
+      if (sample) {
+        await this.recomputeReportStatus(tx, tenantId, sample.invoiceId);
+      }
+      return result;
+    });
+
+    return updated;
   }
 
   private async notifyReportReady(
@@ -495,7 +637,14 @@ export class LaboratoryService {
   // REPORT helper
   // ---------------------------------------------------------------------------
 
-  private async ensureReportAfterRelease(
+  /**
+   * Recomputes Report.status from the actual state of its samples' results
+   * — used after both releasing and reopening a result, so the report
+   * status is always derived fresh rather than incrementally patched (which
+   * is how "reopen" can correctly walk COMPLETE back down to PARTIAL_READY
+   * without a separate, easy-to-drift code path).
+   */
+  private async recomputeReportStatus(
     tx: Prisma.TransactionClient,
     tenantId: string,
     invoiceId: string,
@@ -511,24 +660,35 @@ export class LaboratoryService {
     if (!invoice) return { justCompleted: false };
 
     const releasedTestIds = new Set<string>();
+    const enteredOrReleasedTestIds = new Set<string>();
     for (const sample of invoice.samples) {
       for (const result of sample.results) {
         if (result.status === ResultStatus.RELEASED) {
           releasedTestIds.add(result.testId);
+          enteredOrReleasedTestIds.add(result.testId);
+        } else if (result.status === ResultStatus.ENTERED) {
+          enteredOrReleasedTestIds.add(result.testId);
         }
       }
     }
 
     const testLineCount = invoice.lines.filter((l) => l.testId).length;
     const allReleased = testLineCount > 0 && releasedTestIds.size >= testLineCount;
+    const anyProgress = enteredOrReleasedTestIds.size > 0;
+    const targetStatus = allReleased
+      ? ReportStatus.COMPLETE
+      : anyProgress
+        ? ReportStatus.PARTIAL_READY
+        : ReportStatus.PENDING;
 
     if (!invoice.report) {
+      if (!anyProgress) return { justCompleted: false };
       const created = await tx.report.create({
         data: {
           tenantId,
           branchId: invoice.branchId,
           invoiceId,
-          status: allReleased ? ReportStatus.COMPLETE : ReportStatus.PENDING,
+          status: targetStatus,
           reportNumber: generateReportNumber(),
           trackingId: generateTrackingId(),
           generatedAt: allReleased ? new Date() : null,
@@ -537,13 +697,18 @@ export class LaboratoryService {
       return { justCompleted: allReleased, trackingId: created.trackingId };
     }
 
-    if (allReleased && invoice.report.status === ReportStatus.PENDING) {
+    const wasComplete = invoice.report.status === ReportStatus.COMPLETE;
+    if (invoice.report.status !== targetStatus) {
       const updated = await tx.report.update({
         where: { id: invoice.report.id },
-        data: { status: ReportStatus.COMPLETE, generatedAt: new Date() },
+        data: {
+          status: targetStatus,
+          generatedAt: allReleased ? (invoice.report.generatedAt ?? new Date()) : null,
+        },
       });
-      // Was PENDING and just became COMPLETE — this is the one moment we notify.
-      return { justCompleted: true, trackingId: updated.trackingId };
+      // Only the PENDING/PARTIAL_READY → COMPLETE transition is a genuine
+      // "just became ready" moment worth notifying about.
+      return { justCompleted: allReleased && !wasComplete, trackingId: updated.trackingId };
     }
 
     return { justCompleted: false, trackingId: invoice.report.trackingId };

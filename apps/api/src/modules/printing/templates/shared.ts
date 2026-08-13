@@ -93,10 +93,23 @@ export function buildDocHeader(
   return `<header class="doc-header">${brandingHtml}<div style="text-align:right;">${rightBlockHtml}</div></header>`;
 }
 
+/**
+ * Single shared branding placeholder — every printable document gets this
+ * via buildDocFooter below, rather than each template hardcoding its own
+ * copy. Swap this one constant later when the real product/vendor name is
+ * decided; nothing else needs to change. (Natural next step: promote this
+ * into the Settings/Configuration store alongside printMode/margins/etc.,
+ * once a real name replaces the placeholder — deliberately not done yet
+ * since "LabFlow Systems" is explicitly a placeholder, not a setting an
+ * admin should be able to type over today.)
+ */
+export const PRINT_BRANDING_NAME = 'LabFlow Systems';
+
 export function buildDocFooter(settings: PrintSettings, extraHtml = ''): string {
   const letterhead = settings.printMode === 'LETTERHEAD';
   const boilerplate = letterhead ? '' : esc(settings.footerText || 'Computer-generated document.');
-  return `<footer class="doc-footer">${boilerplate}${extraHtml}</footer>`;
+  const branding = `<div style="margin-top:4px; opacity:0.7;">Powered by ${esc(PRINT_BRANDING_NAME)}</div>`;
+  return `<footer class="doc-footer">${boilerplate}${extraHtml}${branding}</footer>`;
 }
 
 /** Wraps a document body into a complete standalone HTML page ready for
