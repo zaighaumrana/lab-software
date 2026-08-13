@@ -17,6 +17,7 @@ import {
   Decimal,
 } from '@lms/database';
 import { NotificationsService } from '../notifications/notifications.service';
+import { LaboratoryGateway } from './laboratory.gateway';
 import { generateReportNumber, generateTrackingId } from '../../common/id-generators.util';
 
 function generateSampleCode(): string {
@@ -31,6 +32,7 @@ export class LaboratoryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly gateway: LaboratoryGateway,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -370,6 +372,8 @@ export class LaboratoryService {
       await this.notifyReportReady(tenantId, sample.invoiceId, result.reportOutcome.trackingId);
     }
 
+    this.gateway.notifySampleChanged(tenantId, sample.id);
+
     return result.created;
   }
 
@@ -421,6 +425,8 @@ export class LaboratoryService {
       );
     }
 
+    this.gateway.notifySampleChanged(tenantId, sampleForResult.id);
+
     return outcome.updated;
   }
 
@@ -465,6 +471,8 @@ export class LaboratoryService {
       }
       return result;
     });
+
+    this.gateway.notifySampleChanged(tenantId, existing.sampleId);
 
     return updated;
   }
