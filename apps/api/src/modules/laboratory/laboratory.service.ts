@@ -17,28 +17,13 @@ import {
   Decimal,
 } from '@lms/database';
 import { NotificationsService } from '../notifications/notifications.service';
+import { generateReportNumber, generateTrackingId } from '../../common/id-generators.util';
 
 function generateSampleCode(): string {
   const now = new Date();
   const datePart = now.toISOString().slice(0, 10).replace(/-/g, '');
   const random = Math.floor(10000 + Math.random() * 90000);
   return `SP-${datePart}-${random}`;
-}
-
-function generateReportNumber(): string {
-  const now = new Date();
-  const datePart = now.toISOString().slice(0, 10).replace(/-/g, '');
-  const random = Math.floor(10000 + Math.random() * 90000);
-  return `RPT-${datePart}-${random}`;
-}
-
-function generateTrackingId(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let id = '';
-  for (let i = 0; i < 10; i++) {
-    id += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return id;
 }
 
 @Injectable()
