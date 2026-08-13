@@ -5,6 +5,7 @@ import type { Sample, Test, Result } from '../../types';
 import { StatusBadge } from '../../components/StatusBadge';
 import { Loading } from '../../components/Loading';
 import { EmptyState } from '../../components/EmptyState';
+import { connectLabSocket } from '../../lib/labSocket';
 
 export function LaboratoryPage() {
   const [samples, setSamples] = useState<Sample[]>([]);
@@ -34,8 +35,8 @@ export function LaboratoryPage() {
   }
 
   // Same fetch as refresh(), but doesn't toggle the full-page loading
-  // spinner — used for background polling so the screen doesn't flash
-  // every few seconds.
+  // spinner — used for socket-triggered background updates so the screen
+  // doesn't flash every time another technician makes a change.
   async function silentRefresh() {
     try {
       const data = await labApi.listPendingSamples();
@@ -50,11 +51,15 @@ export function LaboratoryPage() {
     catalogApi.listTests().then(setTests);
   }, []);
 
-  // Poll for changes made by other technicians (e.g. someone else entering
-  // or finalizing a result on the currently selected sample) so the screen
-  // stays current without requiring a manual refresh.
+  // Live updates: react when another technician enters, finalizes, or
+  // reopens a result — instead of polling on a timer, subscribe to
+  // LaboratoryGateway's per-tenant broadcast and refresh only when
+  // something actually changed.
   useEffect(() => {
-    const interval = setInterval(() => {
+    const socket = connectLabSocket();
+
+    socket.on('connect', () => {
+      // Catch up on anything that changed while disconnected/reconnecting.
       silentRefresh();
       setSelected((current) => {
         if (current) {
@@ -62,8 +67,21 @@ export function LaboratoryPage() {
         }
         return current;
       });
-    }, 15000);
-    return () => clearInterval(interval);
+    });
+
+    socket.on('sample:changed', ({ sampleId }: { sampleId: string }) => {
+      silentRefresh();
+      setSelected((current) => {
+        if (current?.id === sampleId) {
+          labApi.getSample(sampleId).then((s) => setSelected(s as Sample));
+        }
+        return current;
+      });
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, []);
 
   async function advanceSample(sample: Sample, action: 'receive' | 'accept') {
