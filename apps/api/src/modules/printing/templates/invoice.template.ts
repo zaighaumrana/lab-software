@@ -11,14 +11,6 @@ function ageFromDob(dob: unknown): string {
   return `${age}y`;
 }
 
-function ageFromDob(dob: unknown): string | null {
-  if (!dob) return null;
-  const d = new Date(dob as string);
-  if (Number.isNaN(d.getTime())) return null;
-  const years = Math.floor((Date.now() - d.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
-  return `${years}y`;
-}
-
 /** `invoice` is whatever billingService.findInvoiceById(...) returns. */
 export function buildInvoiceHtml(invoice: any, settings: PrintSettings): string {
   const patient = invoice.booking?.patient;
