@@ -18,6 +18,15 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/api/, ''),
       },
+      // socket.io's handshake/transport path — must be proxied with
+      // ws: true for the upgrade to a real WebSocket to go through.
+      // The gateway's own namespace (/ws/laboratory) is negotiated over
+      // this same connection, not a separate path.
+      '/socket.io': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        ws: true,
+      },
     },
   },
 });
