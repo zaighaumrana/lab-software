@@ -144,6 +144,13 @@ export interface Invoice {
   samples?: { id: string; sampleCode: string; status: string }[];
 }
 
+export interface InvoiceReadiness {
+  testLineCount: number;
+  enteredCount: number;
+  allEntered: boolean;
+  allReleased: boolean;
+}
+
 export interface Sample {
   id: string;
   sampleCode: string;
@@ -158,6 +165,10 @@ export interface Sample {
     booking?: Booking & { patient?: Patient };
     lines?: InvoiceLine[];
   };
+  // Present on getSample() responses — readiness computed across ALL
+  // samples on this sample's invoice (not just this one), backing the
+  // "Ready for Collection" action. Absent on list responses.
+  invoiceReadiness?: InvoiceReadiness | null;
 }
 
 export interface ResultValue {
