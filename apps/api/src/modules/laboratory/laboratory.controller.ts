@@ -152,6 +152,24 @@ export class LaboratoryController {
     return this.laboratoryService.unmarkOutsourced(tenantId, id);
   }
 
+  /**
+   * PATCH /laboratory/invoices/:invoiceId/ready-for-collection
+   * Invoice-level (whole patient report) action — releases every
+   * entered-but-not-finalized result across ALL samples on the invoice
+   * in one action, then recomputes the invoice's overall report status.
+   * Rejects (400) if any test anywhere on the invoice is still missing
+   * a result.
+   */
+  @Patch('invoices/:invoiceId/ready-for-collection')
+  async markInvoiceReady(
+    @Param('invoiceId') invoiceId: string,
+    @Headers('x-tenant-id') tenantHeader?: string,
+    @Headers('x-user-id') userHeader?: string,
+  ) {
+    const tenantId = resolveTenantId(tenantHeader);
+    return this.laboratoryService.markInvoiceReady(tenantId, invoiceId, userHeader);
+  }
+
   // ----- Results -----
 
   /**
