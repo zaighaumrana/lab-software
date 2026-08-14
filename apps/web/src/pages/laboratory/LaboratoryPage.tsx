@@ -143,6 +143,7 @@ export function LaboratoryPage() {
   const [reopenTarget, setReopenTarget] = useState<Result | null>(null);
   const [reopenReason, setReopenReason] = useState('');
   const [finalizing, setFinalizing] = useState(false);
+  const [markingReady, setMarkingReady] = useState(false);
 
   function existingResultFor(sample: Sample, testId: string): Result | undefined {
     return sample.results?.find(
@@ -253,6 +254,30 @@ export function LaboratoryPage() {
       setError(msg);
     } finally {
       setFinalizing(false);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => window.scrollTo(0, scrollY));
+      });
+    }
+  }
+
+  async function markReady() {
+    if (!selected?.invoice) return;
+    const scrollY = window.scrollY;
+    setMarkingReady(true);
+    setError('');
+    try {
+      await labApi.markInvoiceReady(selected.invoice.id);
+      const updated = await labApi.getSample(selected.id);
+      setSelected(updated as Sample);
+      setMessage('Report marked ready for collection — now available in Reports.');
+      await refresh();
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message || 'Failed to mark ready for collection';
+      setError(msg);
+    } finally {
+      setMarkingReady(false);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => window.scrollTo(0, scrollY));
       });
@@ -681,6 +706,44 @@ export function LaboratoryPage() {
                       </button>
                     </div>
                   </div>
+                )}
+
+                {/* Bottom of the panel: this is a whole-patient action,
+                    not a per-sample one — it covers every sample on this
+                    invoice (e.g. blood + urine), so it only lights up
+                    once every test on all of them has a result, and it
+                    stays disabled/grey until then. Clicking it finalizes
+                    the whole report, which is what makes it show up in
+                    Reports (and the public tracking site) for printing —
+                    nothing marks the report ready before this is clicked. */}
+                {selected.invoice && selected.invoiceReadiness && (
+                  selected.invoiceReadiness.allReleased ? (
+                    <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-center text-sm font-medium text-green-700">
+                      ✓ Ready for Collection — available in Reports
+                    </div>
+                  ) : (
+                    <div>
+                      <button
+                        className={`w-full rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                          selected.invoiceReadiness.allEntered
+                            ? 'bg-brand-600 text-white hover:bg-brand-700'
+                            : 'cursor-not-allowed bg-slate-200 text-slate-400'
+                        }`}
+                        onClick={selected.invoiceReadiness.allEntered ? markReady : undefined}
+                        disabled={!selected.invoiceReadiness.allEntered || markingReady}
+                      >
+                        {markingReady ? 'Marking ready…' : 'Ready for Collection'}
+                      </button>
+                      <p className="mt-1 text-center text-xs text-slate-400">
+                        {selected.invoiceReadiness.enteredCount} of{' '}
+                        {selected.invoiceReadiness.testLineCount} results entered across this
+                        patient's report{selected.invoiceReadiness.allEntered
+                          ? ''
+                          : ' — enter the rest to enable this'}
+                        .
+                      </p>
+                    </div>
+                  )
                 )}
               </>
             )}
