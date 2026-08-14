@@ -157,12 +157,56 @@ export class LaboratoryService {
           include: {
             booking: { include: { patient: true } },
             lines: { include: { test: true, package: true } },
+            // Needed to judge collection-readiness across the WHOLE
+            // patient invoice, not just this one sample — an invoice can
+            // have multiple samples (e.g. blood + urine) and the report
+            // isn't ready until every test on every sample is in.
+            samples: { include: { results: true } },
           },
         },
       },
     });
     if (!sample) throw new NotFoundException('Sample not found');
-    return sample;
+
+    const invoiceReadiness = sample.invoice
+      ? this.computeInvoiceReadiness(sample.invoice)
+      : null;
+
+    return { ...sample, invoiceReadiness };
+  }
+
+  /**
+   * Summarizes, across every sample on the invoice, whether every test
+   * line has a result entered (allEntered) and whether every one has been
+   * finalized/released (allReleased). Backs the "Ready for Collection"
+   * button — the frontend uses this instead of judging from a single
+   * sample's results, and markInvoiceReady() re-derives the same missing
+   * list server-side so the check can't be bypassed by calling the API
+   * directly.
+   */
+  private computeInvoiceReadiness(invoice: {
+    lines: { testId: string | null }[];
+    samples: { results: { testId: string; status: string }[] }[];
+  }) {
+    const testIds = invoice.lines.filter((l) => l.testId).map((l) => l.testId as string);
+    const entered = new Set<string>();
+    const released = new Set<string>();
+    for (const s of invoice.samples) {
+      for (const r of s.results) {
+        if (r.status === ResultStatus.RELEASED) {
+          released.add(r.testId);
+          entered.add(r.testId);
+        } else if (r.status === ResultStatus.ENTERED) {
+          entered.add(r.testId);
+        }
+      }
+    }
+    return {
+      testLineCount: testIds.length,
+      enteredCount: testIds.filter((t) => entered.has(t)).length,
+      allEntered: testIds.length > 0 && testIds.every((t) => entered.has(t)),
+      allReleased: testIds.length > 0 && testIds.every((t) => released.has(t)),
+    };
   }
 
   async listPendingSamples(tenantId: string, branchId?: string) {
@@ -428,6 +472,77 @@ export class LaboratoryService {
     this.gateway.notifySampleChanged(tenantId, sampleForResult.id);
 
     return outcome.updated;
+  }
+
+  /**
+   * Invoice-level "Mark Ready for Collection" action — this is the button
+   * that finalizes a patient's whole report, not just one sample. It
+   * releases every still-ENTERED result across ALL samples on the
+   * invoice in one go, then recomputes the invoice's overall Report
+   * status so it flows into the Reports section / public tracking.
+   *
+   * Rejects (400) if any test on the invoice — on any of its samples —
+   * has no result at all yet. This mirrors computeInvoiceReadiness() so
+   * the frontend's greyed-out button state and this server-side check
+   * can never disagree.
+   */
+  async markInvoiceReady(tenantId: string, invoiceId: string, actorId?: string) {
+    const invoice = await this.prisma.invoice.findFirst({
+      where: { id: invoiceId, tenantId },
+      include: { lines: true, samples: { include: { results: true } } },
+    });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+
+    const testIds = invoice.lines.filter((l) => l.testId).map((l) => l.testId as string);
+    if (testIds.length === 0) {
+      throw new BadRequestException('This invoice has no tests to release.');
+    }
+
+    const enteredTestIds = new Set<string>();
+    const resultIdsToRelease: string[] = [];
+    for (const sample of invoice.samples) {
+      for (const r of sample.results) {
+        if (r.status === ResultStatus.RELEASED) {
+          enteredTestIds.add(r.testId);
+        } else if (r.status === ResultStatus.ENTERED) {
+          enteredTestIds.add(r.testId);
+          resultIdsToRelease.push(r.id);
+        }
+      }
+    }
+
+    const missing = testIds.filter((t) => !enteredTestIds.has(t));
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `Cannot mark ready — ${missing.length} of ${testIds.length} test(s) on this report still need a result entered.`,
+      );
+    }
+
+    const reportOutcome = await this.prisma.$transaction(async (tx) => {
+      for (const resultId of resultIdsToRelease) {
+        await tx.result.update({
+          where: { id: resultId },
+          data: {
+            status: ResultStatus.RELEASED,
+            releasedById: actorId ?? null,
+            releasedAt: new Date(),
+          },
+        });
+      }
+      return this.recomputeReportStatus(tx, tenantId, invoiceId);
+    });
+
+    if (reportOutcome.justCompleted) {
+      await this.notifyReportReady(tenantId, invoiceId, reportOutcome.trackingId);
+    }
+
+    // Every sample on this invoice may be open on someone else's screen —
+    // notify for each so all of them refresh live.
+    for (const sample of invoice.samples) {
+      this.gateway.notifySampleChanged(tenantId, sample.id);
+    }
+
+    return { invoiceId, released: resultIdsToRelease.length };
   }
 
   /**
