@@ -50,6 +50,14 @@ export async function unOutsourceSample(id: string) {
   return data;
 }
 
+export async function markInvoiceReady(invoiceId: string) {
+  const { data } = await api.patch<{ invoiceId: string; released: number }>(
+    `/laboratory/invoices/${invoiceId}/ready-for-collection`,
+    {},
+  );
+  return data;
+}
+
 export async function enterResult(payload: {
   sampleId: string;
   invoiceLineId: string;
