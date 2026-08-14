@@ -25,6 +25,10 @@ Full text in `01_Product_Specification.md`. In short: local-first, one codebase 
 2. **`02_Technical_Architecture.md`** — how the system is deployed, secured, and kept running offline/synced.
 3. **`03_Core_Domain_Design.md`** — the business logic bible: domain model, glossary, events, state machines, workflows, pricing. Read before writing any backend code.
 4. **`04_Application_Modules.md`** — the user-facing surface: screens, roles, portals, module-by-module behavior.
+5. **`05_Analytics_Architecture.md`** — admin analytics dashboard design (planning only, not yet implemented).
+6. **`06_Dependencies_and_Tooling.md`** — full inventory of every third-party package and DB tool actually used in the repo, why each was chosen, and what each means for building a packaged/distributable bundle. Read before packaging a release.
+7. **`07_Website_Separation_and_Offline_Online_Hybrid.md`** — plan for pulling `apps/website` out of the local dev/deployment path once the core software is built and tested, and the scope for how the offline lab and the online website connect without breaking the offline-first guarantee. Read before hosting the website for real.
+8. **`08_Windows_Packaging_and_Installer_Roadmap.md`** — roadmap for a two-installer Windows deployment (`LMS-Server-Setup.exe` + `LMS-Workstation-Setup.exe`) reflecting the server/LAN-workstation architecture, ending in one desktop icon per PC and no terminals. Read before packaging a client-facing release.
 
 ## Document Dependency Map
 
@@ -48,7 +52,11 @@ Research/
 ├── 01_Product_Specification.md
 ├── 02_Technical_Architecture.md
 ├── 03_Core_Domain_Design.md
-└── 04_Application_Modules.md
+├── 04_Application_Modules.md
+├── 05_Analytics_Architecture.md
+├── 06_Dependencies_and_Tooling.md
+├── 07_Website_Separation_and_Offline_Online_Hybrid.md
+└── 08_Windows_Packaging_and_Installer_Roadmap.md
 ```
 
 ## High-Level Architecture
@@ -73,6 +81,10 @@ Full detail in `02_Technical_Architecture.md`.
 | Server/DB architecture, offline & sync, security, SMS/printing infra, deployment, DR, risks | `02_Technical_Architecture.md` |
 | Domain model, glossary, bounded contexts, domain events, state machines, workflows, pricing, DB schema | `03_Core_Domain_Design.md` |
 | UI/UX principles, screens, portals, role-specific views | `04_Application_Modules.md` |
+| Admin analytics dashboard design | `05_Analytics_Architecture.md` |
+| Every third-party dependency and DB tool used, why it was chosen, packaging/native-binary considerations | `06_Dependencies_and_Tooling.md` |
+| Separating the public website into its own hosting/DB, and the offline-first/online-hybrid sync scope | `07_Website_Separation_and_Offline_Online_Hybrid.md` |
+| Two-installer Windows deployment (server + workstation), firewall/backup/health-check requirements | `08_Windows_Packaging_and_Installer_Roadmap.md` |
 
 ## Decisions Log
 
