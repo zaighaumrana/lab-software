@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-A client currently running lab operations on H2 Cloud has commissioned a replacement: a Laboratory Management System (LMS) plus a public website, built to work **fully offline**, run on infrastructure the client owns, cost a **one-time purchase** rather than a subscription, and give the client full data ownership. The vendor is building this as v1 of a product intended to later become a multi-tenant SaaS offering — this client's deployment stays single-tenant and self-hosted throughout, with SaaS-readiness as an invisible architectural property rather than a visible feature.
+A client currently running lab operations on H2 Cloud has commissioned a replacement: a Laboratory Management System (LMS) plus a public website, built to work **fully offline**, run on infrastructure the client owns, and give the client full data ownership. Commercially, this is licensed on a **recurring basis** (yearly, monthly, or in some cases usage-based — e.g. tied to receipt/report volume) — see Business Context below for the pricing rationale. The vendor is building this as v1 of a genuine SaaS product intended for multiple lab customers — this first client's deployment stays single-tenant and self-hosted, with SaaS-readiness as an architectural property from day one rather than something bolted on later.
 
 ## Background
 
@@ -16,16 +16,18 @@ The client's core complaint with H2 Cloud is that it does not work without inter
 
 ## Business Context
 
-The vendor is delivering this at discounted/favor pricing to a client who is also the vendor's landlord, while intending to reuse this codebase as the foundation of a future multi-tenant SaaS product sold to other labs. Ongoing revenue from this client is an annual maintenance fee, not a subscription.
+**Market position:** H2 Cloud and comparable lab-management competitors charge roughly PKR 65,000/year for a purely online service. This client's requirement — full offline operation *plus* automated data synchronization to a public tracking website (not the manual/separate data entry a purely online competitor's service doesn't need to solve at all) — is a materially harder engineering problem, and would reasonably be priced well above that market rate; a comparable from-scratch custom build with this scope would run in the PKR 1–1.5 million range. The client is being charged an above-market yearly recurring rate that reflects this — offline-first operation *with* automated online report tracking is a combination no competitor in this market currently offers, making this the top tier of what any lab-software vendor is putting in front of a Pakistani clinic today.
 
-**Software ownership (decided):** the client owns their data, their deployment, and a perpetual license to use the software. The vendor retains source code ownership, intellectual property, and the right to reuse, modify, and commercialize the codebase for other customers. This must be an explicit clause in the service contract — without it, the vendor risks giving away years of future product value to a single favor-priced engagement.
+**Pricing model:** a one-time purchase was considered but isn't commercially sustainable for the vendor at a rate the client can absorb; the model is a **recurring license** — yearly or monthly, with usage-based pricing (e.g. per receipt/report volume) also viable for some future customers — rather than a single upfront payment. This recurring-license model is what `09_LabFlow_Licensing_and_Subscription_Architecture.md` is designed around.
+
+**Software ownership (decided):** the client owns their data and their deployment for the duration of an active license. The vendor retains source code ownership, intellectual property, and the right to reuse, modify, and commercialize the codebase for other customers — this is the same core product every future customer licenses, not a one-off build. This must be an explicit clause in the service contract. Data ownership is unaffected by license status — per `09_LabFlow_Licensing_and_Subscription_Architecture.md § 6-7`, an expired license blocks application access but never deletes the client's data.
 
 ## Business Requirements
 
 - Complete offline functionality for all daily lab operations
 - Client's own server — no third-party cloud dependency
-- One-time purchase — no recurring SaaS fee to the client
-- Full data ownership by the client
+- Recurring license (yearly/monthly/usage-based) rather than a one-time purchase — see Business Context
+- Full data ownership by the client, unaffected by license status
 - Website integration for public info, online booking, and report lookup
 - SMS notifications at key patient touchpoints
 - Architecture expandable to multiple branches without a rewrite
@@ -53,7 +55,7 @@ Every architectural decision must satisfy these principles; when a decision is c
 
 | Stakeholder | Role |
 |---|---|
-| Client (lab owner) | End operator, primary user of admin/staff modules; also the vendor's landlord |
+| Client (lab owner) | End operator, primary user of admin/staff modules; first paying customer of the SaaS product |
 | Lab staff (Reception, Sample Collection, Lab Tech) | Daily operational users |
 | Referring doctors | Indirect stakeholders via commission and referral tracking |
 | Patients | Website visitors, SMS recipients, report-lookup users |
