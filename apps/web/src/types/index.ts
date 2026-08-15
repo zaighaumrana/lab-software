@@ -151,6 +151,20 @@ export interface InvoiceReadiness {
   allReleased: boolean;
 }
 
+export interface InvoiceResultPreviewValue {
+  label: string;
+  unit: string | null;
+  value: string;
+}
+
+export interface InvoiceResultPreview {
+  testId: string;
+  testCode: string;
+  testName: string;
+  status: string;
+  values: InvoiceResultPreviewValue[];
+}
+
 export interface Sample {
   id: string;
   sampleCode: string;
@@ -169,6 +183,10 @@ export interface Sample {
   // samples on this sample's invoice (not just this one), backing the
   // "Ready for Collection" action. Absent on list responses.
   invoiceReadiness?: InvoiceReadiness | null;
+  // Present on getSample() responses — one entry per test that has a
+  // result entered anywhere on the invoice, used to render the
+  // confirmation preview before sending a report out for collection.
+  invoiceResultsPreview?: InvoiceResultPreview[];
 }
 
 export interface ResultValue {
