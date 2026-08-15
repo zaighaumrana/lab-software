@@ -63,9 +63,9 @@ Purchased by the **client**; vendor installs the software. Recommended spec: min
 - Workstations: no install beyond a modern browser, pointed at the local server's LAN address.
 - Print/barcode hardware: configured once per workstation during setup.
 
-### Update Delivery (maintenance-fee model)
+### Update Delivery (recurring-license model)
 
-Since the client's server has no obligation to be online, updates ship as versioned, installable local update packages applied via a simple installer/script — not a silent auto-updater pulling from a vendor server, which would reintroduce the exact cloud dependency the client rejected.
+Since the client's server has no obligation to be online, updates ship as versioned, installable local update packages applied via a simple installer/script — not a silent auto-updater pulling from a vendor server, which would reintroduce the exact cloud dependency the client rejected. This is a deliberately separate mechanism from license validation (`09_LabFlow_Licensing_and_Subscription_Architecture.md`): a lapsed license blocks application access, it does not block the client from continuing to run whatever version they last installed, and license checks never gate whether an update package can be applied.
 
 ## Offline-First Strategy
 
@@ -207,8 +207,8 @@ Covered under Security above (backup cadence, tested restore, offsite copy). In 
 | 1 | Single local server is a single point of failure | Operations halt if hardware fails | Nightly + offsite backups, tested restore, spare machine/image ready |
 | 2 | Power outages corrupting the DB mid-transaction | Data loss/corruption | UPS, Postgres transactional integrity, backup cadence |
 | 3 | Tracking-ID-only report lookup guessable | Patient privacy breach | Secondary verification field + rate-limiting |
-| 4 | IP/ownership ambiguity with the landlord-client's contract | Vendor blocked from reusing codebase for SaaS | **Decided:** client owns data/deployment/perpetual license, vendor retains source/IP and reuse rights (see `01_Product_Specification.md § Business Context`) — remaining action is making sure this is an explicit clause in the actual signed contract, not just a design decision |
-| 5 | Scope creep from dual-purpose build (client deliverable + SaaS foundation) | Delays on a favor-priced project | Keep multi-tenant scaffolding minimal/invisible for v1; no SaaS-only features until there's a real second client |
+| 4 | IP/ownership ambiguity with the client's contract | Vendor blocked from reusing codebase for SaaS | **Decided:** client owns data/deployment for the duration of an active license (recurring — yearly/monthly/usage-based, not perpetual, per `01_Product_Specification.md § Business Context` and `09_LabFlow_Licensing_and_Subscription_Architecture.md`), vendor retains source/IP and reuse rights — remaining action is making sure this is an explicit clause in the actual signed contract, not just a design decision |
+| 5 | Scope creep from dual-purpose build (client deliverable + SaaS foundation) | Delays the first paying customer's delivery | Keep multi-tenant scaffolding minimal/invisible for v1; no SaaS-only features until there's a real second client |
 | 6 | Sync delay perceived as unreliable | Trust in "still works with website" erodes | Set expectations clearly; surface last-synced-at to staff |
 | 7 | Manual result entry error (no analyzer integration) | Wrong results reaching patients | Reference-range highlighting, critical-value flagging |
 | 8 | Existing H2 Cloud data not migrated | Client loses historical records on cutover | Confirm migration need and export format early |
