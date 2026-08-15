@@ -160,8 +160,20 @@ export class LaboratoryService {
             // Needed to judge collection-readiness across the WHOLE
             // patient invoice, not just this one sample — an invoice can
             // have multiple samples (e.g. blood + urine) and the report
-            // isn't ready until every test on every sample is in.
-            samples: { include: { results: true } },
+            // isn't ready until every test on every sample is in. Also
+            // carries actual values (not just status) so the "Ready for
+            // Collection" preview can show what's about to be sent out,
+            // not just a count.
+            samples: {
+              include: {
+                results: {
+                  include: {
+                    test: true,
+                    values: { include: { parameter: true } },
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -171,8 +183,11 @@ export class LaboratoryService {
     const invoiceReadiness = sample.invoice
       ? this.computeInvoiceReadiness(sample.invoice)
       : null;
+    const invoiceResultsPreview = sample.invoice
+      ? this.buildInvoiceResultsPreview(sample.invoice)
+      : [];
 
-    return { ...sample, invoiceReadiness };
+    return { ...sample, invoiceReadiness, invoiceResultsPreview };
   }
 
   /**
@@ -207,6 +222,68 @@ export class LaboratoryService {
       allEntered: testIds.length > 0 && testIds.every((t) => entered.has(t)),
       allReleased: testIds.length > 0 && testIds.every((t) => released.has(t)),
     };
+  }
+
+  /**
+   * Builds a per-test preview of whatever's currently entered/released
+   * across every sample on the invoice — this is what the "Ready for
+   * Collection" confirmation dialog shows before a technician commits to
+   * sending a report out. One entry per test line that has a result yet;
+   * tests with nothing entered are simply absent (the readiness check in
+   * §computeInvoiceReadiness is what tells the frontend those are still
+   * missing).
+   */
+  private buildInvoiceResultsPreview(invoice: {
+    lines: { testId: string | null }[];
+    samples: {
+      results: {
+        testId: string;
+        status: string;
+        test: { code: string; name: string };
+        values: {
+          valueNumeric: unknown;
+          valueText: string | null;
+          unit: string | null;
+          parameter: { name: string; unit: string | null; sortOrder: number };
+        }[];
+      }[];
+    }[];
+  }) {
+    const testIds = invoice.lines.filter((l) => l.testId).map((l) => l.testId as string);
+    // A test could theoretically have results on more than one sample
+    // (shouldn't normally happen, but don't silently drop data if it
+    // does) — prefer a RELEASED result over an ENTERED one for the
+    // preview, and otherwise take the most recently seen.
+    const byTestId = new Map<
+      string,
+      (typeof invoice.samples)[number]['results'][number]
+    >();
+    for (const s of invoice.samples) {
+      for (const r of s.results) {
+        const existing = byTestId.get(r.testId);
+        if (!existing || (r.status === ResultStatus.RELEASED && existing.status !== ResultStatus.RELEASED)) {
+          byTestId.set(r.testId, r);
+        }
+      }
+    }
+    return testIds
+      .filter((testId) => byTestId.has(testId))
+      .map((testId) => {
+        const r = byTestId.get(testId)!;
+        return {
+          testId,
+          testCode: r.test.code,
+          testName: r.test.name,
+          status: r.status,
+          values: [...r.values]
+            .sort((a, b) => a.parameter.sortOrder - b.parameter.sortOrder)
+            .map((v) => ({
+              label: v.parameter.name,
+              unit: v.unit ?? v.parameter.unit ?? null,
+              value: v.valueText ?? (v.valueNumeric != null ? String(v.valueNumeric) : ''),
+            })),
+        };
+      });
   }
 
   async listPendingSamples(tenantId: string, branchId?: string) {
