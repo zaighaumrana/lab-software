@@ -6,7 +6,7 @@
 
 A Laboratory Management System (LMS) and public website, replacing a client's current H2 Cloud software. The client's core complaint with H2 Cloud — it requires internet to function — is the reason this entire project exists, so **offline-first** is the property everything else is designed around, not a feature bullet point.
 
-The client's deployment is single-lab, self-hosted, one-time-purchase, no cloud dependency. The same codebase is architected to become the vendor's own multi-tenant SaaS product for future clients, without a rewrite — this dual purpose shapes several decisions throughout (see `03_Core_Domain_Design.md § Future SaaS Evolution` in `01_Product_Specification.md`).
+The client's deployment is single-lab, self-hosted, on a recurring license (yearly/monthly/usage-based — see Decision #17 below), no cloud dependency for daily operation. The same codebase is architected to become the vendor's own multi-tenant SaaS product for future clients, without a rewrite — this dual purpose shapes several decisions throughout (see `03_Core_Domain_Design.md § Future SaaS Evolution` in `01_Product_Specification.md`).
 
 ## Project Goals
 
@@ -29,6 +29,8 @@ Full text in `01_Product_Specification.md`. In short: local-first, one codebase 
 6. **`06_Dependencies_and_Tooling.md`** — full inventory of every third-party package and DB tool actually used in the repo, why each was chosen, and what each means for building a packaged/distributable bundle. Read before packaging a release.
 7. **`07_Website_Separation_and_Offline_Online_Hybrid.md`** — plan for pulling `apps/website` out of the local dev/deployment path once the core software is built and tested, and the scope for how the offline lab and the online website connect without breaking the offline-first guarantee. Read before hosting the website for real.
 8. **`08_Windows_Packaging_and_Installer_Roadmap.md`** — roadmap for a two-installer Windows deployment (`LMS-Server-Setup.exe` + `LMS-Workstation-Setup.exe`) reflecting the server/LAN-workstation architecture, ending in one desktop icon per PC and no terminals. Read before packaging a client-facing release.
+9. **`09_LabFlow_Licensing_and_Subscription_Architecture.md`** — design-only architecture for LabFlow's subscription/license system: activation, periodic validation, offline grace behavior, clock-tamper resistance. Scoped to the offline/enterprise tier only — see doc 10. Read before writing any licensing code.
+10. **`10_Product_Tiers_and_SaaS_Scope.md`** — design-only scope for the planned multi-tier product (Basic/Pro cloud tiers + the offline/enterprise tier this repo currently builds), and why the online/offline split — not feature count — is what actually separates them. Read before deciding what belongs in which tier, or before assuming doc 9's licensing mechanisms apply everywhere.
 
 ## Document Dependency Map
 
@@ -56,7 +58,9 @@ Research/
 ├── 05_Analytics_Architecture.md
 ├── 06_Dependencies_and_Tooling.md
 ├── 07_Website_Separation_and_Offline_Online_Hybrid.md
-└── 08_Windows_Packaging_and_Installer_Roadmap.md
+├── 08_Windows_Packaging_and_Installer_Roadmap.md
+├── 09_LabFlow_Licensing_and_Subscription_Architecture.md
+└── 10_Product_Tiers_and_SaaS_Scope.md
 ```
 
 ## High-Level Architecture
@@ -85,6 +89,8 @@ Full detail in `02_Technical_Architecture.md`.
 | Every third-party dependency and DB tool used, why it was chosen, packaging/native-binary considerations | `06_Dependencies_and_Tooling.md` |
 | Separating the public website into its own hosting/DB, and the offline-first/online-hybrid sync scope | `07_Website_Separation_and_Offline_Online_Hybrid.md` |
 | Two-installer Windows deployment (server + workstation), firewall/backup/health-check requirements | `08_Windows_Packaging_and_Installer_Roadmap.md` |
+| Licensing/subscription architecture: activation, offline grace period, clock-tamper resistance (design only) | `09_LabFlow_Licensing_and_Subscription_Architecture.md` |
+| Product tier strategy: Basic/Pro cloud tiers vs. the offline/enterprise tier, and why (design only) | `10_Product_Tiers_and_SaaS_Scope.md` |
 
 ## Decisions Log
 
@@ -108,7 +114,7 @@ The 17 open items originally listed here have all been answered and are now fold
 | 14 | Assume shared (non-isolated) LAN; implement internal HTTPS at minimum | `02_Technical_Architecture.md § Security` |
 | 15 | Client owns backups; software automates; vendor trains; maintenance can include verification | `02_Technical_Architecture.md § Security`, `§ Deployment Strategy` |
 | 16 | No existing SMS provider; interface-based, bake-off among eOcean/Jazz Business/Zong Business at deployment | `02_Technical_Architecture.md § SMS Architecture` |
-| 17 | Client owns data/deployment/perpetual license; vendor retains source/IP and reuse rights — must be explicit contract clause | `01_Product_Specification.md § Business Context` |
+| 17 | Client owns data/deployment for the duration of an active license — **recurring license (yearly/monthly/usage-based), not perpetual/one-time**; vendor retains source/IP and reuse rights — must be explicit contract clause | `01_Product_Specification.md § Business Context`, `09_LabFlow_Licensing_and_Subscription_Architecture.md` |
 
 No unresolved decisions remain at this stage.
 
