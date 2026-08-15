@@ -144,6 +144,7 @@ export function LaboratoryPage() {
   const [reopenReason, setReopenReason] = useState('');
   const [finalizing, setFinalizing] = useState(false);
   const [markingReady, setMarkingReady] = useState(false);
+  const [showReadyPreview, setShowReadyPreview] = useState(false);
 
   function existingResultFor(sample: Sample, testId: string): Result | undefined {
     return sample.results?.find(
@@ -235,31 +236,6 @@ export function LaboratoryPage() {
     }
   }
 
-  async function finalizeExisting(resultId: string) {
-    const scrollY = window.scrollY;
-    setFinalizing(true);
-    setError('');
-    try {
-      await labApi.finalizeResult(resultId);
-      setMessage('Result finalized.');
-      await refresh();
-      if (selected) {
-        const updated = await labApi.getSample(selected.id);
-        setSelected(updated as Sample);
-      }
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data
-          ?.message || 'Failed to finalize result';
-      setError(msg);
-    } finally {
-      setFinalizing(false);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => window.scrollTo(0, scrollY));
-      });
-    }
-  }
-
   async function markReady() {
     if (!selected?.invoice) return;
     const scrollY = window.scrollY;
@@ -270,6 +246,7 @@ export function LaboratoryPage() {
       const updated = await labApi.getSample(selected.id);
       setSelected(updated as Sample);
       setMessage('Report marked ready for collection — now available in Reports.');
+      setShowReadyPreview(false);
       await refresh();
     } catch (err: unknown) {
       const msg =
@@ -594,21 +571,12 @@ export function LaboratoryPage() {
                                 </button>
                               )}
                               {isEntered && (
-                                <>
-                                  <button
-                                    className="text-xs text-brand-600 hover:underline"
-                                    onClick={() => openResultEntry(selected, test)}
-                                  >
-                                    Edit
-                                  </button>
-                                  <button
-                                    className="text-xs text-green-700 hover:underline"
-                                    disabled={finalizing}
-                                    onClick={() => finalizeExisting(existing.id)}
-                                  >
-                                    Finalize
-                                  </button>
-                                </>
+                                <button
+                                  className="text-xs text-brand-600 hover:underline"
+                                  onClick={() => openResultEntry(selected, test)}
+                                >
+                                  Edit
+                                </button>
                               )}
                               {isFinalized && (
                                 <button
@@ -651,18 +619,11 @@ export function LaboratoryPage() {
                                   ))}
                                 <div className="flex gap-2">
                                   <button
-                                    className="btn-secondary flex-1"
+                                    className="btn-primary flex-1"
                                     onClick={() => submitResult(false)}
                                     disabled={saving}
                                   >
                                     {saving ? 'Saving…' : 'Save'}
-                                  </button>
-                                  <button
-                                    className="btn-primary flex-1"
-                                    onClick={() => submitResult(true)}
-                                    disabled={saving}
-                                  >
-                                    {saving ? 'Saving…' : 'Save & Finalize'}
                                   </button>
                                 </div>
                                 <button
@@ -712,10 +673,10 @@ export function LaboratoryPage() {
                     not a per-sample one — it covers every sample on this
                     invoice (e.g. blood + urine), so it only lights up
                     once every test on all of them has a result, and it
-                    stays disabled/grey until then. Clicking it finalizes
-                    the whole report, which is what makes it show up in
-                    Reports (and the public tracking site) for printing —
-                    nothing marks the report ready before this is clicked. */}
+                    stays disabled/grey until then. Clicking it opens a
+                    confirmation preview — the actual send happens from
+                    there, not on this click. Nothing marks the report
+                    ready before that confirmation is clicked. */}
                 {selected.invoice && selected.invoiceReadiness && (
                   selected.invoiceReadiness.allReleased ? (
                     <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-center text-sm font-medium text-green-700">
@@ -729,7 +690,11 @@ export function LaboratoryPage() {
                             ? 'bg-brand-600 text-white hover:bg-brand-700'
                             : 'cursor-not-allowed bg-slate-200 text-slate-400'
                         }`}
-                        onClick={selected.invoiceReadiness.allEntered ? markReady : undefined}
+                        onClick={
+                          selected.invoiceReadiness.allEntered
+                            ? () => setShowReadyPreview(true)
+                            : undefined
+                        }
                         disabled={!selected.invoiceReadiness.allEntered || markingReady}
                       >
                         {markingReady ? 'Marking ready…' : 'Ready for Collection'}
@@ -747,6 +712,79 @@ export function LaboratoryPage() {
                 )}
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* "Ready for Collection" confirmation preview — shows exactly
+          what's about to be finalized and sent out before it happens.
+          The actual send (markReady) only fires from the button inside
+          this dialog, never from opening it. */}
+      {showReadyPreview && selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-lg bg-white shadow-xl">
+            <div className="border-b border-slate-200 px-5 py-4">
+              <h2 className="text-lg font-semibold text-slate-900">Confirm report for collection</h2>
+              <p className="text-sm text-slate-500">
+                {selected.invoice?.booking?.patient?.fullName ?? 'Patient'} — review the results
+                below before sending this report out.
+              </p>
+            </div>
+            <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
+              {(selected.invoiceResultsPreview ?? []).length === 0 && (
+                <p className="text-sm text-slate-400">No results to preview.</p>
+              )}
+              {(selected.invoiceResultsPreview ?? []).map((r) => (
+                <div key={r.testId} className="rounded-lg border border-slate-200 p-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-slate-800">
+                      {r.testCode} — {r.testName}
+                    </h3>
+                    <span
+                      className={`rounded px-2 py-0.5 text-[11px] font-medium ${
+                        r.status === 'RELEASED'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-amber-100 text-amber-700'
+                      }`}
+                    >
+                      {r.status === 'RELEASED' ? 'Finalized' : 'Entered'}
+                    </span>
+                  </div>
+                  {r.values.length > 0 ? (
+                    <table className="mt-2 w-full text-sm">
+                      <tbody>
+                        {r.values.map((v, i) => (
+                          <tr key={i} className="border-t border-slate-100 first:border-t-0">
+                            <td className="py-1 pr-2 text-slate-500">{v.label}</td>
+                            <td className="py-1 text-right font-medium text-slate-800">
+                              {v.value || '—'} {v.unit ?? ''}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p className="mt-1 text-xs text-slate-400">No parameter values recorded.</p>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2 border-t border-slate-200 px-5 py-4">
+              <button
+                className="btn-secondary flex-1"
+                onClick={() => setShowReadyPreview(false)}
+                disabled={markingReady}
+              >
+                Go back
+              </button>
+              <button
+                className="btn-primary flex-1"
+                onClick={markReady}
+                disabled={markingReady}
+              >
+                {markingReady ? 'Sending…' : 'Send for Collection'}
+              </button>
+            </div>
           </div>
         </div>
       )}
