@@ -19,16 +19,18 @@ import { AuthService } from '../auth/auth.service';
  * existing sessionId in the socket handshake (`auth.sessionId`), we
  * validate it the same way AuthService already does for HTTP requests.
  *
- * Tenant room: deliberately NOT taken from the validated session.
- * Every REST mutation in this app resolves tenantId from a header
- * (`x-tenant-id`, see laboratory.controller.ts's resolveTenantId()) —
- * this deployment's single-tenant testing convention — not from the
- * caller's session. If the gateway joined sockets to a room keyed by
- * session.tenantId instead, sockets would sit in a different room than
- * notifySampleChanged() ever broadcasts to, and nothing would ever
- * arrive — silently, with no error anywhere. (This happened once
- * already.) So the room key here mirrors the REST resolution exactly:
- * read from the handshake, same default fallback, same value REST uses.
+ * Tenant room: taken from the validated session (session.tenantId), the
+ * same way `laboratory.controller.ts` now resolves tenantId too (it uses
+ * @CurrentUser() off the same session, since SessionGuard was added
+ * there). Both sides deriving tenant identity from the one verified
+ * session is what keeps the room key correct here — they need to always
+ * agree, because a mismatch means sockets silently sit in a room nothing
+ * ever broadcasts to, with no visible error anywhere. (This bit the app
+ * twice already, in both directions — once when the gateway used the
+ * session while REST used a header, and again when REST was fixed to use
+ * the session but the gateway had been changed to match the old header
+ * instead. Both sides now derive from the session, so there's only one
+ * source of truth left to keep in sync.)
  *
  * This app is single-server by design (see AuthService's in-memory
  * session store) so the default in-memory socket.io adapter is
@@ -60,18 +62,9 @@ export class LaboratoryGateway implements OnGatewayConnection, OnGatewayDisconne
       return;
     }
 
-    // Matches laboratory.controller.ts's resolveTenantId() exactly —
-    // header/auth value first, same env fallback, same literal default.
-    // See the class-level comment above for why this can't be
-    // session.tenantId.
-    const tenantId =
-      (client.handshake.auth?.tenantId as string | undefined) ||
-      process.env.DEFAULT_TENANT_ID ||
-      'default-tenant';
-
-    client.data.tenantId = tenantId;
+    client.data.tenantId = session.tenantId;
     client.data.userId = session.userId;
-    client.join(`tenant:${tenantId}`);
+    client.join(`tenant:${session.tenantId}`);
   }
 
   handleDisconnect(client: Socket) {
