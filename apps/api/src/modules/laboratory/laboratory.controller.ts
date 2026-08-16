@@ -5,10 +5,9 @@ import {
   Patch,
   Body,
   Param,
-  Headers,
-  Query,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import { LaboratoryService } from './laboratory.service';
 import { CollectSampleDto } from './dto/collect-sample.dto';
@@ -16,16 +15,25 @@ import { AcceptSampleDto, RejectSampleDto } from './dto/sample-action.dto';
 import { OutsourceSampleDto } from './dto/outsource-sample.dto';
 import { EnterResultDto } from './dto/enter-result.dto';
 import { AmendResultDto } from './dto/amend-result.dto';
+import { SessionGuard } from '../../common/guards/session.guard';
+import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
 
-function resolveTenantId(header?: string): string {
-  return header || process.env.DEFAULT_TENANT_ID || 'default-tenant';
+function resolveBranchId(user: AuthUser): string {
+  return user.branchId || process.env.DEFAULT_BRANCH_ID || 'default-branch';
 }
 
-function resolveBranchId(header?: string): string {
-  return header || process.env.DEFAULT_BRANCH_ID || 'default-branch';
-}
-
+/**
+ * Every route here mutates or reads actual clinical/result data, so this
+ * whole controller requires a valid session (see catalog.controller.ts
+ * for the same pattern). Previously this controller had no guard at
+ * all — tenantId came from a client-supplied `x-tenant-id` header with a
+ * hardcoded fallback, meaning any request that could reach the API could
+ * enter, finalize, or reopen results with no login whatsoever. tenantId
+ * and the acting user's identity now come from the verified session
+ * (@CurrentUser()) instead of trusting whatever the client claims.
+ */
 @Controller('laboratory')
+@UseGuards(SessionGuard)
 export class LaboratoryController {
   constructor(private readonly laboratoryService: LaboratoryService) {}
 
@@ -35,25 +43,16 @@ export class LaboratoryController {
    * GET /laboratory/samples/pending
    */
   @Get('samples/pending')
-  async listPending(
-    @Headers('x-tenant-id') tenantHeader?: string,
-    @Headers('x-branch-id') branchHeader?: string,
-  ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    const branchId = resolveBranchId(branchHeader);
-    return this.laboratoryService.listPendingSamples(tenantId, branchId);
+  async listPending(@CurrentUser() user: AuthUser) {
+    return this.laboratoryService.listPendingSamples(user.tenantId, resolveBranchId(user));
   }
 
   /**
    * GET /laboratory/samples/:id
    */
   @Get('samples/:id')
-  async getSample(
-    @Param('id') id: string,
-    @Headers('x-tenant-id') tenantHeader?: string,
-  ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    return this.laboratoryService.getSample(tenantId, id);
+  async getSample(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.laboratoryService.getSample(user.tenantId, id);
   }
 
   /**
@@ -62,26 +61,16 @@ export class LaboratoryController {
    */
   @Post('samples')
   @HttpCode(HttpStatus.CREATED)
-  async collectSample(
-    @Body() dto: CollectSampleDto,
-    @Headers('x-tenant-id') tenantHeader?: string,
-    @Headers('x-branch-id') branchHeader?: string,
-  ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    const branchId = resolveBranchId(branchHeader);
-    return this.laboratoryService.collectSample(tenantId, branchId, dto);
+  async collectSample(@CurrentUser() user: AuthUser, @Body() dto: CollectSampleDto) {
+    return this.laboratoryService.collectSample(user.tenantId, resolveBranchId(user), dto);
   }
 
   /**
    * PATCH /laboratory/samples/:id/receive
    */
   @Patch('samples/:id/receive')
-  async receiveSample(
-    @Param('id') id: string,
-    @Headers('x-tenant-id') tenantHeader?: string,
-  ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    return this.laboratoryService.receiveSample(tenantId, id);
+  async receiveSample(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.laboratoryService.receiveSample(user.tenantId, id);
   }
 
   /**
@@ -89,12 +78,11 @@ export class LaboratoryController {
    */
   @Patch('samples/:id/accept')
   async acceptSample(
+    @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() dto: AcceptSampleDto,
-    @Headers('x-tenant-id') tenantHeader?: string,
   ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    return this.laboratoryService.acceptSample(tenantId, id, dto.notes);
+    return this.laboratoryService.acceptSample(user.tenantId, id, dto.notes);
   }
 
   /**
@@ -102,24 +90,19 @@ export class LaboratoryController {
    */
   @Patch('samples/:id/reject')
   async rejectSample(
+    @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() dto: RejectSampleDto,
-    @Headers('x-tenant-id') tenantHeader?: string,
   ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    return this.laboratoryService.rejectSample(tenantId, id, dto.rejectionReason);
+    return this.laboratoryService.rejectSample(user.tenantId, id, dto.rejectionReason);
   }
 
   /**
    * PATCH /laboratory/samples/:id/start-testing
    */
   @Patch('samples/:id/start-testing')
-  async startTesting(
-    @Param('id') id: string,
-    @Headers('x-tenant-id') tenantHeader?: string,
-  ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    return this.laboratoryService.startTesting(tenantId, id);
+  async startTesting(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.laboratoryService.startTesting(user.tenantId, id);
   }
 
   /**
@@ -127,13 +110,12 @@ export class LaboratoryController {
    */
   @Patch('samples/:id/outsource')
   async outsourceSample(
+    @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() dto: OutsourceSampleDto,
-    @Headers('x-tenant-id') tenantHeader?: string,
   ) {
-    const tenantId = resolveTenantId(tenantHeader);
     return this.laboratoryService.markOutsourced(
-      tenantId,
+      user.tenantId,
       id,
       dto.externalLabName,
       dto.outsourcingCost,
@@ -144,12 +126,8 @@ export class LaboratoryController {
    * PATCH /laboratory/samples/:id/un-outsource
    */
   @Patch('samples/:id/un-outsource')
-  async unOutsourceSample(
-    @Param('id') id: string,
-    @Headers('x-tenant-id') tenantHeader?: string,
-  ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    return this.laboratoryService.unmarkOutsourced(tenantId, id);
+  async unOutsourceSample(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.laboratoryService.unmarkOutsourced(user.tenantId, id);
   }
 
   /**
@@ -161,13 +139,8 @@ export class LaboratoryController {
    * a result.
    */
   @Patch('invoices/:invoiceId/ready-for-collection')
-  async markInvoiceReady(
-    @Param('invoiceId') invoiceId: string,
-    @Headers('x-tenant-id') tenantHeader?: string,
-    @Headers('x-user-id') userHeader?: string,
-  ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    return this.laboratoryService.markInvoiceReady(tenantId, invoiceId, userHeader);
+  async markInvoiceReady(@CurrentUser() user: AuthUser, @Param('invoiceId') invoiceId: string) {
+    return this.laboratoryService.markInvoiceReady(user.tenantId, invoiceId, user.userId);
   }
 
   // ----- Results -----
@@ -178,12 +151,8 @@ export class LaboratoryController {
    */
   @Post('results')
   @HttpCode(HttpStatus.CREATED)
-  async enterResult(
-    @Body() dto: EnterResultDto,
-    @Headers('x-tenant-id') tenantHeader?: string,
-  ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    return this.laboratoryService.enterResult(tenantId, dto);
+  async enterResult(@CurrentUser() user: AuthUser, @Body() dto: EnterResultDto) {
+    return this.laboratoryService.enterResult(user.tenantId, dto, user.userId);
   }
 
   /**
@@ -191,13 +160,8 @@ export class LaboratoryController {
    * Explicit finalization: ENTERED → RELEASED.
    */
   @Patch('results/:id/finalize')
-  async finalizeResult(
-    @Param('id') id: string,
-    @Headers('x-tenant-id') tenantHeader?: string,
-    @Headers('x-user-id') userHeader?: string,
-  ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    return this.laboratoryService.finalizeResult(tenantId, id, userHeader);
+  async finalizeResult(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.laboratoryService.finalizeResult(user.tenantId, id, user.userId);
   }
 
   /**
@@ -206,13 +170,11 @@ export class LaboratoryController {
    */
   @Patch('results/:id/reopen')
   async reopenResult(
+    @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() dto: { reason: string },
-    @Headers('x-tenant-id') tenantHeader?: string,
-    @Headers('x-user-id') userHeader?: string,
   ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    return this.laboratoryService.reopenResult(tenantId, id, dto?.reason, userHeader);
+    return this.laboratoryService.reopenResult(user.tenantId, id, dto?.reason, user.userId);
   }
 
   /**
@@ -222,11 +184,10 @@ export class LaboratoryController {
   @Post('results/:id/amend')
   @HttpCode(HttpStatus.CREATED)
   async amendResult(
+    @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() dto: AmendResultDto,
-    @Headers('x-tenant-id') tenantHeader?: string,
   ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    return this.laboratoryService.amendResult(tenantId, id, dto);
+    return this.laboratoryService.amendResult(user.tenantId, id, dto);
   }
 }
