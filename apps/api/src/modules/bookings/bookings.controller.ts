@@ -5,24 +5,32 @@ import {
   Patch,
   Body,
   Param,
-  Query,
-  Headers,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { CheckInBookingDto } from './dto/check-in-booking.dto';
+import { SessionGuard } from '../../common/guards/session.guard';
+import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
 
-function resolveTenantId(header?: string): string {
-  return header || process.env.DEFAULT_TENANT_ID || 'default-tenant';
+function resolveBranchId(user: AuthUser): string {
+  return user.branchId || process.env.DEFAULT_BRANCH_ID || 'default-branch';
 }
 
-function resolveBranchId(header?: string): string {
-  return header || process.env.DEFAULT_BRANCH_ID || 'default-branch';
-}
-
+/**
+ * Staff-facing booking management — only called from apps/web (verified:
+ * not referenced from apps/website), so this requires a valid session
+ * (see catalog.controller.ts for the same pattern). Previously
+ * unguarded: tenantId came from a client-supplied `x-tenant-id` header,
+ * meaning any request that could reach the API could create, confirm, or
+ * cancel bookings with no login at all. tenantId now comes from the
+ * verified session (@CurrentUser()) instead of trusting whatever the
+ * client claims.
+ */
 @Controller('bookings')
+@UseGuards(SessionGuard)
 export class BookingsController {
   constructor(private readonly bookingsService: BookingsService) {}
 
@@ -31,24 +39,16 @@ export class BookingsController {
    * Lookup by the human-readable / SMS booking code.
    */
   @Get('code/:bookingCode')
-  async findByCode(
-    @Param('bookingCode') bookingCode: string,
-    @Headers('x-tenant-id') tenantHeader?: string,
-  ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    return this.bookingsService.findByCode(tenantId, bookingCode);
+  async findByCode(@CurrentUser() user: AuthUser, @Param('bookingCode') bookingCode: string) {
+    return this.bookingsService.findByCode(user.tenantId, bookingCode);
   }
 
   /**
    * GET /bookings/:id
    */
   @Get(':id')
-  async findOne(
-    @Param('id') id: string,
-    @Headers('x-tenant-id') tenantHeader?: string,
-  ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    return this.bookingsService.findById(tenantId, id);
+  async findOne(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.bookingsService.findById(user.tenantId, id);
   }
 
   /**
@@ -57,14 +57,8 @@ export class BookingsController {
    */
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  async create(
-    @Body() dto: CreateBookingDto,
-    @Headers('x-tenant-id') tenantHeader?: string,
-    @Headers('x-branch-id') branchHeader?: string,
-  ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    const branchId = resolveBranchId(branchHeader);
-    return this.bookingsService.create(tenantId, branchId, dto);
+  async create(@CurrentUser() user: AuthUser, @Body() dto: CreateBookingDto) {
+    return this.bookingsService.create(user.tenantId, resolveBranchId(user), dto);
   }
 
   /**
@@ -72,12 +66,8 @@ export class BookingsController {
    * Accept an online booking (PENDING_REVIEW → CONFIRMED)
    */
   @Patch(':id/confirm')
-  async confirm(
-    @Param('id') id: string,
-    @Headers('x-tenant-id') tenantHeader?: string,
-  ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    return this.bookingsService.confirm(tenantId, id);
+  async confirm(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.bookingsService.confirm(user.tenantId, id);
   }
 
   /**
@@ -86,12 +76,11 @@ export class BookingsController {
    */
   @Patch(':id/check-in')
   async checkIn(
+    @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() _dto: CheckInBookingDto,
-    @Headers('x-tenant-id') tenantHeader?: string,
   ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    return this.bookingsService.checkIn(tenantId, id);
+    return this.bookingsService.checkIn(user.tenantId, id);
   }
 
   /**
@@ -99,11 +88,10 @@ export class BookingsController {
    */
   @Patch(':id/cancel')
   async cancel(
+    @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() body: { reason?: string },
-    @Headers('x-tenant-id') tenantHeader?: string,
   ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    return this.bookingsService.cancel(tenantId, id, body?.reason);
+    return this.bookingsService.cancel(user.tenantId, id, body?.reason);
   }
 }
