@@ -1,10 +1,11 @@
 import axios from 'axios';
 
 const SESSION_KEY = 'lms_session_id';
-// Single-tenant testing convention used everywhere in this app — REST
-// calls always send this exact header value (see the interceptor below).
-// Exported so other channels (e.g. the WebSocket gateway) can match it
-// instead of silently drifting to a different tenant-resolution source.
+// Single-tenant testing convention — used by the interceptor below as a
+// fallback header for controllers that don't (yet) require a session
+// (e.g. billing, patients, settings). Guarded controllers like
+// laboratory ignore this header entirely and derive tenantId from the
+// verified session instead (see laboratory.controller.ts).
 const DEFAULT_TENANT_ID = 'default-tenant';
 
 export const api = axios.create({
@@ -52,12 +53,4 @@ export function clearSession() {
 
 export function getSessionId() {
   return localStorage.getItem(SESSION_KEY);
-}
-
-export function getTenantId() {
-  // Matches the interceptor above exactly — kept as one shared constant
-  // so any other channel (e.g. the WebSocket connection in labSocket.ts)
-  // resolves the same tenant identity REST calls do, instead of the two
-  // silently drifting apart.
-  return DEFAULT_TENANT_ID;
 }
