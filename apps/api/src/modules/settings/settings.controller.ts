@@ -1,83 +1,84 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
-import { ReportingService } from './reporting.service';
-import { canDeliverReport, isReportFinalized } from '../../common/report-eligibility.util';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Put,
+  Body,
+  Param,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  UseGuards,
+} from '@nestjs/common';
+import { SettingsService } from './settings.service';
+import { CreateUserDto, UpdateUserDto } from './dto/create-user.dto';
+import { BrandingDto, PrintLayoutDto } from './dto/branding.dto';
 import { SessionGuard } from '../../common/guards/session.guard';
 import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
 
-function resolveBranchId(user: AuthUser): string {
-  return user.branchId || process.env.DEFAULT_BRANCH_ID || 'default-branch';
+function resolveTenantId(header?: string): string {
+  return header || process.env.DEFAULT_TENANT_ID || 'default-tenant';
 }
 
 /**
- * Staff-facing report listing/preview — only called from apps/web
- * (verified: not referenced from apps/website, which has its own
- * separate, intentionally-public `/public/reports/*` routes in
- * public.controller.ts). This one requires a valid session (see
- * catalog.controller.ts for the same pattern) since it's staff tooling,
- * not the public lookup surface. Previously unguarded: tenantId came
- * from a client-supplied `x-tenant-id` header, meaning any request that
- * could reach the API could list or view any patient's report with no
- * login at all. tenantId now comes from the verified session
- * (@CurrentUser()) instead of trusting whatever the client claims.
+ * Unlike the other controllers fixed alongside this one, this file
+ * wasn't a real vulnerability — every route except getSettings already
+ * had its own hand-rolled requireSession() check, equivalent in effect
+ * to SessionGuard (both ultimately call AuthService's session
+ * validation). Replaced here for consistency with the rest of the
+ * codebase's pattern (see catalog.controller.ts), not because it was
+ * unprotected.
+ *
+ * `getSettings` is deliberately left unguarded and unchanged — the app
+ * loads it before login (SettingsContext wraps the whole app, including
+ * the login screen, to show the lab's branding/logo pre-authentication),
+ * so it can't require a session. It only ever returns non-sensitive
+ * branding/print-layout display config, never patient or business data.
  */
-@Controller('reports')
-@UseGuards(SessionGuard)
-export class ReportingController {
-  constructor(private readonly reportingService: ReportingService) {}
+@Controller('settings')
+export class SettingsController {
+  constructor(private readonly settingsService: SettingsService) {}
 
-  /**
-   * GET /reports?q=&status=
-   * Must be declared before :id routes.
-   */
+  /** GET /settings — branding + print layout. Intentionally public — see class comment. */
   @Get()
-  async list(
+  async getSettings(@Headers('x-tenant-id') tenantHeader?: string) {
+    const tenantId = resolveTenantId(tenantHeader);
+    return this.settingsService.getPublicSettings(tenantId);
+  }
+
+  @Get('users')
+  @UseGuards(SessionGuard)
+  async listUsers(@CurrentUser() user: AuthUser) {
+    return this.settingsService.listUsers(user.tenantId);
+  }
+
+  @Post('users')
+  @UseGuards(SessionGuard)
+  @HttpCode(HttpStatus.CREATED)
+  async createUser(@CurrentUser() user: AuthUser, @Body() dto: CreateUserDto) {
+    return this.settingsService.createUser(user.tenantId, user.role, dto);
+  }
+
+  @Patch('users/:id')
+  @UseGuards(SessionGuard)
+  async updateUser(
     @CurrentUser() user: AuthUser,
-    @Query('q') q?: string,
-    @Query('status') status?: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateUserDto,
   ) {
-    return this.reportingService.list(user.tenantId, resolveBranchId(user), q, status);
+    return this.settingsService.updateUser(user.tenantId, user.role, id, dto);
   }
 
-  /**
-   * GET /reports/tracking/:trackingId
-   */
-  @Get('tracking/:trackingId')
-  async findByTrackingId(@CurrentUser() user: AuthUser, @Param('trackingId') trackingId: string) {
-    return this.reportingService.findByTrackingId(user.tenantId, trackingId);
+  @Put('branding')
+  @UseGuards(SessionGuard)
+  async saveBranding(@CurrentUser() user: AuthUser, @Body() dto: BrandingDto) {
+    return this.settingsService.saveBranding(user.tenantId, user.role, dto);
   }
 
-  /**
-   * GET /reports/:id
-   *
-   * Front-desk report preview. Per the delivery rule, actual result values
-   * are only included once the report is finalized AND the invoice is
-   * fully paid — this is the server enforcing that, not just the frontend
-   * choosing not to render a button. When not deliverable, the caller
-   * still gets patient/status context (so front desk can say "ready,
-   * payment pending") but never the values themselves.
-   */
-  @Get(':id')
-  async findOne(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    const report = await this.reportingService.findById(user.tenantId, id);
-    const finalized = isReportFinalized(report);
-    const deliverable = canDeliverReport(report, report.invoice);
-
-    if (deliverable) {
-      return { ...report, finalized, deliverable };
-    }
-
-    // Strip actual result values — only status/payment context goes out.
-    return {
-      ...report,
-      finalized,
-      deliverable,
-      invoice: {
-        ...report.invoice,
-        samples: (report.invoice.samples ?? []).map((s) => ({
-          ...s,
-          results: [],
-        })),
-      },
-    };
+  @Put('print-layout')
+  @UseGuards(SessionGuard)
+  async savePrintLayout(@CurrentUser() user: AuthUser, @Body() dto: PrintLayoutDto) {
+    return this.settingsService.savePrintLayout(user.tenantId, user.role, dto);
   }
 }
