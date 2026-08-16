@@ -1,16 +1,27 @@
-import { Controller, Get, Param, Query, Headers } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { ReportingService } from './reporting.service';
 import { canDeliverReport, isReportFinalized } from '../../common/report-eligibility.util';
+import { SessionGuard } from '../../common/guards/session.guard';
+import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
 
-function resolveTenantId(header?: string): string {
-  return header || process.env.DEFAULT_TENANT_ID || 'default-tenant';
+function resolveBranchId(user: AuthUser): string {
+  return user.branchId || process.env.DEFAULT_BRANCH_ID || 'default-branch';
 }
 
-function resolveBranchId(header?: string): string {
-  return header || process.env.DEFAULT_BRANCH_ID || 'default-branch';
-}
-
+/**
+ * Staff-facing report listing/preview — only called from apps/web
+ * (verified: not referenced from apps/website, which has its own
+ * separate, intentionally-public `/public/reports/*` routes in
+ * public.controller.ts). This one requires a valid session (see
+ * catalog.controller.ts for the same pattern) since it's staff tooling,
+ * not the public lookup surface. Previously unguarded: tenantId came
+ * from a client-supplied `x-tenant-id` header, meaning any request that
+ * could reach the API could list or view any patient's report with no
+ * login at all. tenantId now comes from the verified session
+ * (@CurrentUser()) instead of trusting whatever the client claims.
+ */
 @Controller('reports')
+@UseGuards(SessionGuard)
 export class ReportingController {
   constructor(private readonly reportingService: ReportingService) {}
 
@@ -20,26 +31,19 @@ export class ReportingController {
    */
   @Get()
   async list(
+    @CurrentUser() user: AuthUser,
     @Query('q') q?: string,
     @Query('status') status?: string,
-    @Headers('x-tenant-id') tenantHeader?: string,
-    @Headers('x-branch-id') branchHeader?: string,
   ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    const branchId = resolveBranchId(branchHeader);
-    return this.reportingService.list(tenantId, branchId, q, status);
+    return this.reportingService.list(user.tenantId, resolveBranchId(user), q, status);
   }
 
   /**
    * GET /reports/tracking/:trackingId
    */
   @Get('tracking/:trackingId')
-  async findByTrackingId(
-    @Param('trackingId') trackingId: string,
-    @Headers('x-tenant-id') tenantHeader?: string,
-  ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    return this.reportingService.findByTrackingId(tenantId, trackingId);
+  async findByTrackingId(@CurrentUser() user: AuthUser, @Param('trackingId') trackingId: string) {
+    return this.reportingService.findByTrackingId(user.tenantId, trackingId);
   }
 
   /**
@@ -53,12 +57,8 @@ export class ReportingController {
    * payment pending") but never the values themselves.
    */
   @Get(':id')
-  async findOne(
-    @Param('id') id: string,
-    @Headers('x-tenant-id') tenantHeader?: string,
-  ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    const report = await this.reportingService.findById(tenantId, id);
+  async findOne(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    const report = await this.reportingService.findById(user.tenantId, id);
     const finalized = isReportFinalized(report);
     const deliverable = canDeliverReport(report, report.invoice);
 
