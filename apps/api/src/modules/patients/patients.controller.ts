@@ -6,27 +6,28 @@ import {
   Body,
   Param,
   Query,
-  Headers,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import { PatientsService } from './patients.service';
 import { CreatePatientDto } from './dto/create-patient.dto';
 import { UpdatePatientDto } from './dto/update-patient.dto';
 import { SearchPatientDto } from './dto/search-patient.dto';
+import { SessionGuard } from '../../common/guards/session.guard';
+import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
 
 /**
- * Temporary tenant resolution until full auth is wired.
- * For this client's single-tenant deployment we accept x-tenant-id header
- * or fall back to a default. Real auth guard will replace this later.
+ * Patient records — real PII (name, contact info, CNIC) — so this
+ * controller requires a valid session (see catalog.controller.ts for the
+ * same pattern). Previously unguarded: tenantId came from a
+ * client-supplied `x-tenant-id` header, meaning any request that could
+ * reach the API could search, view, register, or edit patients with no
+ * login at all. tenantId now comes from the verified session
+ * (@CurrentUser()) instead of trusting whatever the client claims.
  */
-function resolveTenantId(header?: string): string {
-  // In production this comes from the authenticated session / JWT.
-  // For local testing we accept a header or use a fixed placeholder.
-  return header || process.env.DEFAULT_TENANT_ID || 'default-tenant';
-}
-
 @Controller('patients')
+@UseGuards(SessionGuard)
 export class PatientsController {
   constructor(private readonly patientsService: PatientsService) {}
 
@@ -35,24 +36,16 @@ export class PatientsController {
    * Phone / CNIC / name search — primary entry point for reception.
    */
   @Get('search')
-  async search(
-    @Query() query: SearchPatientDto,
-    @Headers('x-tenant-id') tenantHeader?: string,
-  ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    return this.patientsService.search(tenantId, query.q);
+  async search(@CurrentUser() user: AuthUser, @Query() query: SearchPatientDto) {
+    return this.patientsService.search(user.tenantId, query.q);
   }
 
   /**
    * GET /patients/:id
    */
   @Get(':id')
-  async findOne(
-    @Param('id') id: string,
-    @Headers('x-tenant-id') tenantHeader?: string,
-  ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    return this.patientsService.findById(tenantId, id);
+  async findOne(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.patientsService.findById(user.tenantId, id);
   }
 
   /**
@@ -61,13 +54,8 @@ export class PatientsController {
    */
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  async create(
-    @Body() dto: CreatePatientDto,
-    @Headers('x-tenant-id') tenantHeader?: string,
-    @Headers('x-branch-id') branchId?: string,
-  ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    return this.patientsService.create(tenantId, dto, branchId);
+  async create(@CurrentUser() user: AuthUser, @Body() dto: CreatePatientDto) {
+    return this.patientsService.create(user.tenantId, dto, user.branchId ?? undefined);
   }
 
   /**
@@ -75,11 +63,10 @@ export class PatientsController {
    */
   @Patch(':id')
   async update(
+    @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() dto: UpdatePatientDto,
-    @Headers('x-tenant-id') tenantHeader?: string,
   ) {
-    const tenantId = resolveTenantId(tenantHeader);
-    return this.patientsService.update(tenantId, id, dto);
+    return this.patientsService.update(user.tenantId, id, dto);
   }
 }
