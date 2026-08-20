@@ -2,6 +2,9 @@ import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { ReportingService } from './reporting.service';
 import { canDeliverReport, isReportFinalized } from '../../common/report-eligibility.util';
 import { SessionGuard } from '../../common/guards/session.guard';
+import { PermissionGuard } from '../../common/guards/permission.guard';
+import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
+import { Permission } from '../../common/auth/permissions';
 import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
 
 function resolveBranchId(user: AuthUser): string {
@@ -12,16 +15,14 @@ function resolveBranchId(user: AuthUser): string {
  * Staff-facing report listing/preview — only called from apps/web
  * (verified: not referenced from apps/website, which has its own
  * separate, intentionally-public `/public/reports/*` routes in
- * public.controller.ts). This one requires a valid session (see
- * catalog.controller.ts for the same pattern) since it's staff tooling,
- * not the public lookup surface. Previously unguarded: tenantId came
- * from a client-supplied `x-tenant-id` header, meaning any request that
- * could reach the API could list or view any patient's report with no
- * login at all. tenantId now comes from the verified session
- * (@CurrentUser()) instead of trusting whatever the client claims.
+ * public.controller.ts). Requires a valid session, and every route
+ * declares the exact permission it needs (PermissionGuard denies by
+ * default if a route has no @RequirePermissions). LAB_OPERATOR has full
+ * REPORT_VIEW — finding/checking a report's status to complete the
+ * delivery workflow is core operational work.
  */
 @Controller('reports')
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, PermissionGuard)
 export class ReportingController {
   constructor(private readonly reportingService: ReportingService) {}
 
@@ -30,6 +31,7 @@ export class ReportingController {
    * Must be declared before :id routes.
    */
   @Get()
+  @RequirePermissions(Permission.REPORT_VIEW)
   async list(
     @CurrentUser() user: AuthUser,
     @Query('q') q?: string,
@@ -42,6 +44,7 @@ export class ReportingController {
    * GET /reports/tracking/:trackingId
    */
   @Get('tracking/:trackingId')
+  @RequirePermissions(Permission.REPORT_VIEW)
   async findByTrackingId(@CurrentUser() user: AuthUser, @Param('trackingId') trackingId: string) {
     return this.reportingService.findByTrackingId(user.tenantId, trackingId);
   }
@@ -57,6 +60,7 @@ export class ReportingController {
    * payment pending") but never the values themselves.
    */
   @Get(':id')
+  @RequirePermissions(Permission.REPORT_VIEW)
   async findOne(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     const report = await this.reportingService.findById(user.tenantId, id);
     const finalized = isReportFinalized(report);
