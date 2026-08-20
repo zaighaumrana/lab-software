@@ -14,6 +14,7 @@ import { SettingsModule } from './modules/settings/settings.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { PrintingModule } from './modules/printing/printing.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { PrintingModule } from './modules/printing/printing.module';
     NotificationsModule,
     AnalyticsModule,
     PrintingModule,
+    DashboardModule,
   ],
 })
 export class AppModule {}
