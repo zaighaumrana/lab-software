@@ -17,14 +17,23 @@ export interface DoctorDashboardQuery {
 export class DoctorsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(tenantId: string, activeOnly = true) {
-    return this.prisma.doctor.findMany({
+  /**
+   * `stripFinancials` backs the referring-doctor picker used during
+   * patient registration (DOCTOR_REFERENCE_VIEW — see permissions.ts):
+   * a non-admin caller needs the doctor's name/specialty to pick a
+   * referrer, never their commission rate. ADMIN callers (DOCTOR_MANAGE)
+   * pass false and get the full record, same as before.
+   */
+  async list(tenantId: string, activeOnly = true, stripFinancials = false) {
+    const doctors = await this.prisma.doctor.findMany({
       where: {
         tenantId,
         ...(activeOnly ? { isActive: true } : {}),
       },
       orderBy: { fullName: 'asc' },
     });
+    if (!stripFinancials) return doctors;
+    return doctors.map(({ shareType: _shareType, shareValue: _shareValue, ...rest }) => rest);
   }
 
   async findById(tenantId: string, id: string) {
