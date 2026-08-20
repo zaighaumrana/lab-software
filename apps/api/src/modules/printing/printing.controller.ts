@@ -6,6 +6,9 @@ import { ReportingService } from '../reporting/reporting.service';
 import { SettingsService } from '../settings/settings.service';
 import { DoctorsService } from '../doctors/doctors.service';
 import { SessionGuard } from '../../common/guards/session.guard';
+import { PermissionGuard } from '../../common/guards/permission.guard';
+import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
+import { Permission } from '../../common/auth/permissions';
 import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
 import { canPrintReport, PENDING_PAYMENT_MESSAGE, REPORT_NOT_FINALIZED_MESSAGE, isReportFinalized } from '../../common/report-eligibility.util';
 import { buildInvoiceHtml } from './templates/invoice.template';
@@ -13,8 +16,16 @@ import { buildReportHtml } from './templates/report.template';
 import { buildDoctorStatementHtml } from './templates/doctor-statement.template';
 import type { PrintSettings } from './templates/shared';
 
+/**
+ * Requires a valid session, and every route declares the exact
+ * permission it needs (PermissionGuard denies by default if a route has
+ * no @RequirePermissions). Invoice/report printing is the tail end of
+ * the normal patient workflow (BILLING_VIEW / REPORT_PRINT — LAB_OPERATOR
+ * has both); the doctor statement is owner-level financial data
+ * (DOCTOR_MANAGE — ADMIN only), same boundary as doctors.controller.ts.
+ */
 @Controller('printing')
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, PermissionGuard)
 export class PrintingController {
   constructor(
     private readonly printingService: PrintingService,
@@ -33,6 +44,7 @@ export class PrintingController {
   }
 
   @Get('invoices/:id')
+  @RequirePermissions(Permission.BILLING_VIEW)
   async invoicePdf(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
@@ -55,6 +67,7 @@ export class PrintingController {
   }
 
   @Get('reports/:id')
+  @RequirePermissions(Permission.REPORT_PRINT)
   async reportPdf(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
@@ -81,6 +94,7 @@ export class PrintingController {
   }
 
   @Get('doctors/:id/statement')
+  @RequirePermissions(Permission.DOCTOR_MANAGE)
   async doctorStatementPdf(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
