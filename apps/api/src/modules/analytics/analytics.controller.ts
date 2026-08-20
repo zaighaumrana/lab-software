@@ -1,6 +1,9 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import { SessionGuard } from '../../common/guards/session.guard';
+import { PermissionGuard } from '../../common/guards/permission.guard';
+import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
+import { Permission } from '../../common/auth/permissions';
 import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
 
 function parseRange(from?: string, to?: string) {
@@ -14,8 +17,21 @@ function parseRange(from?: string, to?: string) {
   return range;
 }
 
+/**
+ * The owner/management analytics surface — everything here is "how is
+ * the business doing," not day-to-day operational work, so the whole
+ * controller is ANALYTICS_VIEW (ADMIN-only; LAB_OPERATOR does not have
+ * it). This includes `dashboard/operational`: even though that query is
+ * genuinely operational data (patients today, samples pending, etc.),
+ * this *route* stays admin-only — the new operator dashboard
+ * (modules/dashboard/) calls the same underlying query function
+ * directly instead of going through this controller, so LAB_OPERATOR
+ * gets that data without gaining access to /analytics/* itself. See
+ * docs/12_RBAC_and_Operator_Dashboard.md for the full rationale.
+ */
 @Controller('analytics')
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, PermissionGuard)
+@RequirePermissions(Permission.ANALYTICS_VIEW)
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 
