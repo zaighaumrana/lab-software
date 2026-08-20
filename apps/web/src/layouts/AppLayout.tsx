@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { hasPermission, Permission } from '../lib/permissions';
 import clsx from 'clsx';
 import {
   LayoutDashboard,
@@ -20,6 +21,8 @@ interface NavLeaf {
   to: string;
   label: string;
   end?: boolean;
+  /** Omit for items every active role can see (Dashboard, Patients, Laboratory). */
+  permission?: Permission;
 }
 
 interface NavItem {
@@ -28,6 +31,7 @@ interface NavItem {
   to?: string;
   end?: boolean;
   children?: NavLeaf[];
+  permission?: Permission;
 }
 
 /**
@@ -36,6 +40,16 @@ interface NavItem {
  * both "money", lab reports + insights are both "reporting") group under
  * one item with a dropdown, so the bar stays short regardless of how many
  * pages the app grows to have.
+ *
+ * `permission` on an item/leaf is UX filtering only (see lib/permissions.ts)
+ * — every one of these is independently enforced server-side too, so
+ * hiding a nav entry here is never the only thing standing between a role
+ * and that page. LAB_OPERATOR's resulting nav is intentionally small — see
+ * docs/12_RBAC_and_Operator_Dashboard.md — Dashboard/Patients/Laboratory
+ * have no `permission` (both active roles get them), Finance/Reports keep
+ * only their operational child, Catalog and the admin-only children
+ * (Doctor Shares, Insights) disappear entirely for a role that lacks the
+ * permission.
  */
 const NAV: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, to: '/', end: true },
@@ -53,7 +67,7 @@ const NAV: NavItem[] = [
     icon: Receipt,
     children: [
       { to: '/invoices', label: 'Invoices' },
-      { to: '/doctors', label: 'Doctor Shares' },
+      { to: '/doctors', label: 'Doctor Shares', permission: Permission.DOCTOR_MANAGE },
     ],
   },
   {
@@ -61,11 +75,27 @@ const NAV: NavItem[] = [
     icon: FileText,
     children: [
       { to: '/reports', label: 'Lab Reports' },
-      { to: '/insights', label: 'Insights' },
+      { to: '/insights', label: 'Insights', permission: Permission.ANALYTICS_VIEW },
     ],
   },
-  { label: 'Catalog', icon: BookOpen, to: '/catalog' },
+  { label: 'Catalog', icon: BookOpen, to: '/catalog', permission: Permission.CATALOG_MANAGE },
 ];
+
+/** Filters NAV down to what `role` can actually see — a leaf/item with no
+ * `permission` is visible to any active role; a parent with children is
+ * only shown if at least one child survives the filter. */
+function visibleNav(role: string | undefined | null): NavItem[] {
+  return NAV.map((item) => {
+    if (item.children) {
+      const children = item.children.filter((c) => !c.permission || hasPermission(role, c.permission));
+      return { ...item, children };
+    }
+    return item;
+  }).filter((item) => {
+    if (item.children) return item.children.length > 0;
+    return !item.permission || hasPermission(role, item.permission);
+  });
+}
 
 function isGroupActive(item: NavItem, pathname: string): boolean {
   if (item.to) return item.end ? pathname === item.to : pathname.startsWith(item.to);
@@ -127,6 +157,8 @@ export function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const nav = visibleNav(user?.role);
+  const canSeeSettings = hasPermission(user?.role, Permission.SETTINGS_MANAGE);
 
   async function handleLogout() {
     await logout();
@@ -142,7 +174,7 @@ export function AppLayout() {
 
           {/* Desktop nav */}
           <nav className="hidden flex-1 items-center gap-1 md:flex">
-            {NAV.map((item) =>
+            {nav.map((item) =>
               item.children ? (
                 <NavDropdown key={item.label} item={item} active={isGroupActive(item, location.pathname)} />
               ) : (
@@ -170,18 +202,20 @@ export function AppLayout() {
 
           {/* Right side: settings, user, logout */}
           <div className="hidden items-center gap-1 md:flex">
-            <NavLink
-              to="/settings"
-              className={({ isActive }) =>
-                clsx(
-                  'rounded-md p-2 transition-colors',
-                  isActive ? 'bg-brand-50 text-brand-700' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900',
-                )
-              }
-              title="Settings"
-            >
-              <Settings className="h-4 w-4" />
-            </NavLink>
+            {canSeeSettings && (
+              <NavLink
+                to="/settings"
+                className={({ isActive }) =>
+                  clsx(
+                    'rounded-md p-2 transition-colors',
+                    isActive ? 'bg-brand-50 text-brand-700' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900',
+                  )
+                }
+                title="Settings"
+              >
+                <Settings className="h-4 w-4" />
+              </NavLink>
+            )}
             <div className="mx-1 h-6 w-px bg-slate-200" />
             <div className="px-1 text-right leading-tight">
               <div className="text-xs font-medium text-slate-800">{user?.fullName}</div>
@@ -205,7 +239,7 @@ export function AppLayout() {
         {/* Mobile menu */}
         {mobileOpen && (
           <nav className="space-y-0.5 border-t border-slate-200 p-2 md:hidden">
-            {NAV.flatMap((item) =>
+            {nav.flatMap((item) =>
               item.children
                 ? item.children.map((leaf) => ({ to: leaf.to, label: `${item.label} · ${leaf.label}`, icon: item.icon }))
                 : [{ to: item.to!, label: item.label, icon: item.icon }],
@@ -225,14 +259,16 @@ export function AppLayout() {
                 {leaf.label}
               </NavLink>
             ))}
-            <NavLink
-              to="/settings"
-              onClick={() => setMobileOpen(false)}
-              className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
-            >
-              <Settings className="h-4 w-4" />
-              Settings
-            </NavLink>
+            {canSeeSettings && (
+              <NavLink
+                to="/settings"
+                onClick={() => setMobileOpen(false)}
+                className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                <Settings className="h-4 w-4" />
+                Settings
+              </NavLink>
+            )}
             <button
               onClick={handleLogout}
               className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium text-slate-600 hover:bg-slate-50"
