@@ -16,6 +16,9 @@ import { OutsourceSampleDto } from './dto/outsource-sample.dto';
 import { EnterResultDto } from './dto/enter-result.dto';
 import { AmendResultDto } from './dto/amend-result.dto';
 import { SessionGuard } from '../../common/guards/session.guard';
+import { PermissionGuard } from '../../common/guards/permission.guard';
+import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
+import { Permission } from '../../common/auth/permissions';
 import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
 
 function resolveBranchId(user: AuthUser): string {
@@ -25,15 +28,15 @@ function resolveBranchId(user: AuthUser): string {
 /**
  * Every route here mutates or reads actual clinical/result data, so this
  * whole controller requires a valid session (see catalog.controller.ts
- * for the same pattern). Previously this controller had no guard at
- * all — tenantId came from a client-supplied `x-tenant-id` header with a
- * hardcoded fallback, meaning any request that could reach the API could
- * enter, finalize, or reopen results with no login whatsoever. tenantId
- * and the acting user's identity now come from the verified session
- * (@CurrentUser()) instead of trusting whatever the client claims.
+ * for the same pattern), and every individual route additionally
+ * declares the exact permission it needs (PermissionGuard denies by
+ * default if a route has no @RequirePermissions — see that guard's
+ * comment). LAB_OPERATOR has the full operational set (view/manage
+ * samples, enter/finalize results) per docs/12_RBAC_and_Operator_Dashboard.md;
+ * ADMIN has everything via superuser bypass.
  */
 @Controller('laboratory')
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, PermissionGuard)
 export class LaboratoryController {
   constructor(private readonly laboratoryService: LaboratoryService) {}
 
@@ -43,6 +46,7 @@ export class LaboratoryController {
    * GET /laboratory/samples/pending
    */
   @Get('samples/pending')
+  @RequirePermissions(Permission.LAB_SAMPLE_VIEW)
   async listPending(@CurrentUser() user: AuthUser) {
     return this.laboratoryService.listPendingSamples(user.tenantId, resolveBranchId(user));
   }
@@ -51,6 +55,7 @@ export class LaboratoryController {
    * GET /laboratory/samples/:id
    */
   @Get('samples/:id')
+  @RequirePermissions(Permission.LAB_SAMPLE_VIEW)
   async getSample(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.laboratoryService.getSample(user.tenantId, id);
   }
@@ -61,6 +66,7 @@ export class LaboratoryController {
    */
   @Post('samples')
   @HttpCode(HttpStatus.CREATED)
+  @RequirePermissions(Permission.LAB_SAMPLE_MANAGE)
   async collectSample(@CurrentUser() user: AuthUser, @Body() dto: CollectSampleDto) {
     return this.laboratoryService.collectSample(user.tenantId, resolveBranchId(user), dto);
   }
@@ -69,6 +75,7 @@ export class LaboratoryController {
    * PATCH /laboratory/samples/:id/receive
    */
   @Patch('samples/:id/receive')
+  @RequirePermissions(Permission.LAB_SAMPLE_MANAGE)
   async receiveSample(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.laboratoryService.receiveSample(user.tenantId, id);
   }
@@ -77,6 +84,7 @@ export class LaboratoryController {
    * PATCH /laboratory/samples/:id/accept
    */
   @Patch('samples/:id/accept')
+  @RequirePermissions(Permission.LAB_SAMPLE_MANAGE)
   async acceptSample(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
@@ -89,6 +97,7 @@ export class LaboratoryController {
    * PATCH /laboratory/samples/:id/reject
    */
   @Patch('samples/:id/reject')
+  @RequirePermissions(Permission.LAB_SAMPLE_MANAGE)
   async rejectSample(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
@@ -101,14 +110,20 @@ export class LaboratoryController {
    * PATCH /laboratory/samples/:id/start-testing
    */
   @Patch('samples/:id/start-testing')
+  @RequirePermissions(Permission.LAB_SAMPLE_MANAGE)
   async startTesting(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.laboratoryService.startTesting(user.tenantId, id);
   }
 
   /**
    * PATCH /laboratory/samples/:id/outsource
+   * Marking a sample as sent to an external lab is routine day-to-day
+   * lab work when a test can't be run in-house — operational, not
+   * business analytics (that distinction is "outsourcing analytics" —
+   * see ANALYTICS_VIEW — which this is not).
    */
   @Patch('samples/:id/outsource')
+  @RequirePermissions(Permission.LAB_SAMPLE_MANAGE)
   async outsourceSample(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
@@ -126,6 +141,7 @@ export class LaboratoryController {
    * PATCH /laboratory/samples/:id/un-outsource
    */
   @Patch('samples/:id/un-outsource')
+  @RequirePermissions(Permission.LAB_SAMPLE_MANAGE)
   async unOutsourceSample(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.laboratoryService.unmarkOutsourced(user.tenantId, id);
   }
@@ -139,6 +155,7 @@ export class LaboratoryController {
    * a result.
    */
   @Patch('invoices/:invoiceId/ready-for-collection')
+  @RequirePermissions(Permission.LAB_SAMPLE_MANAGE)
   async markInvoiceReady(@CurrentUser() user: AuthUser, @Param('invoiceId') invoiceId: string) {
     return this.laboratoryService.markInvoiceReady(user.tenantId, invoiceId, user.userId);
   }
@@ -151,6 +168,7 @@ export class LaboratoryController {
    */
   @Post('results')
   @HttpCode(HttpStatus.CREATED)
+  @RequirePermissions(Permission.RESULT_ENTER)
   async enterResult(@CurrentUser() user: AuthUser, @Body() dto: EnterResultDto) {
     return this.laboratoryService.enterResult(user.tenantId, dto, user.userId);
   }
@@ -160,6 +178,7 @@ export class LaboratoryController {
    * Explicit finalization: ENTERED → RELEASED.
    */
   @Patch('results/:id/finalize')
+  @RequirePermissions(Permission.RESULT_FINALIZE)
   async finalizeResult(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.laboratoryService.finalizeResult(user.tenantId, id, user.userId);
   }
@@ -169,6 +188,7 @@ export class LaboratoryController {
    * Explicit, authorized un-finalize: RELEASED → ENTERED. Requires a reason.
    */
   @Patch('results/:id/reopen')
+  @RequirePermissions(Permission.RESULT_FINALIZE)
   async reopenResult(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
@@ -183,6 +203,7 @@ export class LaboratoryController {
    */
   @Post('results/:id/amend')
   @HttpCode(HttpStatus.CREATED)
+  @RequirePermissions(Permission.RESULT_FINALIZE)
   async amendResult(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
