@@ -78,12 +78,22 @@ export class ReportingService {
     });
   }
 
-  async list(tenantId: string, branchId?: string, q?: string, status?: string) {
+  async list(
+    tenantId: string,
+    branchId?: string,
+    q?: string,
+    status?: string,
+    unprintedOnly?: boolean,
+  ) {
     return this.prisma.report.findMany({
       where: {
         tenantId,
         ...(branchId ? { branchId } : {}),
         ...(status ? { status: status as ReportStatus } : {}),
+        // Only applied when the caller didn't also search — see
+        // reporting.controller.ts's comment on why a search query always
+        // overrides this, regardless of who's asking.
+        ...(unprintedOnly && !q ? { printedAt: null } : {}),
         ...(q
           ? {
               OR: [
@@ -117,6 +127,25 @@ export class ReportingService {
             payments: true,
           },
         },
+      },
+    });
+  }
+
+  /**
+   * Called by printing.controller.ts every time a report's PDF is
+   * actually generated/downloaded — this is what "printed" means in
+   * this app (there's no separate physical-printer signal to hook into,
+   * so PDF generation is the honest proxy). First call sets printedAt;
+   * every call (first or a later reprint) increments printCount, which
+   * is what lets a reprint be told apart from an original print if that
+   * distinction is ever needed later.
+   */
+  async markPrinted(tenantId: string, id: string) {
+    await this.prisma.report.updateMany({
+      where: { id, tenantId },
+      data: {
+        printedAt: new Date(),
+        printCount: { increment: 1 },
       },
     });
   }

@@ -86,6 +86,11 @@ export class PrintingController {
       marginTopMm: settings.marginTopMm,
       marginBottomMm: settings.marginBottomMm,
     });
+    // Fire-and-forget-ish, but awaited: this is what "printed" means in
+    // this app (see reporting.service.ts's markPrinted comment) — do it
+    // after the PDF renders successfully, not before, so a failed render
+    // never falsely marks a report as printed.
+    await this.reportingService.markPrinted(user.tenantId, report.id);
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="report-${report.trackingId}.pdf"`,

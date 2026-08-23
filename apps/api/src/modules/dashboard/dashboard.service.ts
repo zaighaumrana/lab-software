@@ -14,10 +14,11 @@ import { getOperationalOverview } from '../analytics/queries/operational.queries
  * different authorization.
  *
  * Every number here is a real query against real data. Nothing is
- * mocked or hardcoded — see docs/12_RBAC_and_Operator_Dashboard.md for
- * why (and for the one metric — "reports printed today" — that was
- * requested but deliberately left out, because no printed/collected
- * timestamp exists anywhere in the schema to source it from honestly).
+ * mocked or hardcoded — see docs/12_RBAC_and_Operator_Dashboard.md.
+ * "Reports printed today" and "cash collected today" are now real
+ * metrics (see operational.queries.ts's getReportsPrintedToday /
+ * getCashReceived) — reports.printedAt was added specifically for this,
+ * see the migration and reporting.service.ts's markPrinted().
  */
 @Injectable()
 export class DashboardService {

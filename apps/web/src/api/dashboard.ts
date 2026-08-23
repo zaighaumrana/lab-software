@@ -14,6 +14,9 @@ export interface OperatorDashboard {
   reportsReady: number;
   criticalAwaitingReview: number;
   avgTurnaroundTimeHours: number | null;
+  testsCompletedToday: number;
+  reportsPrintedToday: number;
+  cashCollectedToday: number;
   pendingPayments: number;
   recentActivity: OperatorActivityItem[];
 }

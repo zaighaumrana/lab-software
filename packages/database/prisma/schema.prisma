@@ -704,6 +704,8 @@ model Report {
   trackingId    String       // Public lookup ID
   pdfPath       String?      // Local filesystem path or storage key
   generatedAt   DateTime?
+  printedAt     DateTime?    // Set the first time this report's PDF is actually requested via /printing/reports/:id — distinct from generatedAt (finalized) and amendedAt/archivedAt
+  printCount    Int          @default(0) // Incremented every time the PDF is requested — lets "reprint" be distinguished from "first print"
   amendedAt     DateTime?
   archivedAt    DateTime?
   createdAt     DateTime     @default(now())

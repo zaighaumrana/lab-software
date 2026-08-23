@@ -27,8 +27,12 @@ export class ReportingController {
   constructor(private readonly reportingService: ReportingService) {}
 
   /**
-   * GET /reports?q=&status=
-   * Must be declared before :id routes.
+   * GET /reports?q=&status=&unprinted=true
+   * Must be declared before :id routes. `unprinted=true` is what backs
+   * the operator's default "today's active queue" view (see
+   * ReportsPage.tsx) — deliberately ignored server-side whenever `q` is
+   * also present, so a search always searches everything, print status
+   * included, for the "need to reprint an old one" case.
    */
   @Get()
   @RequirePermissions(Permission.REPORT_VIEW)
@@ -36,8 +40,15 @@ export class ReportingController {
     @CurrentUser() user: AuthUser,
     @Query('q') q?: string,
     @Query('status') status?: string,
+    @Query('unprinted') unprinted?: string,
   ) {
-    return this.reportingService.list(user.tenantId, resolveBranchId(user), q, status);
+    return this.reportingService.list(
+      user.tenantId,
+      resolveBranchId(user),
+      q,
+      status,
+      unprinted === 'true',
+    );
   }
 
   /**

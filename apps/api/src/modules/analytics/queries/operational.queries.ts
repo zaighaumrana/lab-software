@@ -1,5 +1,6 @@
 import { PrismaClient, SampleStatus, ResultStatus, ReportStatus } from '@lms/database';
 import type { DateRange } from './financial.queries';
+import { getCashReceived } from './financial.queries';
 
 function rangeWhere(range: DateRange) {
   if (!range.from && !range.to) return undefined;
@@ -110,16 +111,47 @@ export async function getAvgTurnaroundTimeHours(
 }
 
 /**
- * NOTE: "Reports Delivered" and "Pending Outsourced Results" from the
- * original request are intentionally NOT implemented here:
- *  - Reports Delivered needs a delivery/collection timestamp on Report that
- *    doesn't exist in the schema (only `generatedAt` exists — there's no
- *    tracking of when/if a patient actually collected the printed report).
- *  - Pending Outsourced Results depends on the outsourcing schema fields
- *    that don't exist yet (see docs/05_Analytics_Architecture.md section 2).
- * Both should be added once their backing fields exist, following the exact
- * same pattern as every function above.
+ * "Reports Delivered" from the original request is intentionally NOT
+ * implemented — it would need a distinct collection/handover timestamp
+ * separate from printedAt (a report can be printed without the patient
+ * having picked it up yet), and that concept doesn't exist anywhere in
+ * this app's workflow today. "Pending Outsourced Results" depends on
+ * outsourcing schema fields that don't exist yet (see
+ * docs/05_Analytics_Architecture.md section 2). Both should be added
+ * once their backing concept exists, following the exact same pattern
+ * as every function above.
  */
+
+/** How many tests were finalized (released) today — a cashier-POS-style
+ * daily total, distinct from getTestsInProgress's point-in-time queue
+ * depth above. */
+export async function getTestsCompletedToday(
+  prisma: PrismaClient,
+  tenantId: string,
+  range: DateRange = todayRange(),
+) {
+  return prisma.result.count({
+    where: {
+      tenantId,
+      status: ResultStatus.RELEASED,
+      releasedAt: rangeWhere(range),
+    },
+  });
+}
+
+/** How many reports were actually printed today — see Report.printedAt
+ * and reporting.service.ts's markPrinted() for what "printed" means
+ * here. Counts each report once regardless of printCount (a reprint
+ * doesn't re-count it a second time today). */
+export async function getReportsPrintedToday(
+  prisma: PrismaClient,
+  tenantId: string,
+  range: DateRange = todayRange(),
+) {
+  return prisma.report.count({
+    where: { tenantId, printedAt: rangeWhere(range) },
+  });
+}
 
 export async function getOperationalOverview(
   prisma: PrismaClient,
@@ -134,6 +166,9 @@ export async function getOperationalOverview(
     reportsReady,
     criticalAwaitingReview,
     avgTurnaroundTimeHours,
+    testsCompletedToday,
+    reportsPrintedToday,
+    cashCollectedToday,
   ] = await Promise.all([
     getPatientCount(prisma, tenantId, range),
     getSamplesCollected(prisma, tenantId, range),
@@ -142,6 +177,9 @@ export async function getOperationalOverview(
     getReportsReady(prisma, tenantId),
     getCriticalAwaitingReview(prisma, tenantId),
     getAvgTurnaroundTimeHours(prisma, tenantId, range),
+    getTestsCompletedToday(prisma, tenantId, range),
+    getReportsPrintedToday(prisma, tenantId, range),
+    getCashReceived(prisma, tenantId, range),
   ]);
 
   return {
@@ -152,5 +190,8 @@ export async function getOperationalOverview(
     reportsReady,
     criticalAwaitingReview,
     avgTurnaroundTimeHours,
+    testsCompletedToday,
+    reportsPrintedToday,
+    cashCollectedToday,
   };
 }

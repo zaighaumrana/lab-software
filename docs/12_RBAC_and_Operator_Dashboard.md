@@ -137,6 +137,14 @@ A new page (`apps/web/src/pages/dashboard/OperatorDashboardPage.tsx`), not a res
 
 ---
 
-## 8. Known gap: no automated test suite yet
+## 8. Follow-up (post-initial-rollout): print tracking added
+
+A later pass added `Report.printedAt` / `Report.printCount` (migration `20260822000000_add_report_print_tracking`) — a genuinely additive, non-destructive schema change, not a redesign. `printing.controller.ts`'s report-PDF route now calls `reportingService.markPrinted()` after a successful render, which is what "printed" means in this app (there's no separate physical-printer signal to hook into; PDF generation is the honest proxy).
+
+This unblocked something §6 originally couldn't do honestly for lack of data:
+- **"Reports Printed Today"** is now a real Operator Dashboard metric (`getReportsPrintedToday`), alongside two more real additions: **"Tests Completed Today"** (`getTestsCompletedToday`) and **"Cash Collected Today"** (reuses `getCashReceived` from `financial.queries.ts` directly — no duplicate implementation). The Operator Dashboard now groups cards into "Today's Totals" (daily counters) vs. "Right Now" (queue-depth snapshots) explicitly, rather than mixing the two kinds of number in one undifferentiated grid.
+- **The Reports list** now defaults to unprinted-only for non-admin roles (`GET /reports?unprinted=true`) — "what still needs attention today" — with a "Show all" toggle and search both overriding it; a search always looks across every report regardless of print status, since the point of searching is usually finding something to reprint. ADMIN's default is unchanged (sees everything).
+
+## 9. Known gap: no automated test suite yet
 
 `apps/api` currently has no test files and no `test` script (confirmed by inspection, not assumed). The verification for this task was done by direct code inspection — tracing each controller's routes against `role-permissions.ts`'s bundle, and confirming the guard's fail-closed behavior by reading `permission.guard.ts` and `Reflector.getAllAndOverride`'s semantics — not by running an automated `ADMIN → allowed / LAB_OPERATOR → 403` suite, because there's no test harness in this repo to run one in yet. Setting up `apps/api` test infrastructure (Jest is NestJS's default, already implied by `@nestjs/cli`'s scaffolding conventions, but not installed here) is real, separate scope — worth doing before this authorization system gets much larger, but it's infrastructure work, not something this task should have silently bundled in on top of everything else.

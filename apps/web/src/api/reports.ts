@@ -1,9 +1,13 @@
 import { api } from './client';
 import type { Report } from '../types';
 
-export async function listReports(q?: string, status?: string) {
+export async function listReports(q?: string, status?: string, unprintedOnly?: boolean) {
   const { data } = await api.get<Report[]>('/reports', {
-    params: { q: q || undefined, status: status || undefined },
+    params: {
+      q: q || undefined,
+      status: status || undefined,
+      unprinted: unprintedOnly ? 'true' : undefined,
+    },
   });
   return data;
 }

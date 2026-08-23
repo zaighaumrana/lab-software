@@ -63,20 +63,19 @@ const NAV: NavItem[] = [
   },
   { label: 'Laboratory', icon: TestTube, to: '/laboratory' },
   {
-    label: 'Finance',
-    icon: Receipt,
-    children: [
-      { to: '/invoices', label: 'Invoices' },
-      { to: '/doctors', label: 'Doctor Shares', permission: Permission.DOCTOR_MANAGE },
-    ],
-  },
-  {
     label: 'Reports',
     icon: FileText,
     children: [
       { to: '/reports', label: 'Lab Reports' },
+      { to: '/invoices', label: 'Invoices' },
       { to: '/insights', label: 'Insights', permission: Permission.ANALYTICS_VIEW },
     ],
+  },
+  {
+    label: 'Doctor Shares',
+    icon: Receipt,
+    to: '/doctors',
+    permission: Permission.DOCTOR_MANAGE,
   },
   { label: 'Catalog', icon: BookOpen, to: '/catalog', permission: Permission.CATALOG_MANAGE },
 ];

@@ -11,6 +11,8 @@ import {
   Wallet,
   TestTube,
   Receipt,
+  Banknote,
+  Printer,
 } from 'lucide-react';
 import * as dashboardApi from '../../api/dashboard';
 import type { OperatorDashboard } from '../../api/dashboard';
@@ -25,6 +27,10 @@ const QUICK = [
   { to: '/invoices', label: 'Pending Payments', icon: Wallet, color: 'bg-amber-50 text-amber-700' },
   { to: '/reports', label: 'Reports', icon: Receipt, color: 'bg-green-50 text-green-700' },
 ];
+
+function formatRs(n: number) {
+  return `Rs ${n.toLocaleString()}`;
+}
 
 function timeAgo(iso: string) {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -42,13 +48,17 @@ function timeAgo(iso: string) {
  * ADMIN-only). Deliberately its own page rather than the Admin Dashboard
  * with widgets hidden — see docs/12_RBAC_and_Operator_Dashboard.md.
  *
- * Every number here comes from GET /dashboard/operator, which is real
- * data end to end (see dashboard.service.ts on the backend) — nothing
- * on this page is mocked. Built so it can extend cleanly for future
- * operational roles (RECEPTION, LAB_TECH, etc.) later: the summary/
- * activity/quick-actions structure is generic, only the specific card
- * set and quick actions would need to vary per role, and neither of
- * those future roles is implemented here — see the doc above.
+ * Two distinct groups of cards, deliberately labeled apart rather than
+ * mixed into one grid: "Today's Totals" (patients seen, tests
+ * completed, cash collected, reports printed — cashier-POS-style daily
+ * counters, each reset conceptually at midnight) vs. "Right Now" (queue
+ * depth — tests in progress, results pending, reports ready, pending
+ * payments, critical results — a snapshot of current backlog, not tied
+ * to today specifically; a sample doesn't stop being "in progress" at
+ * midnight). No charts anywhere on this page, by design.
+ *
+ * Every number comes from GET /dashboard/operator — real data end to
+ * end (see dashboard.service.ts on the backend), nothing mocked.
  */
 export function OperatorDashboardPage() {
   const { user } = useAuth();
@@ -72,61 +82,85 @@ export function OperatorDashboardPage() {
         <p className="text-sm text-slate-500">Here's what's happening in the lab today.</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        <KpiCard
-          label="Patients Today"
-          value={loading ? '' : String(data?.todayPatients ?? 0)}
-          loading={loading}
-          icon={UserPlus}
-        />
-        <KpiCard
-          label="Samples Collected"
-          value={loading ? '' : String(data?.samplesCollected ?? 0)}
-          loading={loading}
-          icon={TestTube2}
-          to="/laboratory"
-        />
-        <KpiCard
-          label="Tests In Progress"
-          value={loading ? '' : String(data?.testsInProgress ?? 0)}
-          loading={loading}
-          icon={TestTube}
-          to="/laboratory"
-        />
-        <KpiCard
-          label="Results Pending"
-          value={loading ? '' : String(data?.pendingVerification ?? 0)}
-          loading={loading}
-          tone={data && data.pendingVerification > 0 ? 'warning' : 'default'}
-          icon={Clock}
-          to="/laboratory"
-        />
-        <KpiCard
-          label="Reports Ready"
-          value={loading ? '' : String(data?.reportsReady ?? 0)}
-          loading={loading}
-          tone="good"
-          icon={FileCheck}
-          to="/reports"
-        />
-        <KpiCard
-          label="Pending Payments"
-          value={loading ? '' : String(data?.pendingPayments ?? 0)}
-          loading={loading}
-          tone={data && data.pendingPayments > 0 ? 'warning' : 'default'}
-          icon={Wallet}
-          to="/invoices"
-        />
-        {!!data?.criticalAwaitingReview && (
+      <div>
+        <h2 className="mb-2 text-sm font-semibold text-slate-700">Today's Totals</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           <KpiCard
-            label="Critical — Awaiting Review"
-            value={loading ? '' : String(data.criticalAwaitingReview)}
+            label="Patients Today"
+            value={loading ? '' : String(data?.todayPatients ?? 0)}
             loading={loading}
-            tone="bad"
-            icon={AlertTriangle}
+            icon={UserPlus}
+          />
+          <KpiCard
+            label="Tests Completed Today"
+            value={loading ? '' : String(data?.testsCompletedToday ?? 0)}
+            loading={loading}
+            icon={TestTube2}
             to="/laboratory"
           />
-        )}
+          <KpiCard
+            label="Cash Collected Today"
+            value={loading ? '' : formatRs(data?.cashCollectedToday ?? 0)}
+            loading={loading}
+            tone="good"
+            icon={Banknote}
+            to="/invoices"
+          />
+          <KpiCard
+            label="Reports Printed Today"
+            value={loading ? '' : String(data?.reportsPrintedToday ?? 0)}
+            loading={loading}
+            icon={Printer}
+            to="/reports"
+          />
+        </div>
+      </div>
+
+      <div>
+        <h2 className="mb-2 text-sm font-semibold text-slate-700">Right Now</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          <KpiCard
+            label="Tests In Progress"
+            value={loading ? '' : String(data?.testsInProgress ?? 0)}
+            loading={loading}
+            icon={TestTube}
+            to="/laboratory"
+          />
+          <KpiCard
+            label="Results Pending"
+            value={loading ? '' : String(data?.pendingVerification ?? 0)}
+            loading={loading}
+            tone={data && data.pendingVerification > 0 ? 'warning' : 'default'}
+            icon={Clock}
+            to="/laboratory"
+          />
+          <KpiCard
+            label="Reports Ready"
+            value={loading ? '' : String(data?.reportsReady ?? 0)}
+            loading={loading}
+            tone="good"
+            icon={FileCheck}
+            to="/reports"
+          />
+          <KpiCard
+            label="Pending Payments"
+            value={loading ? '' : String(data?.pendingPayments ?? 0)}
+            loading={loading}
+            tone={data && data.pendingPayments > 0 ? 'warning' : 'default'}
+            icon={Wallet}
+            to="/invoices"
+          />
+          {!!data?.criticalAwaitingReview && (
+            <KpiCard
+              label="Critical — Awaiting Review"
+              value={loading ? '' : String(data.criticalAwaitingReview)}
+              loading={loading}
+              tone="bad"
+              icon={AlertTriangle}
+              to="/laboratory"
+            />
+          )}
+        </div>
       </div>
 
       <div>

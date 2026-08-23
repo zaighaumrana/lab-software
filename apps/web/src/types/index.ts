@@ -220,6 +220,8 @@ export interface Report {
   finalized?: boolean;
   deliverable?: boolean;
   generatedAt?: string | null;
+  printedAt?: string | null;
+  printCount?: number;
   createdAt?: string;
   invoice?: Invoice & {
     booking?: Booking & { patient?: Patient; doctor?: Doctor | null };
