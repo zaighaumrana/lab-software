@@ -20,6 +20,7 @@ import { ReportsPage } from './pages/reports/ReportsPage';
 import { ReportPrintPage } from './pages/reports/ReportPrintPage';
 import { ReportDocumentPage } from './pages/reports/ReportDocumentPage';
 import { SettingsPage } from './pages/settings/SettingsPage';
+import { ProfilePage } from './pages/settings/ProfilePage';
 import { Loading } from './components/Loading';
 import { RequirePermission } from './components/RequirePermission';
 import { Permission, isAdminRole } from './lib/permissions';
@@ -134,6 +135,9 @@ function AppRoutes() {
             </RequirePermission>
           }
         />
+        {/* Unlike /settings, this needs no permission — every logged-in
+            role can edit their own name/password. */}
+        <Route path="profile" element={<ProfilePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

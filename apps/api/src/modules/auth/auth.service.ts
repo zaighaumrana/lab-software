@@ -1,10 +1,12 @@
 import {
   Injectable,
   UnauthorizedException,
+  BadRequestException,
   OnModuleInit,
 } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
+import { UpdateOwnProfileDto } from './dto/update-own-profile.dto';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 
@@ -125,6 +127,61 @@ export class AuthService implements OnModuleInit {
       role: session.role,
       fullName: session.fullName,
       username: session.username,
+    };
+  }
+
+  /**
+   * Self-service profile update: any logged-in user (any role) can
+   * rename themselves and/or change their own password. Never touches
+   * role, tenantId, branchId, or username — UpdateOwnProfileDto has no
+   * fields for those, so there's nothing here to accidentally trust.
+   *
+   * Changing the password requires currentPassword to match what's on
+   * file — the DTO's @ValidateIf already requires currentPassword
+   * whenever newPassword is present, but we re-check for null here too
+   * (defense in depth against the DTO's validation ever changing).
+   */
+  async updateOwnProfile(userId: string, tenantId: string, dto: UpdateOwnProfileDto) {
+    const user = await this.prisma.user.findFirst({ where: { id: userId, tenantId } });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const data: { fullName?: string; passwordHash?: string } = {};
+
+    if (dto.fullName !== undefined) {
+      data.fullName = dto.fullName;
+    }
+
+    if (dto.newPassword) {
+      if (!dto.currentPassword) {
+        throw new BadRequestException('Current password is required to set a new password');
+      }
+      const valid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
+      if (!valid) {
+        throw new BadRequestException('Current password is incorrect');
+      }
+      data.passwordHash = await bcrypt.hash(dto.newPassword, 10);
+    }
+
+    const updated = await this.prisma.user.update({ where: { id: user.id }, data });
+
+    // Keep the in-memory session's cached fullName in sync — session.me()
+    // reads from the session object, not a fresh DB lookup, so without
+    // this the header would keep showing the old name until next login.
+    for (const session of sessions.values()) {
+      if (session.userId === user.id && data.fullName !== undefined) {
+        session.fullName = data.fullName;
+      }
+    }
+
+    return {
+      userId: updated.id,
+      username: updated.username,
+      fullName: updated.fullName,
+      role: updated.role,
+      tenantId: updated.tenantId,
+      branchId: updated.branchId,
     };
   }
 }

@@ -202,20 +202,18 @@ export function AppLayout() {
 
           {/* Right side: settings, user, logout */}
           <div className="hidden items-center gap-1 md:flex">
-            {canSeeSettings && (
-              <NavLink
-                to="/settings"
-                className={({ isActive }) =>
-                  clsx(
-                    'rounded-md p-2 transition-colors',
-                    isActive ? 'bg-brand-50 text-brand-700' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900',
-                  )
-                }
-                title="Settings"
-              >
-                <Settings className="h-4 w-4" />
-              </NavLink>
-            )}
+            <NavLink
+              to={canSeeSettings ? '/settings' : '/profile'}
+              className={({ isActive }) =>
+                clsx(
+                  'rounded-md p-2 transition-colors',
+                  isActive ? 'bg-brand-50 text-brand-700' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900',
+                )
+              }
+              title={canSeeSettings ? 'Settings' : 'My Profile'}
+            >
+              <Settings className="h-4 w-4" />
+            </NavLink>
             <div className="mx-1 h-6 w-px bg-slate-200" />
             <div className="px-1 text-right leading-tight">
               <div className="text-xs font-medium text-slate-800">{user?.fullName}</div>
@@ -269,6 +267,14 @@ export function AppLayout() {
                 Settings
               </NavLink>
             )}
+            <NavLink
+              to="/profile"
+              onClick={() => setMobileOpen(false)}
+              className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            >
+              <Settings className="h-4 w-4" />
+              My Profile
+            </NavLink>
             <button
               onClick={handleLogout}
               className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium text-slate-600 hover:bg-slate-50"

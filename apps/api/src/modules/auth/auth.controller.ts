@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Body,
   Headers,
   HttpCode,
@@ -10,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { UpdateOwnProfileDto } from './dto/update-own-profile.dto';
 import { SessionGuard } from '../../common/guards/session.guard';
 import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
 
@@ -55,5 +57,20 @@ export class AuthController {
   @UseGuards(SessionGuard)
   async me(@CurrentUser() user: AuthUser) {
     return user;
+  }
+
+  /**
+   * PATCH /auth/me
+   * Self-service profile update — any logged-in user, any role. No
+   * permission check beyond "is logged in": this is intentionally not
+   * gated by PermissionGuard/RequirePermissions, because editing your
+   * own name/password isn't an admin-vs-operator distinction, it's
+   * something every account should be able to do for itself. Role is
+   * never editable here — see UpdateOwnProfileDto.
+   */
+  @Patch('me')
+  @UseGuards(SessionGuard)
+  async updateMe(@CurrentUser() user: AuthUser, @Body() dto: UpdateOwnProfileDto) {
+    return this.authService.updateOwnProfile(user.userId, user.tenantId, dto);
   }
 }

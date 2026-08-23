@@ -42,6 +42,24 @@ export async function me(): Promise<AuthUser> {
   return data;
 }
 
+export interface UpdateOwnProfilePayload {
+  fullName?: string;
+  currentPassword?: string;
+  newPassword?: string;
+}
+
+/**
+ * PATCH /auth/me — self-service, any role. Backend response doesn't
+ * include a session-refreshing sessionId, so callers should follow this
+ * with me() (or just call me() itself) to re-sync the header/cached
+ * user with whatever changed (currently just fullName).
+ */
+export async function updateOwnProfile(payload: UpdateOwnProfilePayload) {
+  const { data } = await api.patch<AuthUser>('/auth/me', payload);
+  localStorage.setItem('lms_user', JSON.stringify(data));
+  return data;
+}
+
 export function getStoredUser(): AuthUser | null {
   const raw = localStorage.getItem('lms_user');
   if (!raw) return null;
