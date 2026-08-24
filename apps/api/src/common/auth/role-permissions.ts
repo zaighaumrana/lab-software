@@ -51,6 +51,8 @@ export const ROLE_PERMISSIONS: Partial<Record<string, Permission[]>> = {
     Permission.CATALOG_VIEW,
 
     Permission.DASHBOARD_OPERATOR_VIEW,
+
+    Permission.CASH_SHIFT_MANAGE,
   ],
 };
 

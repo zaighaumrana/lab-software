@@ -49,6 +49,8 @@ export enum Permission {
   USER_MANAGE = 'USER_MANAGE',
 
   DASHBOARD_OPERATOR_VIEW = 'DASHBOARD_OPERATOR_VIEW',
+
+  CASH_SHIFT_MANAGE = 'CASH_SHIFT_MANAGE',
 }
 
 /** Mirrors apps/api/src/common/auth/role-permissions.ts. */
@@ -72,6 +74,7 @@ const ROLE_PERMISSIONS: Partial<Record<string, Permission[]>> = {
     Permission.DOCTOR_REFERENCE_VIEW,
     Permission.CATALOG_VIEW,
     Permission.DASHBOARD_OPERATOR_VIEW,
+    Permission.CASH_SHIFT_MANAGE,
   ],
 };
 

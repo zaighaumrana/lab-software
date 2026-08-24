@@ -37,6 +37,7 @@ model Tenant {
   results  Result[]
   reports  Report[]
   notifications Notification[]
+  cashShifts CashShift[]
   shares DoctorShare[]
   auditLogs AuditLog[]
   syncOutbox SyncOutbox[]
@@ -108,6 +109,8 @@ model User {
   branch Branch? @relation(fields: [branchId], references: [id])
 
   auditLogs AuditLog[] @relation("AuditActor")
+  cashShiftsOpened CashShift[] @relation("CashShiftOpenedBy")
+  cashShiftsClosed CashShift[] @relation("CashShiftClosedBy")
 
   @@unique([tenantId, username])
   @@index([tenantId])
@@ -558,6 +561,50 @@ model Payment {
 
   @@index([invoiceId])
   @@map("payments")
+}
+
+enum CashShiftStatus {
+  OPEN
+  CLOSED
+}
+
+/**
+ * A cashier's working session for reconciling physical cash against what
+ * the system recorded. Scoped to CASH-method payments only (the whole
+ * point is counting money in a drawer — card/bank/wallet payments never
+ * touch a drawer, so they're excluded from expectedCash entirely; see
+ * cash-shifts.service.ts).
+ *
+ * v1 scope, worth knowing about before extending this: expectedCash is
+ * computed from CASH payments' `receivedAt` falling within
+ * [openedAt, closedAt ?? now] for the tenant/branch — it is NOT currently
+ * attributed to which specific user recorded each payment, because
+ * Payment has no actor field yet. That's fine for this deployment's
+ * single-operator-at-a-time reality, but if multiple cashiers ever work
+ * concurrent shifts at the same branch, Payment would need a
+ * `recordedById` field to attribute cash correctly per shift — don't
+ * assume this already handles that case.
+ */
+model CashShift {
+  id           String          @id @default(cuid())
+  tenantId     String
+  branchId     String?
+  openedById   String
+  openedAt     DateTime        @default(now())
+  closedById   String?
+  closedAt     DateTime?
+  expectedCash Decimal?        @db.Decimal(12, 2) // Snapshotted at close time, not live-recomputed after
+  countedCash  Decimal?        @db.Decimal(12, 2) // What the cashier physically counted
+  variance     Decimal?        @db.Decimal(12, 2) // countedCash - expectedCash; negative = short, positive = over
+  notes        String?
+  status       CashShiftStatus @default(OPEN)
+
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  openedBy User   @relation("CashShiftOpenedBy", fields: [openedById], references: [id])
+  closedBy User?  @relation("CashShiftClosedBy", fields: [closedById], references: [id])
+
+  @@index([tenantId, status])
+  @@map("cash_shifts")
 }
 
 // =============================================================================

@@ -72,4 +72,10 @@ export enum Permission {
 
   // Dashboards
   DASHBOARD_OPERATOR_VIEW = 'DASHBOARD_OPERATOR_VIEW',
+
+  // Cash shift reconciliation — open/close a drawer session, view
+  // current and past shifts. One permission for all of it (view and
+  // manage aren't meaningfully separate here — the whole point is a
+  // cashier managing their own shift).
+  CASH_SHIFT_MANAGE = 'CASH_SHIFT_MANAGE',
 }

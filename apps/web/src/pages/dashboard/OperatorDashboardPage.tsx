@@ -26,6 +26,7 @@ const QUICK = [
   { to: '/laboratory', label: 'Laboratory', icon: TestTube, color: 'bg-purple-50 text-purple-700' },
   { to: '/invoices', label: 'Pending Payments', icon: Wallet, color: 'bg-amber-50 text-amber-700' },
   { to: '/reports', label: 'Reports', icon: Receipt, color: 'bg-green-50 text-green-700' },
+  { to: '/cash-shift', label: 'Cash Shift', icon: Banknote, color: 'bg-teal-50 text-teal-700' },
 ];
 
 function formatRs(n: number) {
@@ -99,7 +100,7 @@ export function OperatorDashboardPage() {
             to="/laboratory"
           />
           <KpiCard
-            label="Cash Collected Today"
+            label="Payments Collected Today"
             value={loading ? '' : formatRs(data?.cashCollectedToday ?? 0)}
             loading={loading}
             tone="good"

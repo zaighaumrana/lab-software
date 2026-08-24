@@ -14,6 +14,7 @@ import {
   ChevronDown,
   Menu,
   X,
+  Wallet,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -62,6 +63,12 @@ const NAV: NavItem[] = [
     ],
   },
   { label: 'Laboratory', icon: TestTube, to: '/laboratory' },
+  {
+    label: 'Cash Shift',
+    icon: Wallet,
+    to: '/cash-shift',
+    permission: Permission.CASH_SHIFT_MANAGE,
+  },
   {
     label: 'Reports',
     icon: FileText,

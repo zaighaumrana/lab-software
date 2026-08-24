@@ -21,6 +21,7 @@ import { ReportPrintPage } from './pages/reports/ReportPrintPage';
 import { ReportDocumentPage } from './pages/reports/ReportDocumentPage';
 import { SettingsPage } from './pages/settings/SettingsPage';
 import { ProfilePage } from './pages/settings/ProfilePage';
+import { CashShiftPage } from './pages/cash-shift/CashShiftPage';
 import { Loading } from './components/Loading';
 import { RequirePermission } from './components/RequirePermission';
 import { Permission, isAdminRole } from './lib/permissions';
@@ -138,6 +139,14 @@ function AppRoutes() {
         {/* Unlike /settings, this needs no permission — every logged-in
             role can edit their own name/password. */}
         <Route path="profile" element={<ProfilePage />} />
+        <Route
+          path="cash-shift"
+          element={
+            <RequirePermission permission={Permission.CASH_SHIFT_MANAGE}>
+              <CashShiftPage />
+            </RequirePermission>
+          }
+        />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
