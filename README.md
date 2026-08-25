@@ -165,6 +165,14 @@ pnpm dev:web       # Internal LMS UI → http://localhost:5173
 pnpm dev:website   # Public website  → http://localhost:3001
 ```
 
+## Running Tests
+
+```powershell
+pnpm --filter @lms/api test
+```
+
+No database or running server needed — see `docs/13_Testing.md` for what this suite actually covers (and doesn't), and for the pattern to follow when adding a test for a new controller or permission.
+
 ## Troubleshooting (Windows / PowerShell)
 
 Common issues on a fresh Windows machine, and the PowerShell commands to diagnose/fix them.

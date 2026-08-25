@@ -5,8 +5,8 @@ import { useAuth } from '../../contexts/AuthContext';
 export function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('admin123');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -63,9 +63,6 @@ export function LoginPage() {
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
-        <p className="mt-4 text-center text-xs text-slate-400">
-          Default: admin / admin123
-        </p>
       </div>
     </div>
   );

@@ -28,12 +28,73 @@ interface Session {
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
 const sessions = new Map<string, Session>();
 
+// --- Login rate limiting / lockout ---
+//
+// Deliberately keyed by the ATTEMPTED username string, not by IP and not
+// only by usernames that turn out to be real. Two reasons:
+//  1. This is a LAN-deployed app (see 02_Technical_Architecture.md) — every
+//     workstation shares the clinic's router, so IP-only limiting would
+//     lock out every legitimate user the moment one of them mistypes a
+//     password a few times.
+//  2. Locking out ONLY real usernames (and staying silent for fake ones)
+//     would itself leak which usernames exist — an attacker could tell a
+//     username is real just by noticing lockout kicks in for it and not
+//     for others. Tracking every attempted string identically closes
+//     that side channel.
+//
+// In-memory, matching the existing session store's own documented
+// single-server assumption above — no new infrastructure introduced.
+const LOGIN_MAX_ATTEMPTS = 5;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000; // failed attempts older than this don't count
+const LOGIN_LOCKOUT_MS = 15 * 60 * 1000; // once locked, how long before retrying is allowed
+
+interface LoginAttemptRecord {
+  failures: number;
+  windowStartedAt: number;
+  lockedUntil?: number;
+}
+
+const loginAttempts = new Map<string, LoginAttemptRecord>();
+
+function normalizeAttemptKey(username: string): string {
+  return username.trim().toLowerCase();
+}
+
+/** Throws if this username string is currently locked out; otherwise no-op. */
+function assertNotLockedOut(key: string) {
+  const record = loginAttempts.get(key);
+  if (record?.lockedUntil && Date.now() < record.lockedUntil) {
+    const minutesLeft = Math.ceil((record.lockedUntil - Date.now()) / 60000);
+    throw new UnauthorizedException(
+      `Too many failed attempts. Try again in ${minutesLeft} minute${minutesLeft === 1 ? '' : 's'}.`,
+    );
+  }
+}
+
+function recordLoginFailure(key: string) {
+  const now = Date.now();
+  const record = loginAttempts.get(key);
+  if (!record || now - record.windowStartedAt > LOGIN_WINDOW_MS) {
+    // First failure, or the previous failure window has expired — start fresh.
+    loginAttempts.set(key, { failures: 1, windowStartedAt: now });
+    return;
+  }
+  record.failures += 1;
+  if (record.failures >= LOGIN_MAX_ATTEMPTS) {
+    record.lockedUntil = now + LOGIN_LOCKOUT_MS;
+  }
+}
+
+function clearLoginFailures(key: string) {
+  loginAttempts.delete(key);
+}
+
 @Injectable()
 export class AuthService implements OnModuleInit {
   constructor(private readonly prisma: PrismaService) {}
 
   onModuleInit() {
-    // Periodic cleanup of expired sessions
+    // Periodic cleanup of expired sessions and stale login-attempt records
     setInterval(() => {
       const now = Date.now();
       for (const [id, session] of sessions) {
@@ -41,10 +102,21 @@ export class AuthService implements OnModuleInit {
           sessions.delete(id);
         }
       }
+      for (const [key, record] of loginAttempts) {
+        const expired =
+          (!record.lockedUntil || now > record.lockedUntil) &&
+          now - record.windowStartedAt > LOGIN_WINDOW_MS;
+        if (expired) {
+          loginAttempts.delete(key);
+        }
+      }
     }, 60_000);
   }
 
   async login(dto: LoginDto) {
+    const attemptKey = normalizeAttemptKey(dto.username);
+    assertNotLockedOut(attemptKey);
+
     // For single-tenant v1 we look up by username across the default tenant.
     // Multi-tenant login can add a tenant slug field later.
     const user = await this.prisma.user.findFirst({
@@ -56,13 +128,17 @@ export class AuthService implements OnModuleInit {
     });
 
     if (!user) {
+      recordLoginFailure(attemptKey);
       throw new UnauthorizedException('Invalid username or password');
     }
 
     const valid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!valid) {
+      recordLoginFailure(attemptKey);
       throw new UnauthorizedException('Invalid username or password');
     }
+
+    clearLoginFailures(attemptKey);
 
     const sessionId = randomBytes(32).toString('hex');
     const session: Session = {

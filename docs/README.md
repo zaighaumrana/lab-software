@@ -32,6 +32,7 @@ Full text in `01_Product_Specification.md`. In short: local-first, one codebase 
 9. **`09_LabFlow_Licensing_and_Subscription_Architecture.md`** — design-only architecture for LabFlow's subscription/license system: activation, periodic validation, offline grace behavior, clock-tamper resistance. Scoped to the offline/enterprise tier only — see doc 10. Read before writing any licensing code.
 10. **`10_Product_Tiers_and_SaaS_Scope.md`** — design-only scope for the planned multi-tier product (Basic/Pro cloud tiers + the offline/enterprise tier this repo currently builds), and why the online/offline split — not feature count — is what actually separates them. Read before deciding what belongs in which tier, or before assuming doc 9's licensing mechanisms apply everywhere.
 12. **`12_RBAC_and_Operator_Dashboard.md`** — the centralized role/permission authorization system (ADMIN vs. LAB_OPERATOR) and the new Operator Dashboard. Read before adding a new route, a new role, or changing what either active role can access. (Numbering note: `11` is a handoff-only document that exists in separate packaged copies of this codebase, not in this repo — see `docs/07`/`08` for the separation pattern this follows.)
+13. **`13_Testing.md`** — what the automated test suite covers (and doesn't), how to run it, and conventions for adding to it. Read before touching `common/auth/`, `common/guards/permission.guard.ts`, or adding a new controller.
 
 ## Document Dependency Map
 
@@ -62,7 +63,8 @@ Research/
 ├── 08_Windows_Packaging_and_Installer_Roadmap.md
 ├── 09_LabFlow_Licensing_and_Subscription_Architecture.md
 ├── 10_Product_Tiers_and_SaaS_Scope.md
-└── 12_RBAC_and_Operator_Dashboard.md
+├── 12_RBAC_and_Operator_Dashboard.md
+└── 13_Testing.md
 ```
 
 ## High-Level Architecture
@@ -94,6 +96,7 @@ Full detail in `02_Technical_Architecture.md`.
 | Licensing/subscription architecture: activation, offline grace period, clock-tamper resistance (design only) | `09_LabFlow_Licensing_and_Subscription_Architecture.md` |
 | Product tier strategy: Basic/Pro cloud tiers vs. the offline/enterprise tier, and why (design only) | `10_Product_Tiers_and_SaaS_Scope.md` |
 | RBAC/permission system (ADMIN vs. LAB_OPERATOR), server-side enforcement, and the Operator Dashboard | `12_RBAC_and_Operator_Dashboard.md` |
+| Automated test suite: what it covers, how to run it, conventions for adding tests | `13_Testing.md` |
 
 ## Decisions Log
 
