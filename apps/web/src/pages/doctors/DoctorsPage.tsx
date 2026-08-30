@@ -35,9 +35,11 @@ export function DoctorsPage() {
 
   function load() {
     setLoading(true);
+    setError('');
     doctorsApi
       .listDoctors(true)
       .then(setDoctors)
+      .catch(() => setError('Failed to load doctors. Try refreshing the page.'))
       .finally(() => setLoading(false));
   }
 

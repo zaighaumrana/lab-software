@@ -56,6 +56,7 @@ export function CatalogPage() {
   const [parameters, setParameters] = useState<TestParameterPayload[]>([emptyParameter()]);
   const [testSaving, setTestSaving] = useState(false);
   const [testError, setTestError] = useState('');
+  const [loadError, setLoadError] = useState('');
 
   const [showPackageForm, setShowPackageForm] = useState(false);
   const [packageForm, setPackageForm] = useState(emptyPackageForm);
@@ -65,11 +66,13 @@ export function CatalogPage() {
 
   function load() {
     setLoading(true);
+    setLoadError('');
     Promise.all([catalogApi.listTests(true), catalogApi.listPackages(true)])
       .then(([t, p]) => {
         setTests(t);
         setPackages(p);
       })
+      .catch(() => setLoadError('Failed to load the catalog. Try refreshing the page.'))
       .finally(() => setLoading(false));
   }
 
@@ -279,6 +282,10 @@ export function CatalogPage() {
           </button>
         )}
       </div>
+
+      {loadError && (
+        <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{loadError}</div>
+      )}
 
       <div className="flex gap-2">
         <button

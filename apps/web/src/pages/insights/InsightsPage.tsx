@@ -64,9 +64,11 @@ export function InsightsPage() {
   const [insights, setInsights] = useState<BusinessInsightsOverview | null>(null);
   const [outsourcing, setOutsourcing] = useState<OutsourcingOverview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     setLoading(true);
+    setError('');
     Promise.all([
       analyticsApi.getTestAnalyticsOverview({ from: range.from, to: range.to }),
       analyticsApi.getBusinessInsightsOverview({ from: range.from, to: range.to }),
@@ -77,6 +79,7 @@ export function InsightsPage() {
         setInsights(i);
         setOutsourcing(o);
       })
+      .catch(() => setError('Failed to load insights. Try refreshing the page.'))
       .finally(() => setLoading(false));
   }, [range.from, range.to]);
 
@@ -94,6 +97,10 @@ export function InsightsPage() {
         </div>
         <DateRangeFilter value={range} onChange={setRange} />
       </div>
+
+      {error && (
+        <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
+      )}
 
       {loading && !tests && <Loading />}
 

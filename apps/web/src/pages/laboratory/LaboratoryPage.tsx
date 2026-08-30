@@ -29,6 +29,11 @@ export function LaboratoryPage() {
     try {
       const data = await labApi.listPendingSamples();
       setSamples(data);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        'Failed to load samples';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -48,7 +53,10 @@ export function LaboratoryPage() {
 
   useEffect(() => {
     refresh();
-    catalogApi.listTests().then(setTests);
+    catalogApi
+      .listTests()
+      .then(setTests)
+      .catch(() => setError('Failed to load the test catalog'));
   }, []);
 
   // Live updates: react when another technician enters, finalizes, or

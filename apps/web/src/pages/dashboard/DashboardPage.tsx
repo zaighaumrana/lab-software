@@ -46,9 +46,11 @@ export function DashboardPage() {
   const [operational, setOperational] = useState<OperationalOverview | null>(null);
   const [doctorShare, setDoctorShare] = useState<DoctorShareOverview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     setLoading(true);
+    setError('');
     Promise.all([
       analyticsApi.getFinancialOverview({ from: range.from, to: range.to }),
       analyticsApi.getOperationalOverview({ from: range.from, to: range.to }),
@@ -59,6 +61,7 @@ export function DashboardPage() {
         setOperational(o);
         setDoctorShare(d);
       })
+      .catch(() => setError('Failed to load dashboard data. Try refreshing the page.'))
       .finally(() => setLoading(false));
   }, [range.from, range.to]);
 
@@ -79,6 +82,10 @@ export function DashboardPage() {
         <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
         <p className="text-sm text-slate-500">Welcome back, {user?.fullName}</p>
       </div>
+
+      {error && (
+        <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {QUICK.map((item) => (

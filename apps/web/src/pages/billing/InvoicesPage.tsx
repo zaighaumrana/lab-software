@@ -27,10 +27,12 @@ export function InvoicesPage() {
   });
   const [items, setItems] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const load = useCallback(
     async (query?: string) => {
       setLoading(true);
+      setError('');
       try {
         const data = await billingApi.listInvoices({
           q: query ?? q ?? undefined,
@@ -39,6 +41,11 @@ export function InvoicesPage() {
           status: status || undefined,
         });
         setItems(data);
+      } catch (err: unknown) {
+        const msg =
+          (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+          'Failed to load invoices';
+        setError(msg);
       } finally {
         setLoading(false);
       }
@@ -96,6 +103,10 @@ export function InvoicesPage() {
         <h1 className="text-2xl font-bold text-slate-900">Transactions</h1>
         <p className="text-sm text-slate-500">Invoices, payments, and outstanding balances</p>
       </div>
+
+      {error && (
+        <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
+      )}
 
       {/* Summary strip — reflects the currently applied filters */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

@@ -24,12 +24,19 @@ export function ReportsPage() {
   const [showAll, setShowAll] = useState(admin);
   const [items, setItems] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   async function load(query?: string, statusFilter?: string, showAllFilter?: boolean) {
     setLoading(true);
+    setError('');
     try {
       const data = await reportsApi.listReports(query, statusFilter, !showAllFilter);
       setItems(data);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        'Failed to load reports';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -96,6 +103,10 @@ export function ReportsPage() {
           </label>
         )}
       </form>
+
+      {error && (
+        <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
+      )}
 
       {loading && <Loading />}
 

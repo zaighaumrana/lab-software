@@ -66,6 +66,11 @@ export function CashShiftPage() {
       ]);
       setCurrent(cur);
       setHistory(hist);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        'Failed to load cash shift data';
+      setError(msg);
     } finally {
       setLoading(false);
     }

@@ -9,13 +9,13 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
-  ForbiddenException,
 } from '@nestjs/common';
 import { DoctorsService, DoctorDashboardQuery } from './doctors.service';
 import { CreateDoctorDto } from './dto/create-doctor.dto';
 import { SessionGuard } from '../../common/guards/session.guard';
 import { PermissionGuard } from '../../common/guards/permission.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
+import { RequireAnyPermission } from '../../common/decorators/require-any-permission.decorator';
 import { Permission } from '../../common/auth/permissions';
 import { roleHasPermission } from '../../common/auth/role-permissions';
 import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
@@ -23,16 +23,26 @@ import { CurrentUser, AuthUser } from '../../common/decorators/current-user.deco
 /**
  * Requires a valid session, and every route declares the exact
  * permission it needs (PermissionGuard denies by default if a route has
- * no @RequirePermissions).
+ * neither @RequirePermissions nor @RequireAnyPermission).
  *
- * `list()` is the one route with mixed access: it needs
- * EITHER DOCTOR_REFERENCE_VIEW (LAB_OPERATOR — backs the referring-doctor
+ * `list()` is the one route with mixed access: it needs EITHER
+ * DOCTOR_REFERENCE_VIEW (LAB_OPERATOR — backs the referring-doctor
  * picker in patient registration) OR DOCTOR_MANAGE (ADMIN — full doctor
- * administration). PermissionGuard only expresses AND-of-required, so
- * this one route checks manually instead of via the decorator — see the
- * comment on the method. Every other route (findOne, dashboard, create,
- * update) is real doctor financial/administrative data and stays
- * DOCTOR_MANAGE-only, matching docs/12_RBAC_and_Operator_Dashboard.md.
+ * administration) — declared via @RequireAnyPermission, enforced by
+ * PermissionGuard before the handler runs. The response SHAPE still
+ * differs between the two (DOCTOR_REFERENCE_VIEW strips commission
+ * fields), which is a data-shaping decision the handler makes itself via
+ * roleHasPermission — that's a different question from whether the
+ * request is allowed in at all, which is now fully the guard's job, not
+ * something checked in the method body. (An earlier version of this
+ * route tried to do both — access control AND shaping — as a manual
+ * in-body check with no decorator at all, which meant PermissionGuard's
+ * fail-closed default rejected every request before the body ever ran,
+ * for every role. See require-any-permission.decorator.ts.)
+ *
+ * Every other route (findOne, dashboard, create, update) is real doctor
+ * financial/administrative data and stays DOCTOR_MANAGE-only, matching
+ * docs/12_RBAC_and_Operator_Dashboard.md.
  */
 @Controller('doctors')
 @UseGuards(SessionGuard, PermissionGuard)
@@ -41,25 +51,17 @@ export class DoctorsController {
 
   /**
    * GET /doctors
-   * Allowed for DOCTOR_REFERENCE_VIEW or DOCTOR_MANAGE — but the two get
-   * a different shape: DOCTOR_REFERENCE_VIEW strips commission fields.
-   * @RequirePermissions can't express "either of," so this route is
-   * intentionally left undecorated and checks manually — PermissionGuard
-   * would otherwise deny it by default (see that guard's comment), so
-   * this is a deliberate, narrow exception, not an oversight.
+   * Access: DOCTOR_REFERENCE_VIEW or DOCTOR_MANAGE, either is enough.
+   * Shape: DOCTOR_MANAGE gets full records; DOCTOR_REFERENCE_VIEW gets
+   * commission fields stripped (see doctors.service.ts#list).
    */
   @Get()
+  @RequireAnyPermission(Permission.DOCTOR_REFERENCE_VIEW, Permission.DOCTOR_MANAGE)
   async list(
     @CurrentUser() user: AuthUser,
     @Query('all') all?: string,
   ) {
     const canManage = roleHasPermission(user.role, Permission.DOCTOR_MANAGE);
-    const canViewReference = roleHasPermission(user.role, Permission.DOCTOR_REFERENCE_VIEW);
-    if (!canManage && !canViewReference) {
-      throw new ForbiddenException(
-        `Your role (${user.role}) does not have permission to view doctors.`,
-      );
-    }
     return this.doctorsService.list(user.tenantId, all !== 'true', !canManage);
   }
 

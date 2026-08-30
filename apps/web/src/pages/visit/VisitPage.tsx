@@ -68,11 +68,15 @@ export function VisitPage() {
       catalogApi.listTests(),
       catalogApi.listPackages(),
       doctorsApi.listDoctors(),
-    ]).then(([t, p, d]) => {
-      setTests(t);
-      setPackages(p);
-      setDoctors(d);
-    });
+    ])
+      .then(([t, p, d]) => {
+        setTests(t);
+        setPackages(p);
+        setDoctors(d);
+      })
+      .catch(() => {
+        setError('Failed to load tests/packages/doctors. Try refreshing the page.');
+      });
   }, []);
 
   useEffect(() => {

@@ -8,10 +8,16 @@ export const REQUIRE_PERMISSIONS_KEY = 'requirePermissions';
  * (common/guards/permission.guard.ts), which must run after SessionGuard
  * on the same route so `request.user` is already populated.
  *
- * A route with more than one permission requires ALL of them — there's
- * no current use case for "any of," and adding that distinction before
- * it's needed would be speculative. If a route needs OR semantics later,
- * extend the guard then, against a real example.
+ * A route with more than one permission requires ALL of them. If a
+ * route needs "at least one of several" instead, use
+ * @RequireAnyPermission (require-any-permission.decorator.ts) — do NOT
+ * fall back to a manual in-body permission check as a substitute for
+ * either decorator. PermissionGuard denies by default when a route
+ * declares neither one, before the handler body ever runs — an in-body
+ * check on an undeclared route is unreachable dead code, not a working
+ * alternative. This happened once already (doctors.controller.ts's
+ * original list() route), which is why this warning is here now instead
+ * of the more speculative one that used to be in its place.
  *
  * Usage:
  *   @Get('samples/pending')
