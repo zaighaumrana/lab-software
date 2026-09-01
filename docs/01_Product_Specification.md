@@ -1,160 +1,561 @@
 # 01 — Product Specification
 
-**Purpose:** defines what is being built, for whom, and why — the business and product layer, independent of technical implementation.
-**Why it exists:** every technical and design decision downstream should trace back to a requirement or principle stated here.
-**Read this:** first, before any other document. Read again whenever scope is questioned or a new feature request arrives — check it against Scope/Non-Goals before assuming it belongs in v1.
+**Purpose:** defines what LabFlow is, who it serves, why it exists, and the product principles that govern its development across all commercial tiers. This is the business and product layer, independent of any single deployment or technical implementation.
+
+**Why it exists:** every technical, architectural, commercial, and design decision downstream should trace back to a requirement or principle stated here. LabFlow is a single product platform, not a collection of client-specific builds.
+
+**Read this:** first, before any other document. Read again whenever scope is questioned, a new module is proposed, a tier distinction is introduced, or an implementation decision risks creating product divergence.
 
 ---
 
 ## Executive Summary
 
-A client currently running lab operations on H2 Cloud has commissioned a replacement: a Laboratory Management System (LMS) plus a public website, built to work **fully offline**, run on infrastructure the client owns, and give the client full data ownership. Commercially, this is licensed on a **recurring basis** (yearly, monthly, or in some cases usage-based — e.g. tied to receipt/report volume) — see Business Context below for the pricing rationale. The vendor is building this as v1 of a genuine SaaS product intended for multiple lab customers — this first client's deployment stays single-tenant and self-hosted, with SaaS-readiness as an architectural property from day one rather than something bolted on later.
+**LabFlow** is a laboratory management platform designed for diagnostic laboratories ranging from small independent labs to larger multi-branch organizations.
+
+The product began from a practical offline-first laboratory requirement but has evolved substantially beyond that original implementation. LabFlow is now being developed as a reusable commercial software platform with **three product tiers**:
+
+1. **Basic Cloud**
+2. **Pro Cloud**
+3. **Offline / Enterprise**
+
+All three tiers belong to the same LabFlow product family and are intended to share the same core domain model, business rules, APIs, and application architecture wherever practical.
+
+The primary differences between tiers are deployment model, operational capabilities, infrastructure ownership, feature entitlements, and service level rather than separate codebases.
+
+The current codebase already contains a substantial shared laboratory-management core including patient management, billing, laboratory processing, result management, reporting, analytics, RBAC, doctor/referral functionality, cash reconciliation, public website functionality, and tenant/branch-aware data structures.
+
+Several broader platform capabilities are designed or scaffolded but are not yet complete, including full SaaS tenant provisioning, product-tier entitlement enforcement, cloud/offline synchronization, Windows production packaging, automated backup infrastructure, licensing enforcement, corporate workflows, complete package-test processing, and advanced public website administration.
+
+LabFlow should therefore be treated as an **evolving product platform**, not as the original small-lab MVP from which development began.
 
 ## Background
 
-The client's core complaint with H2 Cloud is that it does not work without internet — an operational risk for a business that must register patients, collect payment, and issue results daily regardless of connectivity or power reliability. This single complaint is the reason offline-first is the top design constraint of the entire project, not one requirement among many.
+LabFlow originated from a common operational problem in laboratory software: many cloud-only systems make core laboratory operations dependent on continuous internet connectivity.
+
+Patient registration, invoicing, payment collection, sample handling, result entry, and report printing are business-critical activities. A laboratory using the Offline / Enterprise tier must therefore remain operational even when internet connectivity is unavailable.
+
+As development progressed, the product expanded beyond the needs of a single offline installation.
+
+The current direction is a reusable laboratory-management platform capable of supporting both:
+
+* vendor-managed cloud deployments; and
+* laboratory-owned offline or hybrid deployments.
+
+The original small-laboratory implementation remains useful as the foundation of the product, but its machine count, patient volume, staffing structure, pricing arrangement, and individual deployment assumptions no longer define the boundaries of LabFlow.
 
 ## Business Context
 
-**Market position:** H2 Cloud and comparable lab-management competitors charge roughly PKR 65,000/year for a purely online service. This client's requirement — full offline operation *plus* automated data synchronization to a public tracking website (not the manual/separate data entry a purely online competitor's service doesn't need to solve at all) — is a materially harder engineering problem, and would reasonably be priced well above that market rate; a comparable from-scratch custom build with this scope would run in the PKR 1–1.5 million range. The client is being charged an above-market yearly recurring rate that reflects this — offline-first operation *with* automated online report tracking is a combination no competitor in this market currently offers, making this the top tier of what any lab-software vendor is putting in front of a Pakistani clinic today.
+**Product model:** LabFlow is a commercial software product offered through recurring subscription or licensing models rather than a one-off custom software project.
 
-**Pricing model:** a one-time purchase was considered but isn't commercially sustainable for the vendor at a rate the client can absorb; the model is a **recurring license** — yearly or monthly, with usage-based pricing (e.g. per receipt/report volume) also viable for some future customers — rather than a single upfront payment. This recurring-license model is what `09_LabFlow_Licensing_and_Subscription_Architecture.md` is designed around.
+The commercial structure is organized around three product tiers:
 
-**Software ownership (decided):** the client owns their data and their deployment for the duration of an active license. The vendor retains source code ownership, intellectual property, and the right to reuse, modify, and commercialize the codebase for other customers — this is the same core product every future customer licenses, not a one-off build. This must be an explicit clause in the service contract. Data ownership is unaffected by license status — per `09_LabFlow_Licensing_and_Subscription_Architecture.md § 6-7`, an expired license blocks application access but never deletes the client's data.
+### Basic Cloud
+
+A vendor-managed cloud offering intended to provide the essential LabFlow workflow with minimal infrastructure responsibility for the customer.
+
+The laboratory uses LabFlow through the hosted platform while the vendor operates the underlying application infrastructure.
+
+### Pro Cloud
+
+A vendor-managed cloud offering for laboratories requiring broader operational, administrative, analytical, branch, workflow, or business-management capabilities.
+
+Pro remains part of the same hosted LabFlow platform but receives additional product entitlements.
+
+### Offline / Enterprise
+
+A locally deployed LabFlow environment intended for laboratories that require local infrastructure ownership, offline operation, stronger deployment control, or enterprise/hybrid capabilities.
+
+The local laboratory environment remains operational independently of internet availability. Online services may be synchronized with the local system where required.
+
+The detailed commercial and capability distinction between these tiers is defined in `10_Product_Tiers_and_SaaS_Scope.md`.
+
+**Pricing model:** recurring commercial access is the default model. Depending on tier and market requirements, this may include monthly subscription, yearly subscription, enterprise licensing, usage-based components, support agreements, or combinations of these models.
+
+**Software ownership:** customers own their laboratory data. LabFlow's source code, product architecture, intellectual property, shared platform components, and reusable product functionality remain the property of the vendor.
+
+Customer data ownership must remain independent of subscription or license status. Expiry or suspension of a commercial entitlement must never silently delete customer data.
+
+Offline / Enterprise licensing architecture is defined separately in `09_LabFlow_Licensing_and_Subscription_Architecture.md`.
 
 ## Business Requirements
 
-- Complete offline functionality for all daily lab operations
-- Client's own server — no third-party cloud dependency
-- Recurring license (yearly/monthly/usage-based) rather than a one-time purchase — see Business Context
-- Full data ownership by the client, unaffected by license status
-- Website integration for public info, online booking, and report lookup
-- SMS notifications at key patient touchpoints
-- Architecture expandable to multiple branches without a rewrite
+* Maintain one LabFlow product core across all commercial tiers.
+* Support **Basic Cloud, Pro Cloud, and Offline / Enterprise** from a shared architecture.
+* Support multiple laboratory customers without customer-specific code forks.
+* Maintain strict tenant isolation for cloud deployments.
+* Support multiple branches without requiring a domain-model rewrite.
+* Allow product capabilities to be controlled through tier entitlements and configuration.
+* Keep product entitlements separate from employee permissions and RBAC.
+* Provide complete laboratory workflows covering patients, billing, samples, results, and reports.
+* Provide public-facing functionality for laboratory information, bookings, and patient report access.
+* Support configurable SMS and future communication providers.
+* Allow Offline / Enterprise deployments to perform core laboratory work without internet connectivity.
+* Preserve customer ownership and portability of laboratory data.
+* Support recurring subscription/licensing as a first-class product concern.
+* Allow new modules and integrations to be added without forking the product.
+* Maintain a clear boundary between currently implemented capabilities and roadmap capabilities.
 
 ## Product Vision
 
-A lab system that feels as modern and convenient as a cloud LMS (dashboards, SMS, online report lookup, online booking) while carrying none of the operational risk of requiring internet to function. Built once, deployable either as a single client's private offline installation or as the vendor's own multi-tenant hosted product — same codebase, different configuration.
+Build a modern laboratory operating platform capable of serving a small independent laboratory, a growing multi-branch organization, or an enterprise requiring local infrastructure without maintaining separate products for each use case.
+
+LabFlow should provide a common product experience across deployment models while allowing infrastructure and feature capabilities to vary by tier.
+
+The long-term product model is:
+
+```text
+                         LabFlow Product Core
+                                  │
+                 ┌────────────────┼────────────────┐
+                 │                │                │
+           Basic Cloud        Pro Cloud     Offline / Enterprise
+                 │                │                │
+          Managed Cloud     Managed Cloud      Local / Hybrid
+          Core Features    Expanded Features   Offline Capable
+```
+
+A feature should not require a separate codebase simply because one customer runs it in the cloud and another runs it locally.
 
 ## Product Philosophy
 
-Every architectural decision must satisfy these principles; when a decision is contested, this list settles it:
+Every architectural decision must satisfy these principles. When a decision is contested, this list settles it:
 
-1. **Local-first.** Internet is optional for the lab; every core operation completes with zero connectivity.
-2. **Single codebase, multiple deployments.** One product; this client gets single-tenant offline, future clients get hosted multi-tenant — no forked codebases.
-3. **Everything replaceable.** SMS provider, printer, storage, payment method, authentication all sit behind interfaces. No vendor lock-in.
-4. **Business logic lives in the backend, never the UI.**
-5. **Audit everything that matters.** Corrections version; nothing important is silently overwritten or deleted.
-6. **Every integration is optional.** The system works with zero third-party integrations active.
-7. **No vendor lock-in** — for the client, or for the vendor's own dependencies on any third party.
-8. **Data belongs to the customer**, always exportable without asking the vendor.
-9. **Offline is the default. Online is an enhancement.**
-10. **Future SaaS requires configuration, not rewrites** — multi-tenancy and feature flags exist from day one, even with one tenant and all flags on.
+1. **One product, multiple tiers.** Basic Cloud, Pro Cloud, and Offline / Enterprise are configurations of LabFlow, not separate software products.
+
+2. **Shared core, no customer forks.** Customer-specific requirements should be handled through configuration, entitlements, branding, integrations, or extension points rather than permanent code divergence.
+
+3. **Tenant isolation is foundational.** Data belonging to one laboratory must never become visible or accessible to another tenant.
+
+4. **Branches are first-class domain concepts.** Multi-branch capability must not require redesigning the core schema.
+
+5. **Offline capability is a product capability, not the entire product identity.** Offline-first operation is essential to the Offline / Enterprise tier while cloud tiers are operated as hosted services.
+
+6. **Entitlements and permissions are different.** A subscription determines which product capabilities a laboratory owns; RBAC determines which employees may use those capabilities.
+
+7. **Business logic lives in the backend, never solely in the UI.**
+
+8. **Audit everything that matters.** Clinically or financially significant information must not be silently overwritten or deleted. Corrections and amendments must remain traceable.
+
+9. **Everything external should be replaceable.** SMS providers, printers, storage providers, payment integrations, authentication providers, and similar dependencies should use stable abstractions where practical.
+
+10. **Integrations are optional.** Core laboratory operations must not become unusable because an SMS gateway, cloud service, analytics provider, or other external integration is unavailable.
+
+11. **Customer data belongs to the customer.** It must remain exportable and recoverable.
+
+12. **Configuration before customization.** New customer requirements should first be solved through product configuration or reusable product functionality.
+
+13. **Product tiers are entitlement boundaries, not codebase boundaries.**
+
+14. **Architecture should evolve without breaking existing deployments.** Database migrations, APIs, licensing, synchronization, and installers must support controlled upgrades.
+
+15. **Designed does not mean implemented.** Documentation must explicitly distinguish implemented functionality, partial/scaffolded functionality, and planned architecture.
 
 ## Stakeholders
 
-| Stakeholder | Role |
-|---|---|
-| Client (lab owner) | End operator, primary user of admin/staff modules; first paying customer of the SaaS product |
-| Lab staff (Reception, Sample Collection, Lab Tech) | Daily operational users |
-| Referring doctors | Indirect stakeholders via commission and referral tracking |
-| Patients | Website visitors, SMS recipients, report-lookup users |
-| Vendor | Builder, and future owner of the reusable product core |
+| Stakeholder                              | Role                                                                                                                       |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Laboratory Owner / Organization          | Customer purchasing and operating LabFlow                                                                                  |
+| Laboratory Administrator                 | Manages laboratory configuration, users, finance, reporting, and operational oversight                                     |
+| Operational Staff                        | Handles registration, billing, samples, laboratory processing, results, and other daily workflows according to permissions |
+| Pathologists / Authorized Clinical Staff | Review or authorize clinical information where workflow configuration requires it                                          |
+| Referring Doctors                        | Indirect or direct participants through referrals, commissions, statements, and future portal functionality                |
+| Corporate Customers                      | Organizations whose employees or members receive laboratory services under corporate arrangements                          |
+| Patients                                 | Booking users, SMS recipients, report-lookup users, and future patient-account/mobile users                                |
+| Vendor / Platform Operator               | Builds, operates, licenses, supports, and evolves the LabFlow product                                                      |
+| Enterprise IT / Deployment Administrator | Manages infrastructure for Offline / Enterprise deployments where applicable                                               |
 
-## Scope (v1)
+## Scope (Current Product)
 
-**Confirmed PKR 100k build (this is the actual v1 — everything else below "Non-Goals" is roadmap, not this build):**
-- Patient registration
-- Test/rate catalog with per-test price and a manual discount field usable at registration (no full pricing-engine pipeline — flat price + discount box)
-- SMS sent on registration (confirmation) and again when the report is ready to collect
-- Manual result entry into the software (no analyzer integration)
-- Report printing
-- A simple dashboard: patient/record list, doctor commission tracking (fixed amount or percentage, per doctor)
-- A separate website: home page, about, test rates, a promotions section, and a report-lookup/print page for fully-paid patients only
+The current LabFlow codebase has progressed significantly beyond its original MVP.
 
-**Topology:** two machines. The owner's office PC runs the local server (and is where he works from); the lab PC is a single workstation where one person handles registration, result entry, and printing — a combined role, not separate Reception/Lab Tech logins, since it's one person doing all of it. Lab equipment does not write directly into the system — everything is manually entered, as before.
+### Current shared product core
 
-**Broader scope (designed for, not part of this build):**
+The implemented or substantially implemented product core includes:
 
-## Non-Goals (v1)
+* Patient registration, search, updating, and patient-history foundations
+* Internal patient/laboratory identifiers
+* Test catalog
+* Test parameters and reference ranges
+* Package catalog foundations
+* Invoicing
+* Invoice-line price snapshots
+* Manual discounts and discount reasons
+* Payment recording
+* Multiple payment-method representations
+* Sample creation and laboratory lifecycle handling
+* Sample receiving, acceptance, rejection, testing, and outsourcing workflows
+* Manual result entry
+* Reference-range comparison
+* Abnormal and critical-result flagging
+* Explicit result saving and finalization
+* Result reopening and amendment foundations
+* Report readiness processing
+* Report PDF generation
+* Invoice PDF generation
+* Doctor statement PDF generation
+* Plain-paper and letterhead printing modes
+* Configurable report margins
+* Continuous and one-test-per-page report layouts
+* Print tracking and reprint counts
+* Doctor/referral management
+* Doctor commission calculation and snapshots
+* Administrative analytics
+* Operational analytics
+* Financial analytics
+* Test analytics
+* Doctor analytics
+* Outsourcing analytics
+* Business insights
+* Admin dashboard
+* Operator dashboard
+* Cash-shift reconciliation
+* Centralized permission-based RBAC
+* Tenant-aware and branch-aware schema foundations
+* Public website application
+* Public services/rate information
+* Online booking foundations
+* Public report lookup
+* Payment-gated public report availability
+* SMS gateway abstraction
+* Current SendPK SMS integration
+* Notification persistence and delivery-state tracking
 
-- Live multi-branch deployment (architecture supports it; not operationally built out)
-- Lab analyzer/machine integration (results are entered manually — confirmed, no interfacing hardware today)
-- Patient login/account system beyond tracking-ID + verification lookup
-- Insurance/claims processing (not requested — flagged for confirmation)
-- Inventory/reagent tracking, report template designer UI, full plugin marketplace tooling — designed for, not built, in v1
-- **H2 Cloud data migration** — need is unknown until the client confirms whether historical data must move over. Decided approach regardless: the system supports a one-time historical import tool (CSV/Excel/SQL dump/API, whichever H2 Cloud can export) — treated as a migration utility, not a core runtime feature.
+### Product capabilities currently partial or scaffolded
 
-## Operating Parameters (confirmed)
+The following capabilities exist in the schema, architecture, or selected application layers but are not yet complete end-to-end product workflows:
 
-| Parameter | Value |
-|---|---|
-| Branches at launch | 1 (schema/architecture supports more later) |
-| Volume | Under 50 patients/tests per day |
-| Result entry | Fully manual, no analyzer integration |
-| Jurisdiction | Pakistan |
-| Result release workflow | Single-step (entry = release, no separate authorization gate) |
-| Report access | Tracking ID + secondary verification; full payment → view/download; partial payment → "ready for collection" only |
-| Booking model | Online booking → Booking ID → walk-in redemption; no physical/live queue system |
-| Licensing | No activation/DRM for this client — fully theirs to run |
-| Branding | Website matches client's existing branding; internal staff software uses a neutral, modern UI |
-| Language | English-only for v1; architecture supports localization later, bilingual Urdu/English not built now |
-| Enabled roles | Admin, Reception, Sample Collector, Lab Technician (full RBAC role set designed, remaining roles built but disabled — see `02_Technical_Architecture.md § Authorization Matrix`) |
-| Payment methods | Cash, Bank Transfer, EasyPaisa, JazzCash; card payments disabled but interface-ready |
+* Package selection and package catalog management
+* Automatic package expansion into constituent laboratory tests
+* Corporate accounts and corporate billing
+* Home collection
+* Full barcode generation, label printing, and scanner workflow
+* Application-wide audit logging
+* Feature-flag and product-entitlement enforcement
+* Multi-role expansion beyond the currently active permission bundles
+* Notification retry/background processing
+* Refund and void workflows
+* Doctor commission payout/reversal workflow
+* Advanced amendment notifications
+* Partial-report release configuration
+* Public website administration/CMS
+* Branch and doctor directories on the public website
+* Public news/announcement management
+
+### Platform capabilities designed but not yet complete
+
+The following are part of the LabFlow product architecture but should not be treated as currently delivered functionality:
+
+* Full hosted multi-tenant SaaS control plane
+* Automated tenant provisioning
+* Basic/Pro subscription entitlement enforcement
+* Offline / Enterprise licensing enforcement
+* Local-to-cloud synchronization
+* Cloud-to-local booking synchronization
+* Production Sync Agent
+* Windows Server installer
+* Windows Workstation application/installer
+* Automated backup and restore management
+* Production disaster-recovery tooling
+* Internal HTTPS automation
+* Full printer-driver abstraction
+* Payment-provider abstraction
+* Storage-provider abstraction
+* SaaS billing integration
+* Centralized subscription management
+
+## Non-Goals (Current Product Release)
+
+The following are not requirements for the current core product release, although some remain part of the longer-term roadmap:
+
+* Direct laboratory analyzer/machine integration
+* Full LIS/HL7 analyzer ecosystem
+* Insurance claim processing
+* Full inventory and reagent-management system
+* Automated reagent consumption forecasting
+* Visual report-template designer
+* Plugin marketplace
+* Third-party extension marketplace
+* Full patient account system
+* Patient mobile application
+* Complete doctor portal
+* AI-assisted clinical interpretation
+* AI anomaly detection
+* Enterprise data warehouse
+* Full accounting/ERP replacement
+* Country-specific insurance or government-claim integrations that have not yet been selected
+
+Historical data migration is treated as a deployment/import capability rather than a core runtime module. Import tools may support CSV, Excel, SQL exports, APIs, or other formats depending on the source system.
+
+## Operating Parameters (Current Product Direction)
+
+| Parameter                     | Value                                                                                                                  |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Product model                 | One LabFlow platform with three commercial tiers                                                                       |
+| Commercial tiers              | Basic Cloud, Pro Cloud, Offline / Enterprise                                                                           |
+| Deployment model              | Vendor-managed cloud for Cloud tiers; local/hybrid deployment for Offline / Enterprise                                 |
+| Tenancy                       | Tenant-scoped architecture; cloud tiers require strict multi-tenant isolation                                          |
+| Branches                      | Branch-aware architecture; multi-branch product support is a first-class goal                                          |
+| Result entry                  | Manual result entry currently supported; analyzer integration is future scope                                          |
+| Result release workflow       | Explicit entry/save → finalize/release workflow                                                                        |
+| Result amendments             | Reopen/amend/supersede foundations implemented; audit and notification behavior continues to be hardened               |
+| Report access                 | Tracking ID + secondary verification; report availability governed by clinical readiness and payment state             |
+| Booking model                 | Public booking requests enter laboratory workflow; advanced scheduling remains expandable                              |
+| Licensing                     | Cloud tiers use subscription entitlement; Offline / Enterprise uses recurring licensing architecture defined in Doc 09 |
+| Branding                      | Tenant/laboratory branding should be configurable without code forks                                                   |
+| Language                      | English currently; architecture should support localization                                                            |
+| RBAC                          | Permission-driven authorization architecture                                                                           |
+| Currently active role bundles | ADMIN and LAB_OPERATOR                                                                                                 |
+| Reserved/future roles         | Additional operational and clinical roles may be enabled through defined permission bundles                            |
+| Product entitlement           | Tier/tenant capability enforcement is separate from RBAC and remains an active platform requirement                    |
+| Payment methods               | Cash, Bank Transfer, EasyPaisa, JazzCash represented; payment-provider abstraction remains future platform work        |
+| Analytics                     | Significant analytics subsystem implemented; tier-specific entitlement boundaries remain to be defined                 |
+| Public website                | Separate application exists; hosted SaaS separation and production synchronization architecture remain in progress     |
+| SMS                           | Gateway abstraction exists; SendPK currently implemented                                                               |
+| Offline operation             | Mandatory capability of Offline / Enterprise                                                                           |
+| Cloud synchronization         | Designed for Offline / Enterprise hybrid operation; production implementation pending                                  |
 
 ## Functional Requirements
 
-**LMS modules:** patient registration, invoicing, sample collection, test booking/processing, result entry with reference-range comparison and auto-interpretation, doctor referral and commission management, payment tracking, report printing/reprinting, patient history/search, barcode support, audit logs, user permissions/roles, lab and financial dashboards, backup/restore, offline mode with sync, package tests, corporate account billing, home collection.
+### Core Laboratory Platform
 
-**Website modules:** general info, about, services, rate list, test list, online test booking, report lookup/tracking, contact, branches, doctors, news/announcements, admin CMS.
+LabFlow must support:
 
-**SMS features:** booking confirmation, payment reminders, report-ready notices, critical-value doctor alerts, sample rejection/recollection notices.
+* patient registration and patient search;
+* patient history;
+* laboratory identifiers;
+* test and rate catalog management;
+* test parameters and reference ranges;
+* packages;
+* invoicing;
+* discounts;
+* payment tracking;
+* sample lifecycle management;
+* result entry;
+* result validation/finalization;
+* result amendments and history;
+* abnormal/critical result detection;
+* report generation;
+* report printing and reprinting;
+* report access control;
+* doctor/referral management;
+* doctor commissions;
+* operational dashboards;
+* financial dashboards;
+* analytics;
+* user management;
+* role-based permissions;
+* tenant and branch isolation;
+* configuration;
+* auditability;
+* notification handling;
+* backup/recovery architecture;
+* import/export capability.
+
+### SaaS Platform
+
+Cloud editions must progressively support:
+
+* tenant provisioning;
+* tenant isolation;
+* subscription state;
+* product tiers;
+* product entitlement enforcement;
+* tenant configuration;
+* tenant branding;
+* branch management;
+* cloud deployment and upgrades;
+* centralized monitoring;
+* subscription and licensing integration;
+* usage measurement where required by commercial model.
+
+### Offline / Enterprise Platform
+
+Offline / Enterprise must progressively support:
+
+* local PostgreSQL authority;
+* local API/application operation;
+* zero internet dependency for core laboratory work;
+* controlled local installation;
+* workstation connectivity;
+* production Windows packaging;
+* local backup and restore;
+* license validation with safe offline grace behavior;
+* optional cloud synchronization;
+* hosted public website integration;
+* cloud booking synchronization;
+* report synchronization;
+* connectivity recovery;
+* upgrade-safe migrations.
+
+### Public Website
+
+The public platform may support:
+
+* laboratory information;
+* About;
+* services;
+* test catalog;
+* rate list;
+* online booking;
+* report lookup;
+* report download where eligible;
+* contact information;
+* branches;
+* doctors;
+* promotions;
+* news and announcements;
+* tenant branding;
+* future CMS capabilities.
+
+Public website functionality must operate through a secure public API boundary and must never expose unrestricted access to the laboratory's operational database.
+
+### Notifications
+
+The product architecture should support:
+
+* booking confirmation;
+* booking-status updates;
+* payment reminders;
+* report-ready notices;
+* critical-value notifications;
+* sample rejection/recollection notices;
+* operational notifications;
+* delivery tracking;
+* retries;
+* provider replacement;
+* future WhatsApp/email/push channels.
+
+Notification features may vary by product tier and configured provider.
+
+### Advanced Business Modules
+
+The architecture should support future or expanding modules including:
+
+* corporate accounts;
+* corporate discounts;
+* corporate billing;
+* split payment;
+* consolidated statements;
+* home collection;
+* collector scheduling;
+* outsourcing;
+* doctor payouts;
+* advanced branch management;
+* configurable pricing rules.
+
+These modules must reuse the shared LabFlow domain rather than creating separate customer-specific workflows.
 
 ## Non-Functional Requirements
 
-- **Availability:** lab operations must have zero dependency on internet uptime; only website/SMS delivery depend on connectivity, and both degrade gracefully (queued, not lost) when offline.
-- **Performance:** comfortably handles current volume (<50/day) on modest local hardware (8GB+ RAM, SSD) with headroom for 5-10x growth before any infrastructure change is needed.
-- **Data integrity:** no silent overwrites on clinically or financially significant records — corrections are versioned.
-- **Security:** password hashing (bcrypt/argon2), RBAC, encrypted data at rest, HTTPS for all internet-facing traffic.
-- **Recoverability:** nightly backups, tested restore procedure, offsite/rotated copy in addition to on-box backup.
-- **Extensibility:** new integrations (WhatsApp, analytics, doctor portal) attach via existing domain events without modifying core modules.
+* **Tenant isolation:** one tenant must never gain unauthorized access to another tenant's data.
+
+* **Offline availability:** Offline / Enterprise core laboratory operations must continue without internet connectivity.
+
+* **Cloud availability:** Basic Cloud and Pro Cloud must be deployable as centrally managed online services with appropriate production availability and monitoring.
+
+* **Data integrity:** clinically or financially significant data must not be silently overwritten. Amendments and corrections must remain traceable.
+
+* **Security:** strong password hashing, permission-based RBAC, secure session handling, tenant isolation, transport encryption for internet-facing services, rate limiting for sensitive public endpoints, and secure secret handling.
+
+* **Recoverability:** every production deployment model must have a documented and tested backup/restore strategy appropriate to that tier.
+
+* **Upgradeability:** application and schema upgrades must preserve customer data and support controlled migration.
+
+* **Extensibility:** external integrations should attach through stable service boundaries, interfaces, events, or adapters instead of being embedded throughout domain logic.
+
+* **Scalability:** architecture must support growth from small laboratories to larger multi-user and multi-branch deployments without replacing the core domain model.
+
+* **Observability:** production systems should provide sufficient logs, health information, audit records, delivery status, and operational visibility to diagnose failures.
+
+* **Portability:** customer data must remain exportable in usable formats.
+
+* **Configuration:** branding, features, branch behavior, integrations, printing, and tier capabilities should be configurable wherever practical rather than hardcoded.
+
+* **Consistency:** cloud and offline editions should share domain rules wherever deployment differences do not require different behavior.
 
 ## Product Roadmap
 
-Nine-phase evolution from this client's deployment to a full platform:
+LabFlow's roadmap is now the evolution of a shared product platform rather than a progression from one client deployment into a future product.
 
 ```mermaid
 flowchart LR
-    P1[Phase 1: Single Lab] --> P2[Phase 2: Multi-Branch]
-    P2 --> P3[Phase 3: Central Dashboard]
-    P3 --> P4[Phase 4: Hosted SaaS]
-    P4 --> P5[Phase 5: Marketplace]
-    P5 --> P6[Phase 6: AI Features]
-    P6 --> P7[Phase 7: Analyzer Integrations]
-    P7 --> P8[Phase 8: Doctor Portal]
-    P8 --> P9[Phase 9: Patient Mobile App]
+    P1[Phase 1: Core Product Hardening] --> P2[Phase 2: Entitlements & RBAC Expansion]
+    P2 --> P3[Phase 3: SaaS Control Plane]
+    P3 --> P4[Phase 4: Basic & Pro Cloud]
+    P4 --> P5[Phase 5: Offline / Enterprise Productization]
+    P5 --> P6[Phase 6: Hybrid Sync & Multi-Branch]
+    P6 --> P7[Phase 7: Advanced Business Modules]
+    P7 --> P8[Phase 8: Integrations & Portals]
+    P8 --> P9[Phase 9: Ecosystem, AI & Mobile]
 ```
 
-1. **Single Lab** — this project: one client, one branch, fully offline, self-hosted.
-2. **Multi-Branch** — federated model: each branch runs its own offline-capable local server, reconciling up to a shared reporting view (see `02_Technical_Architecture.md`).
-3. **Central Dashboard** — group-wide view across branches for owners/admins, built from the same sync mechanism already used for the website.
-4. **Hosted SaaS** — the same core, deployed multi-tenant, sold to other labs with a subscription/billing layer added on top.
-5. **Marketplace** — third-party or vendor-built plugins (extra SMS providers, payment methods, report templates) installable per tenant.
-6. **AI Features** — result interpretation assistance, anomaly detection, operational analytics.
-7. **Analyzer Integrations** — direct machine interfacing for automated result entry, once a client actually needs it.
-8. **Doctor Portal** — referring doctors log in to see their own referred patients, commission history, and outstanding balances.
-9. **Patient Mobile App** — a dedicated app building on the existing tracking-ID web portal, adding push notifications and full visit history.
+1. **Core Product Hardening**
+   Complete and harden the existing laboratory core, including clinical data integrity, package processing, reporting correctness, auditability, payments, notification reliability, automated testing, and production security.
+
+2. **Entitlements & RBAC Expansion**
+   Separate tenant product entitlement from employee authorization. Expand the existing permission architecture into additional operational roles while introducing tier/feature entitlement enforcement.
+
+3. **SaaS Control Plane**
+   Add tenant onboarding, subscription state, tenant configuration, centralized deployment/monitoring, feature entitlements, and the infrastructure required to operate LabFlow as a managed service.
+
+4. **Basic & Pro Cloud**
+   Productize the managed cloud editions using the shared LabFlow core, with capabilities enabled according to commercial tier.
+
+5. **Offline / Enterprise Productization**
+   Complete Windows packaging, local deployment tooling, licensing, backup/restore, workstation deployment, health checks, secure upgrades, and production support tooling.
+
+6. **Hybrid Sync & Multi-Branch**
+   Complete reliable local-to-cloud and cloud-to-local synchronization, hosted public services for offline customers, branch federation, central reporting, conflict handling, and synchronization monitoring.
+
+7. **Advanced Business Modules**
+   Complete corporate accounts, corporate billing, home collection, advanced pricing, expanded doctor settlement, barcode workflows, inventory-related functionality where commercially justified, and additional operational modules.
+
+8. **Integrations & Portals**
+   Add analyzer integrations, doctor portal functionality, expanded communication providers, payment providers, external APIs, and enterprise integrations.
+
+9. **Ecosystem, AI & Mobile**
+   Expand into patient mobile experiences, AI-assisted operational or clinical tooling, marketplace/plugin architecture, advanced analytics, and a broader LabFlow ecosystem where commercially justified.
 
 ## Success Criteria
 
-- Lab staff can complete a full patient visit (registration → payment → sample → result → report) with the server's internet connection fully disconnected, with no functional degradation.
-- Staff adoption requires no workaround processes or shadow spreadsheets within the first month of go-live.
-- A tested backup restore completes successfully before go-live, not assumed to work.
-- The codebase requires no schema migration to onboard a second branch or a second (SaaS) tenant, only configuration.
+* Basic Cloud, Pro Cloud, and Offline / Enterprise operate from the same LabFlow product core without permanent tier-specific code forks.
+
+* A new laboratory tenant can be onboarded primarily through configuration, subscription/tier assignment, branding, and data initialization rather than custom development.
+
+* Tenant isolation is enforced consistently across API, database access, background processing, analytics, reporting, and public functionality.
+
+* Product entitlement and employee RBAC remain separate concerns.
+
+* The core workflow from patient registration through invoice, sample, result finalization, and report generation is reliable and clinically traceable.
+
+* Offline / Enterprise can complete core laboratory operations with internet connectivity unavailable.
+
+* Cloud editions can operate without local server infrastructure.
+
+* Offline / Enterprise can synchronize selected public/online functionality without making the local laboratory dependent on that synchronization.
+
+* Clinically significant amendments preserve history and attribution.
+
+* Financially significant corrections preserve history and attribution.
+
+* Production deployments have tested backup and recovery procedures appropriate to their deployment tier.
+
+* Adding another tenant or branch does not require redesigning the core database model.
+
+* New commercial features can be assigned through product entitlements rather than maintaining separate editions of the codebase.
+
+* External integrations can be added or replaced without rewriting core laboratory workflows.
+
+* Documentation clearly identifies whether a capability is implemented, partially implemented/scaffolded, or planned.
 
 ---
 
-**Dependencies:** none — this is the root document.
-**Related chapters:** `02_Technical_Architecture.md` (how these requirements are met technically), `03_Core_Domain_Design.md` (business rules derived from these requirements).
-**Future extensions:** success criteria and non-functional targets should be revisited once real usage data exists post-go-live.
-**Remaining open questions:** none from the original list — see `README.md § Decisions Log`. New questions will surface during implementation and are tracked as they arise.
+**Dependencies:** none. This is the root LabFlow product document.
+
+**Related chapters:** `02_Technical_Architecture.md` defines how these product requirements are supported technically; `03_Core_Domain_Design.md` defines the shared business/domain rules; `04_Application_Modules.md` defines product-facing modules and workflows; `09_LabFlow_Licensing_and_Subscription_Architecture.md` defines Offline / Enterprise licensing architecture; `10_Product_Tiers_and_SaaS_Scope.md` defines the commercial/deployment tier model.
+
+**Historical context:** the earliest LabFlow requirements originated from a small single-laboratory offline deployment. Those requirements remain useful product-domain history but no longer define the scope, scale, deployment topology, commercial model, or future boundaries of LabFlow.
+
+**Future extensions:** product scope, tier entitlement boundaries, deployment requirements, non-functional targets, and commercial packaging should be revisited as LabFlow moves through SaaS and Offline / Enterprise productization.
+
+**Remaining open questions:** implementation-level and commercial decisions continue to be tracked in the documentation set and Decisions Log. A decision is not considered implemented merely because supporting schema or architecture exists.
