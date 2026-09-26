@@ -9,7 +9,7 @@ import {
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CreateUserDto, UpdateUserDto } from './dto/create-user.dto';
 import { BrandingDto, PrintLayoutDto } from './dto/branding.dto';
-import { SaveSmsTemplateDto } from './dto/sms-settings.dto';
+import { SaveSmsTemplateDto, SmsTemplateRecord } from './dto/sms-settings.dto';
 import { Role } from '@lms/database';
 import * as bcrypt from 'bcrypt';
 import {
@@ -284,7 +284,7 @@ export class SettingsService {
     actorRole: string,
     key: string,
     dto: SaveSmsTemplateDto,
-  ) {
+  ): Promise<SmsTemplateRecord> {
     this.assertAdmin(actorRole);
 
     const def = getSmsEventDefinition(key);

@@ -14,7 +14,7 @@ import {
 import { SettingsService } from './settings.service';
 import { CreateUserDto, UpdateUserDto } from './dto/create-user.dto';
 import { BrandingDto, PrintLayoutDto } from './dto/branding.dto';
-import { SaveSmsTemplateDto } from './dto/sms-settings.dto';
+import { SaveSmsTemplateDto, SmsTemplateRecord } from './dto/sms-settings.dto';
 import { SessionGuard } from '../../common/guards/session.guard';
 import { PermissionGuard } from '../../common/guards/permission.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
@@ -108,7 +108,7 @@ export class SettingsController {
     @CurrentUser() user: AuthUser,
     @Param('key') key: string,
     @Body() dto: SaveSmsTemplateDto,
-  ) {
+  ): Promise<SmsTemplateRecord> {
     return this.settingsService.saveSmsTemplate(user.tenantId, user.role, key, dto);
   }
 
