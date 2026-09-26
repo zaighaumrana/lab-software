@@ -833,8 +833,8 @@ model Notification {
   channel     NotificationChannel @default(SMS)
   status      NotificationStatus  @default(QUEUED)
   recipient   String              // Phone or email
-  templateKey String?
-  body        String
+  templateKey String?             // Our event key, e.g. SAMPLE_COLLECTED, REPORT_READY
+  body        String              // Rendered local-format text (audit/dashboard display)
   relatedType String?             // e.g. "Booking", "Report"
   relatedId   String?
   attempts    Int                 @default(0)
@@ -843,20 +843,50 @@ model Notification {
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 
+  // --- Provider (SENDPK) send details, needed to retry without re-deriving ---
+  provider             String?   // e.g. "SENDPK"
+  providerTemplateId   String?   // Approved SENDPK template_id used for this send
+  providerVariables    Json?     // JSON variables payload sent as `message` to SENDPK
+  providerMessageId    String?   // e.g. SENDPK's "OK ID:29346" id — for delivery lookups
+  providerStatus       String?   // Last known provider-side status (ACCEPTED/DELIVERED/FAILED/etc.)
+  lastProviderResponse String?   // Raw response, truncated — for troubleshooting, no secrets
+  acceptedAt           DateTime? // Provider accepted for delivery (SENDPK returned OK)
+  deliveredAt          DateTime? // Confirmed delivered, if a delivery check confirms it
+  messageType          String?   // "text" | "unicode" — detected at render time
+  smsParts             Int?      // Calculated SMS part count for the final rendered message
+
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
+  // Idempotency guard: the same event (by related entity + event key) for a
+  // tenant is only ever recorded/sent once, so retries, double-submits, and
+  // websocket races can't produce duplicate customer SMS. NULLs (ad-hoc
+  // notifications with no relatedType/relatedId/templateKey) are exempt —
+  // Postgres treats NULLs as distinct in unique indexes.
+  @@unique([tenantId, relatedType, relatedId, templateKey])
   @@index([tenantId, status])
   @@index([status, createdAt])
   @@map("notifications")
 }
 
+/// One row per automatic SMS event (SAMPLE_COLLECTED, REPORT_READY). Holds
+/// the administrator-owned local wording plus the mapping to an approved
+/// SENDPK template — nothing about the actual SMS wording is hardcoded in
+/// application code; it is always read from here at send time.
 model SmsTemplate {
   id        String   @id @default(cuid())
   tenantId  String
-  key       String   // e.g. booking_confirmation, report_ready
+  key       String   // SAMPLE_COLLECTED | REPORT_READY
   name      String
-  body      String   // Supports {{placeholders}}
-  isActive  Boolean  @default(true)
+  body      String   // Local admin-facing format, supports {{placeholders}}
+  isActive  Boolean  @default(false) // Per-event enable/disable toggle
+
+  // --- SENDPK approved-template mapping (synced via "Sync SENDPK Templates") ---
+  sendpkTemplateId        String?   // Approved template_id selected by the admin
+  sendpkTemplateName      String?   // Snapshot of the SENDPK template's name at last sync
+  sendpkApprovedBody      String?   // Snapshot of the SENDPK-approved wording (#var# format)
+  sendpkRequiredVariables Json?     // Snapshot of the SENDPK template's required variable keys
+  sendpkLastSyncedAt      DateTime? // When the snapshot above was last refreshed
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

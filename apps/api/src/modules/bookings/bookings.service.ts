@@ -7,7 +7,6 @@ import {
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { BookingStatus, BookingSource } from '@lms/database';
-import { NotificationsService } from '../notifications/notifications.service';
 
 function generateBookingCode(): string {
   const now = new Date();
@@ -18,10 +17,7 @@ function generateBookingCode(): string {
 
 @Injectable()
 export class BookingsService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly notifications: NotificationsService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async findByCode(tenantId: string, bookingCode: string) {
     const booking = await this.prisma.booking.findFirst({
@@ -128,21 +124,11 @@ export class BookingsService {
       },
     });
 
-    // TODO: raise BookingCreated / BookingRequested domain event (this direct
-    // call is the v1 stand-in for that — fine at this scale, but worth
-    // revisiting once more than one thing needs to react to a new booking).
-    if (patient.smsConsent && patient.phone) {
-      const message =
-        source === BookingSource.ONLINE
-          ? `Hi ${patient.fullName}, your booking request ${booking.bookingCode} has been received. You'll get an SMS once it's confirmed.`
-          : `Hi ${patient.fullName}, you're registered. Booking ID: ${booking.bookingCode}. Thank you for choosing us.`;
-
-      await this.notifications.sendSms(tenantId, patient.phone, message, {
-        templateKey: 'booking_confirmation',
-        relatedType: 'Booking',
-        relatedId: booking.id,
-      });
-    }
+    // Booking creation itself is not one of the LMS's two automatic SMS
+    // events (see @lms/shared sms-events.ts) — the patient is notified by
+    // SMS once samples are actually collected instead (LaboratoryService
+    // .collectSample -> SAMPLE_COLLECTED), which also means no hardcoded
+    // wording lives here anymore.
 
     return booking;
   }

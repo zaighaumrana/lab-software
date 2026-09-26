@@ -82,6 +82,11 @@ export const V1_ENABLED_PAYMENT_METHODS = [
   PAYMENT_METHODS.JAZZCASH,
 ] as const;
 
+export * from './sms-segmentation';
+export * from './sms-placeholders';
+export * from './sms-events';
+export * from './phone';
+
 export const FEATURE_FLAGS = {
   INVENTORY: 'inventory',
   ANALYZER_INTEGRATION: 'analyzer_integration',

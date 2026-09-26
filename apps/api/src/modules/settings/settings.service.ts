@@ -4,12 +4,21 @@ import {
   ConflictException,
   ForbiddenException,
   BadRequestException,
+  Inject,
 } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CreateUserDto, UpdateUserDto } from './dto/create-user.dto';
 import { BrandingDto, PrintLayoutDto } from './dto/branding.dto';
+import { SaveSmsTemplateDto } from './dto/sms-settings.dto';
 import { Role } from '@lms/database';
 import * as bcrypt from 'bcrypt';
+import {
+  SMS_EVENT_DEFINITIONS,
+  getSmsEventDefinition,
+  validatePlaceholders,
+  type SmsEventKey,
+} from '@lms/shared';
+import { SMS_GATEWAY, SmsGateway } from '../notifications/providers/sms-gateway.interface';
 
 const KEY_BRANDING = 'branding';
 const KEY_PRINT = 'print_layout';
@@ -37,7 +46,10 @@ const DEFAULT_PRINT = {
 
 @Injectable()
 export class SettingsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(SMS_GATEWAY) private readonly smsGateway: SmsGateway,
+  ) {}
 
   private assertAdmin(role: string) {
     if (role !== 'ADMIN') {
@@ -220,5 +232,147 @@ export class SettingsService {
       this.getPrintLayout(tenantId),
     ]);
     return { branding, printLayout };
+  }
+
+  // ----- SMS / Notifications -----
+
+  /**
+   * Everything the Settings → SMS screen needs: provider connection status
+   * (never the API key itself), and both events' current configuration
+   * merged with their static definitions (label/variables/example) from
+   * @lms/shared so the frontend never has to hardcode either.
+   */
+  async getSmsSettings(tenantId: string) {
+    const rows = await this.prisma.smsTemplate.findMany({
+      where: { tenantId, key: { in: SMS_EVENT_DEFINITIONS.map((d) => d.key) } },
+    });
+    const byKey = new Map(rows.map((r) => [r.key, r]));
+
+    const events = SMS_EVENT_DEFINITIONS.map((def) => {
+      const row = byKey.get(def.key);
+      return {
+        key: def.key,
+        label: def.label,
+        variables: def.variables,
+        exampleBody: def.exampleBody,
+        exampleValues: def.exampleValues,
+        body: row?.body ?? def.exampleBody,
+        isActive: row?.isActive ?? false,
+        sendpkTemplateId: row?.sendpkTemplateId ?? null,
+        sendpkTemplateName: row?.sendpkTemplateName ?? null,
+        sendpkApprovedBody: row?.sendpkApprovedBody ?? null,
+        sendpkRequiredVariables: Array.isArray(row?.sendpkRequiredVariables)
+          ? (row!.sendpkRequiredVariables as unknown[]).map(String)
+          : [],
+        sendpkLastSyncedAt: row?.sendpkLastSyncedAt ?? null,
+      };
+    });
+
+    return {
+      provider: {
+        name: 'SENDPK',
+        configured: this.smsGateway.isConfigured(),
+        sender: this.smsGateway.isConfigured() ? this.smsGateway.getSenderId() : null,
+        balance: await this.tryGetBalance(),
+      },
+      events,
+    };
+  }
+
+  async saveSmsTemplate(
+    tenantId: string,
+    actorRole: string,
+    key: string,
+    dto: SaveSmsTemplateDto,
+  ) {
+    this.assertAdmin(actorRole);
+
+    const def = getSmsEventDefinition(key);
+    if (!def) {
+      throw new BadRequestException(`Unknown SMS event key: ${key}`);
+    }
+
+    const body = dto.body.trim();
+    const validation = validatePlaceholders(body);
+    if (!validation.valid) {
+      throw new BadRequestException(
+        `Unknown SMS variable: ${validation.unknown.join(', ')}`,
+      );
+    }
+    const disallowed = validation.used.filter((v) => !def.variables.includes(v));
+    if (disallowed.length > 0) {
+      throw new BadRequestException(
+        `Variable(s) not available for this event: ${disallowed.join(', ')}`,
+      );
+    }
+
+    const existing = await this.prisma.smsTemplate.findUnique({
+      where: { tenantId_key: { tenantId, key: key as SmsEventKey } },
+    });
+
+    // A SENDPK mapping is only meaningful for the exact wording it was
+    // approved against — if the admin changes the body without also
+    // re-selecting a template, keep the existing mapping (they may be
+    // re-approving the same wording) but the "Not ready" status will
+    // recompute from the fresh snapshot on next sync if it no longer fits.
+    const data = {
+      name: def.label,
+      body,
+      isActive: dto.isActive,
+      sendpkTemplateId:
+        dto.sendpkTemplateId !== undefined ? dto.sendpkTemplateId : (existing?.sendpkTemplateId ?? null),
+    };
+
+    return this.prisma.smsTemplate.upsert({
+      where: { tenantId_key: { tenantId, key: key as SmsEventKey } },
+      create: { tenantId, key: key as SmsEventKey, ...data },
+      update: data,
+    });
+  }
+
+  /**
+   * "Sync SENDPK Templates" — lists the account's approved templates and
+   * refreshes the snapshot (name/wording/required variables) for any event
+   * already mapped to one of them. Returns the full list so the frontend
+   * can populate/refresh the mapping dropdown for both events.
+   */
+  async syncSendPkTemplates(tenantId: string, actorRole: string) {
+    this.assertAdmin(actorRole);
+
+    if (!this.smsGateway.listTemplates) {
+      throw new BadRequestException(
+        'The configured SMS gateway does not support listing templates',
+      );
+    }
+    const templates = await this.smsGateway.listTemplates();
+
+    const mapped = await this.prisma.smsTemplate.findMany({
+      where: { tenantId, sendpkTemplateId: { not: null } },
+    });
+    for (const row of mapped) {
+      const match = templates.find((t) => t.id === row.sendpkTemplateId);
+      if (match) {
+        await this.prisma.smsTemplate.update({
+          where: { id: row.id },
+          data: {
+            sendpkTemplateName: match.name,
+            sendpkApprovedBody: match.message,
+            sendpkRequiredVariables: match.variables,
+            sendpkLastSyncedAt: new Date(),
+          },
+        });
+      }
+    }
+
+    return templates;
+  }
+
+  private async tryGetBalance(): Promise<number | null> {
+    if (!this.smsGateway.isConfigured() || !this.smsGateway.checkBalance) return null;
+    try {
+      return await this.smsGateway.checkBalance();
+    } catch {
+      return null;
+    }
   }
 }

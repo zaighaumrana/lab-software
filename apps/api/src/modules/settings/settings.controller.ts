@@ -14,6 +14,7 @@ import {
 import { SettingsService } from './settings.service';
 import { CreateUserDto, UpdateUserDto } from './dto/create-user.dto';
 import { BrandingDto, PrintLayoutDto } from './dto/branding.dto';
+import { SaveSmsTemplateDto } from './dto/sms-settings.dto';
 import { SessionGuard } from '../../common/guards/session.guard';
 import { PermissionGuard } from '../../common/guards/permission.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
@@ -91,5 +92,30 @@ export class SettingsController {
   @RequirePermissions(Permission.SETTINGS_MANAGE)
   async savePrintLayout(@CurrentUser() user: AuthUser, @Body() dto: PrintLayoutDto) {
     return this.settingsService.savePrintLayout(user.tenantId, user.role, dto);
+  }
+
+  @Get('sms')
+  @UseGuards(SessionGuard, PermissionGuard)
+  @RequirePermissions(Permission.SETTINGS_MANAGE)
+  async getSmsSettings(@CurrentUser() user: AuthUser) {
+    return this.settingsService.getSmsSettings(user.tenantId);
+  }
+
+  @Put('sms/:key')
+  @UseGuards(SessionGuard, PermissionGuard)
+  @RequirePermissions(Permission.SETTINGS_MANAGE)
+  async saveSmsTemplate(
+    @CurrentUser() user: AuthUser,
+    @Param('key') key: string,
+    @Body() dto: SaveSmsTemplateDto,
+  ) {
+    return this.settingsService.saveSmsTemplate(user.tenantId, user.role, key, dto);
+  }
+
+  @Post('sms/sync')
+  @UseGuards(SessionGuard, PermissionGuard)
+  @RequirePermissions(Permission.SETTINGS_MANAGE)
+  async syncSmsTemplates(@CurrentUser() user: AuthUser) {
+    return this.settingsService.syncSendPkTemplates(user.tenantId, user.role);
   }
 }

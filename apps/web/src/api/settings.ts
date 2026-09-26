@@ -1,4 +1,5 @@
 import { api } from './client';
+import type { SmsEventKey } from '@lms/shared';
 
 export interface Branding {
   labName: string;
@@ -75,5 +76,59 @@ export async function updateUser(
   },
 ) {
   const { data } = await api.patch<StaffUser>(`/settings/users/${id}`, payload);
+  return data;
+}
+
+// ----- SMS / Notifications -----
+
+export interface SmsProviderStatus {
+  name: string;
+  configured: boolean;
+  sender: string | null;
+  balance: number | null;
+}
+
+export interface SmsEventSettings {
+  key: SmsEventKey;
+  label: string;
+  variables: string[];
+  exampleBody: string;
+  exampleValues: Record<string, string>;
+  body: string;
+  isActive: boolean;
+  sendpkTemplateId: string | null;
+  sendpkTemplateName: string | null;
+  sendpkApprovedBody: string | null;
+  sendpkRequiredVariables: string[];
+  sendpkLastSyncedAt: string | null;
+}
+
+export interface SmsSettings {
+  provider: SmsProviderStatus;
+  events: SmsEventSettings[];
+}
+
+export interface SendPkTemplateOption {
+  id: string;
+  name: string;
+  message: string;
+  variables: string[];
+}
+
+export async function getSmsSettings() {
+  const { data } = await api.get<SmsSettings>('/settings/sms');
+  return data;
+}
+
+export async function saveSmsTemplate(
+  key: SmsEventKey,
+  payload: { body: string; isActive: boolean; sendpkTemplateId?: string | null },
+) {
+  const { data } = await api.put(`/settings/sms/${key}`, payload);
+  return data;
+}
+
+export async function syncSendPkTemplates() {
+  const { data } = await api.post<SendPkTemplateOption[]>('/settings/sms/sync');
   return data;
 }

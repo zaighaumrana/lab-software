@@ -47,10 +47,11 @@ export class LaboratoryService {
   ) {
     const invoice = await this.prisma.invoice.findFirst({
       where: { id: dto.invoiceId, tenantId },
+      include: { booking: { include: { patient: true } } },
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
 
-    return this.prisma.sample.create({
+    const sample = await this.prisma.sample.create({
       data: {
         tenantId,
         branchId,
@@ -63,6 +64,28 @@ export class LaboratoryService {
         notes: dto.notes,
       },
     });
+
+    // Fire-and-forget-ish, but never inside the write above: sample
+    // collection must succeed and commit regardless of SMS/network state.
+    // See notes in NotificationsService for the offline-first rationale.
+    const booking = invoice.booking;
+    const patient = booking?.patient;
+    if (booking && patient?.smsConsent && patient.phone) {
+      const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+      await this.notifications.sendTemplatedSms(
+        tenantId,
+        'SAMPLE_COLLECTED',
+        patient.phone,
+        {
+          patientName: patient.fullName,
+          bookingId: booking.bookingCode,
+          labName: tenant?.name ?? '',
+        },
+        { relatedType: 'Booking', relatedId: booking.id },
+      );
+    }
+
+    return sample;
   }
 
   async markOutsourced(
@@ -681,19 +704,25 @@ export class LaboratoryService {
     const patient = invoice?.booking?.patient;
     if (!patient?.smsConsent || !patient.phone) return;
 
-    const fullyPaid = invoice
-      ? Number(invoice.amountDue) <= 0
-      : false;
-
-    const message = fullyPaid
-      ? `Hi ${patient.fullName}, your lab report is ready. View/download it online with tracking ID ${trackingId}.`
-      : `Hi ${patient.fullName}, your lab report is ready for collection at the lab.`;
-
-    await this.notifications.sendSms(tenantId, patient.phone, message, {
-      templateKey: 'report_ready',
-      relatedType: 'Report',
-      relatedId: invoiceId,
-    });
+    // Wording (including whether/how tracking ID or payment status is
+    // mentioned) is entirely administrator-owned via Settings → SMS; this
+    // service only supplies the values. Tracking ID is safe to include
+    // regardless of payment status — it's already printed on the patient's
+    // receipt, and the online report-lookup page itself still withholds the
+    // actual report for a partially-paid invoice.
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    await this.notifications.sendTemplatedSms(
+      tenantId,
+      'REPORT_READY',
+      patient.phone,
+      {
+        patientName: patient.fullName,
+        bookingId: invoice?.booking?.bookingCode ?? '',
+        labName: tenant?.name ?? '',
+        trackingId: trackingId ?? '',
+      },
+      { relatedType: 'Report', relatedId: invoiceId },
+    );
   }
 
   async amendResult(

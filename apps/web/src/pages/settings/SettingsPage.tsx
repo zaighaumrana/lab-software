@@ -5,8 +5,9 @@ import * as settingsApi from '../../api/settings';
 import type { StaffUser } from '../../api/settings';
 import { Loading } from '../../components/Loading';
 import { Navigate } from 'react-router-dom';
+import { SmsSettingsTab } from './SmsSettingsTab';
 
-type Tab = 'users' | 'branding' | 'print' | 'report-layout';
+type Tab = 'users' | 'branding' | 'print' | 'report-layout' | 'sms';
 
 const ROLES = [
   { value: 'ADMIN', label: 'Admin' },
@@ -148,6 +149,7 @@ export function SettingsPage() {
             ['branding', 'Branding'],
             ['print', 'Print layout'],
             ['report-layout', 'Report Print Layout'],
+            ['sms', 'SMS / Notifications'],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -521,6 +523,8 @@ export function SettingsPage() {
           </button>
         </form>
       )}
+
+      {tab === 'sms' && <SmsSettingsTab />}
     </div>
   );
 }

@@ -267,17 +267,28 @@ async function main() {
   });
   console.log('  Doctor: Dr. Ahmed Khan');
 
-  const templates = [
-    { key: 'booking_confirmation', name: 'Booking Confirmation', body: 'Dear {{patientName}}, your booking {{bookingCode}} is confirmed.' },
-    { key: 'report_ready_paid', name: 'Report Ready (Paid)', body: 'Dear {{patientName}}, your report is ready. Tracking ID: {{trackingId}}.' },
-    { key: 'report_ready_unpaid', name: 'Report Ready (Unpaid)', body: 'Dear {{patientName}}, your report is ready for collection. Tracking ID: {{trackingId}}.' },
-    { key: 'sample_rejected', name: 'Sample Rejected', body: 'Dear {{patientName}}, your sample was rejected ({{reason}}). Please contact the lab.' },
+  // The two automatic transactional SMS events (see @lms/shared
+  // sms-events.ts). Seeded with their example wording so the Settings UI
+  // has a sensible starting point, but disabled by default — an
+  // administrator must review the wording, map an approved SENDPK
+  // template, and explicitly enable each event before it can send.
+  const smsTemplates = [
+    {
+      key: 'SAMPLE_COLLECTED',
+      name: 'Sample Collection Confirmation',
+      body: 'Dear {{patientName}}, your samples have been collected successfully. Booking ID: {{bookingId}}.',
+    },
+    {
+      key: 'REPORT_READY',
+      name: 'Report Ready to Collect',
+      body: 'Dear {{patientName}}, your report is ready for collection. Booking ID: {{bookingId}}.',
+    },
   ];
-  for (const t of templates) {
+  for (const t of smsTemplates) {
     await prisma.smsTemplate.upsert({
       where: { tenantId_key: { tenantId: tenant.id, key: t.key } },
       update: {},
-      create: { tenantId: tenant.id, key: t.key, name: t.name, body: t.body, isActive: true },
+      create: { tenantId: tenant.id, key: t.key, name: t.name, body: t.body, isActive: false },
     });
   }
 

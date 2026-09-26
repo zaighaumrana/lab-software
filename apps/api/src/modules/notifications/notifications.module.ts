@@ -13,6 +13,6 @@ import { SMS_GATEWAY } from './providers/sms-gateway.interface';
     NotificationsService,
     { provide: SMS_GATEWAY, useClass: SendPkProvider },
   ],
-  exports: [NotificationsService],
+  exports: [NotificationsService, SMS_GATEWAY],
 })
 export class NotificationsModule {}
