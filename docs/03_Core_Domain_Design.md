@@ -1,21 +1,48 @@
-# 03 — Core Domain Design
+# 03 – Core Domain Design
 
-**Purpose:** the technical "Bible" of the product — every business rule, entity, event, and workflow lives here.
-**Why it exists:** backend code should be a direct implementation of what's written in this document; if code and this document disagree, this document wins until deliberately revised.
-**Read this:** before writing any backend module. Re-read the relevant section before implementing any state transition or business rule.
+**Purpose:** the domain "Bible" of LabFlow. Core business concepts, invariants, state transitions, workflows, and cross-module business rules belong here.
+
+**Why it exists:** the shared LabFlow product must preserve consistent laboratory behavior across Basic Cloud, Pro Cloud, and Offline / Enterprise. Backend implementation should follow this model unless the domain design is deliberately revised.
+
+**Read this:** before writing or modifying backend business logic, state transitions, billing rules, result workflows, reporting rules, tenant-scoped behavior, or a module that touches another bounded context.
 
 ---
 
 ## Executive Summary
 
-The domain is modeled around a single linear backbone — Patient → Booking → Invoice → Sample → LabTest → Result → Report → Notification — with Doctor, Package, and Company as entities that attach to this backbone rather than replace it. Every operationally-scoped entity carries a `tenant_id`/`branch_id`. State transitions are explicit and enforced (see State Machines); cross-cutting behavior (notifications, sync, commission) is driven by domain events rather than direct module-to-module calls.
+LabFlow's domain is centered around the laboratory journey:
+
+**Patient → Booking/Visit → Invoice → Sample → Lab Test → Result → Report**
+
+with Doctor, Package, Company, Notification, Tenant, Branch, and other business entities attaching to that journey.
+
+The domain model is shared across product tiers.
+
+A Basic Cloud patient and an Offline / Enterprise patient should not obey different clinical rules merely because their infrastructure is deployed differently.
+
+The codebase already implements a substantial portion of this domain, but this document also contains **accepted target-domain behavior that remains partial or planned**.
+
+Therefore:
+
+> A concept appearing in this document means it belongs to the LabFlow product domain. It does not automatically mean every state, event, workflow, or UI described here is already implemented.
+
+When current code and a domain rule disagree, determine whether:
+
+1. the code contains an implementation defect;
+2. the documented rule has been superseded;
+3. the rule represents planned behavior not yet implemented.
+
+Update the documentation explicitly rather than silently treating either side as authoritative.
 
 ## Domain Model
 
-*Read this first — every other section in this document assumes this model.*
+*Read this first. Every other section assumes these concepts.*
 
 ```mermaid
 flowchart LR
+    Tenant --> Branch
+    Branch --> Patient
+
     Patient --> Booking
     Booking --> Invoice
     Invoice --> Sample
@@ -24,159 +51,353 @@ flowchart LR
     Result --> Report
     Report --> Notification
 
-    Doctor -.refers.-> Booking
+    Doctor -.refers.-> Invoice
     Doctor -.earns.-> Commission
-    Invoice -.calculates.-> Commission
-    Package -.expands into.-> LabTest
+
+    Package -.contains.-> LabTest
     Company -.sponsors.-> Invoice
 ```
 
-- **Patient** — a person the lab has or will provide services to; exists independently of any single visit.
-- **Booking** — an intent to be tested: walk-in, online, or home-collection.
-- **Invoice** — the financial record for a booking: line items, pricing-engine-adjusted price, payment status.
-- **Sample** — a physical specimen collected against an invoice/booking; one sample may serve multiple tests.
-- **LabTest** — a single test definition, standalone or resolved from a Package.
-- **Package** — a named bundle of tests (possibly nested) sold as one priced unit.
-- **Result** — a value recorded against a LabTest for a Sample; versioned, never overwritten.
-- **Report** — the patient-facing document assembled from one or more Results.
-- **Doctor** — a referral source, earns Commission from linked Invoices.
-- **Company** — a corporate account sponsoring Invoices for linked Patients (employees).
-- **Notification** — an outbound message (SMS today) triggered by domain events.
+* **Tenant**: a laboratory organization/customer using LabFlow.
+* **Branch**: an operational location belonging to a Tenant.
+* **Patient**: a person receiving laboratory services, independent of a single encounter.
+* **Booking**: intent/scheduling for laboratory service, created through staff or public channels.
+* **Visit**: business-language description of a patient's encounter. It is not currently a dedicated persisted entity.
+* **Invoice**: financial record containing selected tests/packages, price snapshots, discounts, payment state, and referral information.
+* **Payment**: money recorded against an Invoice.
+* **Sample**: physical specimen collected for one or more laboratory tests.
+* **LabTest / Test**: catalog definition for a laboratory test and its parameters/reference ranges.
+* **Package**: commercially sold bundle of Tests.
+* **Result**: recorded laboratory result for a Test/Sample, with finalization and amendment history.
+* **Report**: patient-facing clinical document assembled from finalized Results.
+* **Doctor**: referral source associated with patients/invoices and optionally commission arrangements.
+* **Commission / Doctor Share**: amount attributed to a referring doctor according to the commercial arrangement snapshotted at transaction time.
+* **Company**: corporate/customer organization sponsoring laboratory services for linked patients/employees.
+* **Notification**: persisted outbound communication attempt or delivery record.
+* **Sync Job / Outbox Record**: durable unit representing data that must eventually cross a deployment boundary.
 
-This model is what stays true even if the database changes — it's the contract a developer (or an AI coding agent) should understand in five minutes, independent of how PostgreSQL happens to store it.
+These concepts belong to the shared LabFlow domain even when a particular tier does not expose every module.
 
 ## Ubiquitous Language / Glossary
 
-One official definition per term — used consistently across all documents, code, and conversations with the client.
+One definition per term should be used consistently across documentation, code, APIs, interfaces, and product conversations.
 
-| Term | Definition |
-|---|---|
-| **Patient** | A person registered in the system, independent of any single visit. Repeat visits reuse this record. |
-| **Visit** | The real-world encounter that produces one Booking, one Invoice, one or more Samples, and (usually) one Report. Not a stored entity itself — it's the informal name for "everything that happened during one trip to the lab." |
-| **Booking** | The scheduling record capturing intent to be tested — walk-in, online, or home-collection — before any money or specimen is involved. |
-| **Sample** | A physical specimen collected from a Patient, tracked through collection, quality-check, and testing. |
-| **Report** | The patient-facing document assembled from one or more Results tied to an Invoice. May be Partial or Complete. |
-| **Result** | A single recorded value for one LabTest against one Sample. Amendments create new versions; originals are never deleted. |
-| **Invoice** | The financial record for a Booking: line items, applied pricing rules, and payment status. |
-| **Package** | A named, priced bundle of LabTests (possibly containing nested Packages) sold as one unit. |
-| **Commission** | The amount owed to a referring Doctor, calculated from an Invoice at the rate/type in effect at invoice time. |
-| **Corporate Account (Company)** | An organization that sponsors Invoices on behalf of linked Patients (its employees), billed on its own cycle rather than per-visit. |
-| **Tenant / Branch** | The scoping unit for multi-lab or multi-branch data isolation. Fixed to one value for this client's deployment. |
+| Term                            | Definition                                                                                                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Tenant**                      | A laboratory organization/customer whose data, configuration, subscription/license, and product entitlements are isolated from other organizations.                       |
+| **Branch**                      | A physical or operational location belonging to a Tenant.                                                                                                                 |
+| **Patient**                     | A person registered in LabFlow independent of any single visit. Repeat encounters reuse the patient record where matching rules permit.                                   |
+| **Visit**                       | Informal business term for one encounter involving some combination of booking, invoice, samples, tests, payments, and report. Not currently a dedicated database entity. |
+| **Booking**                     | Request/scheduling record representing intent to receive laboratory services.                                                                                             |
+| **Sample**                      | A physical specimen associated with laboratory processing.                                                                                                                |
+| **Test / LabTest**              | Catalog definition of a laboratory investigation, including parameters and reference ranges where applicable.                                                             |
+| **Test Parameter**              | Individual measurable/reported component of a Test.                                                                                                                       |
+| **Reference Range**             | Contextual normal/critical thresholds used to interpret a Test Parameter.                                                                                                 |
+| **Result**                      | Recorded clinical values for a Test, progressing from entry to finalization/release and supporting amendment/version history.                                             |
+| **Report**                      | Patient-facing document assembled from eligible finalized Results.                                                                                                        |
+| **Invoice**                     | Financial transaction containing selected tests/packages, price snapshots, discounts, balances, payment state, referral information, and other billing context.           |
+| **Payment**                     | Money received and recorded against an Invoice.                                                                                                                           |
+| **Package**                     | Named bundle of Tests sold as a commercial unit.                                                                                                                          |
+| **Doctor**                      | Referring clinician/source associated with a patient encounter or invoice.                                                                                                |
+| **Commission / Doctor Share**   | Financial amount attributed to a referring Doctor under the arrangement in effect when the transaction occurred.                                                          |
+| **Corporate Account / Company** | Organization sponsoring or subsidizing laboratory services for linked patients/employees.                                                                                 |
+| **Notification**                | SMS or future outbound communication stored with delivery state and audit information.                                                                                    |
+| **Product Entitlement**         | Tenant-level right to use a LabFlow capability based on subscription/license/tier.                                                                                        |
+| **Permission**                  | User-level authorization allowing an employee to perform an action.                                                                                                       |
+| **Sync Outbox**                 | Durable local/cloud queue representation for data that must be synchronized asynchronously.                                                                               |
+
+Historical wording such as "fixed to one value for this client's deployment" is no longer part of the domain definition.
+
+Tenants and branches are now first-class product concepts.
 
 ## Bounded Contexts
 
-Each context owns its own models; no other context reaches into its data directly — cross-context communication happens via domain events.
+Bounded contexts provide logical ownership of domain behavior.
 
-| Bounded Context | Owns |
-|---|---|
-| **Patient Management** | Patient, patient history/search |
-| **Billing** | Invoice, Payment, Pricing Engine, Company (corporate billing) |
-| **Laboratory** | Sample, LabTest, Result, Package |
-| **Reporting** | Report, report generation/versioning |
-| **Notification** | Notification, SMS gateway integration |
-| **Doctor Management** | Doctor, Commission |
-| **Website / Public Portal** | Public-facing Booking requests, report lookup, CMS content |
-| **Sync** | Sync Job, outbox processing |
+Current code is a modular monolith, so these boundaries are primarily architectural/domain boundaries rather than separate deployed microservices.
+
+| Bounded Context               | Owns / Governs                                                                            |
+| ----------------------------- | ----------------------------------------------------------------------------------------- |
+| **Tenant / Product Platform** | Tenant, Branch, subscription/license relationship, future feature entitlements            |
+| **Patient Management**        | Patient identity, demographics, search/history                                            |
+| **Booking**                   | Booking requests, confirmation, check-in, cancellation                                    |
+| **Billing**                   | Invoice, InvoiceLine, Payment, pricing/discount logic, Company billing                    |
+| **Catalog**                   | Tests, Test Parameters, Reference Ranges, Packages                                        |
+| **Laboratory**                | Samples, testing lifecycle, result entry/finalization/amendment                           |
+| **Reporting**                 | Report readiness, report generation, print/download history                               |
+| **Notification**              | Notification persistence, provider dispatch, retries                                      |
+| **Doctor Management**         | Doctors, referral configuration, Doctor Shares/Commissions                                |
+| **Analytics**                 | Tenant-scoped management/operational aggregations                                         |
+| **Public Portal**             | Public booking, public catalog/rates, report lookup                                       |
+| **Sync**                      | Outbox, synchronization jobs, deployment-boundary reconciliation                          |
+| **Audit**                     | Cross-cutting record of clinically, financially, and administratively significant actions |
+
+### Current Implementation Note
+
+These boundaries are **not yet fully event-decoupled**.
+
+Current services often call other modules/services directly.
+
+That is acceptable for the existing modular monolith as long as domain ownership remains clear.
 
 ## Domain Events
 
-**Approach:** in-process event dispatcher (modular monolith), not a distributed message bus — at current scale (single branch, <50/day), a broker like Kafka/RabbitMQ is operational overkill. Each bounded context raises events through a shared in-process dispatcher; other contexts subscribe without the raising context knowing who's listening. When the product later runs as real multi-tenant SaaS at higher volume, the same dispatcher interface can be re-pointed at a real queue without changing any context's business logic.
+### Product Direction
 
-**Design rule:** events are facts about what already happened (past tense), not commands. `ResultReleased` is an event; "ReleaseResult" is the command that, once successful, raises it.
+Domain events remain the preferred long-term mechanism for cross-cutting reactions to completed business actions.
 
-**Core event list (v1):** `PatientRegistered` · `BookingRequested` / `BookingCreated` / `BookingConfirmed` / `BookingCancelled` / `BookingExpired` / `BookingConverted` · `InvoiceIssued` / `InvoiceVoided` / `InvoiceClosed` / `InvoiceRefunded` · `PaymentReceived` / `PaymentFailed` / `PaymentRefunded` · `SampleCollected` / `SampleInTransit` / `SampleReceived` / `SampleAccepted` / `SampleRejected` / `SampleRecollected` / `TestingStarted` / `SampleTestingCompleted` / `SampleDiscarded` · `ResultEntered` / `ResultReleased` / `ResultAmended` / `ResultVoided` / `CriticalValueDetected` · `ReportGenerated` / `ReportPartialReleased` / `ReportAmended` / `ReportArchived` / `ReportPrinted` / `ReportDownloaded` · `NotificationQueued` / `NotificationSent` / `NotificationFailed` / `NotificationAbandoned` · `DoctorCommissionCalculated` / `DoctorCommissionReversed` / `DoctorCommissionPaid` / `DoctorCommissionClawbackRequested` / `DoctorCommissionClawbackSettled` · `SyncJobQueued` / `SyncJobCompleted` / `SyncJobFailed` / `SyncJobAbandoned`
+Examples:
+
+```text
+Result finalized
+    ↓
+ResultReleased
+    ├── Reporting reacts
+    ├── Notification reacts
+    ├── Audit reacts
+    └── Sync reacts
+```
+
+This prevents the Laboratory module from needing hardcoded knowledge of every downstream consumer.
+
+### Current Status
+
+**Designed / not yet implemented as a general event-dispatch system.**
+
+The current codebase contains direct service calls and TODOs around event concepts.
+
+Do not document the event system as operational until a shared dispatcher/outbox pattern actually performs these interactions.
+
+### Event Naming Rule
+
+Events describe facts that already happened and use past tense.
+
+Examples:
+
+* `PatientRegistered`
+* `BookingCreated`
+* `BookingConfirmed`
+* `InvoiceIssued`
+* `PaymentReceived`
+* `SampleCollected`
+* `SampleRejected`
+* `ResultEntered`
+* `ResultReleased`
+* `ResultAmended`
+* `ReportGenerated`
+* `ReportPrinted`
+* `NotificationQueued`
+* `DoctorCommissionCalculated`
+* `SyncJobQueued`
+
+### Candidate Product Event Catalog
+
+The following represents the desired domain vocabulary rather than guaranteed current implementation:
+
+**Patient**
+
+* `PatientRegistered`
+* `PatientUpdated`
+
+**Booking**
+
+* `BookingRequested`
+* `BookingCreated`
+* `BookingConfirmed`
+* `BookingCheckedIn`
+* `BookingCancelled`
+* `BookingExpired`
+* `BookingConverted`
+
+**Billing**
+
+* `InvoiceIssued`
+* `InvoiceVoided`
+* `InvoiceClosed`
+* `InvoiceRefunded`
+* `PaymentReceived`
+* `PaymentRefunded`
+* `PaymentFailed`
+
+**Laboratory**
+
+* `SampleCollected`
+* `SampleReceived`
+* `SampleAccepted`
+* `SampleRejected`
+* `SampleRecollected`
+* `TestingStarted`
+* `SampleTestingCompleted`
+* `ResultEntered`
+* `ResultReleased`
+* `ResultAmended`
+* `ResultVoided`
+* `CriticalValueDetected`
+
+**Reporting**
+
+* `ReportGenerated`
+* `ReportReady`
+* `ReportAmended`
+* `ReportPrinted`
+* `ReportDownloaded`
+* `ReportArchived`
+
+**Notification**
+
+* `NotificationQueued`
+* `NotificationSent`
+* `NotificationFailed`
+* `NotificationAbandoned`
+
+**Doctor**
+
+* `DoctorCommissionCalculated`
+* `DoctorCommissionReversed`
+* `DoctorCommissionPaid`
+* `DoctorCommissionClawbackRequested`
+* `DoctorCommissionClawbackSettled`
+
+**Synchronization**
+
+* `SyncJobQueued`
+* `SyncJobCompleted`
+* `SyncJobFailed`
+* `SyncJobAbandoned`
 
 ## State Machines
 
-*Notation used throughout: **Actor** = who/what is authorized to trigger the transition. **Event** = the domain event emitted. States not listed as reachable from a given state are forbidden — see each entity's "Forbidden Transitions" list.*
+State-machine definitions below describe both current behavior and intended mature product behavior.
+
+Every state machine explicitly states implementation status.
 
 ### Booking
 
-States: `PendingReview` · `Confirmed` · `CheckedIn` · `Converted` · `Expired` · `Cancelled`
+States represented in the current domain include:
+
+`PENDING_REVIEW` · `CONFIRMED` · `CHECKED_IN` · `CONVERTED` · `EXPIRED` · `CANCELLED`
 
 ```mermaid
 stateDiagram-v2
-    [*] --> PendingReview: online booking
-    [*] --> Confirmed: walk-in booking
+    [*] --> PendingReview: public request
+    [*] --> Confirmed: staff-created / accepted
     PendingReview --> Confirmed: staff accepts
-    PendingReview --> Cancelled: staff rejects
-    Confirmed --> CheckedIn: patient arrives with Booking ID
-    Confirmed --> Expired: time window elapses
-    Confirmed --> Cancelled: patient/staff cancels
-    CheckedIn --> Converted: invoice generated
-    CheckedIn --> Cancelled: patient leaves before invoicing
+    PendingReview --> Cancelled: rejected/cancelled
+    Confirmed --> CheckedIn: patient arrives
+    Confirmed --> Expired: expiry policy
+    Confirmed --> Cancelled: cancelled
+    CheckedIn --> Converted: billing/visit progresses
+    CheckedIn --> Cancelled: cancelled before conversion
 ```
 
-| From | To | Actor | Event |
-|---|---|---|---|
-| *(new)* | PendingReview | Patient (website) | `BookingRequested` |
-| *(new)* | Confirmed | Reception | `BookingCreated` |
-| PendingReview | Confirmed | Reception | `BookingConfirmed` |
-| PendingReview | Cancelled | Reception | `BookingCancelled` |
-| Confirmed | CheckedIn | Reception | `PatientCheckedIn` |
-| Confirmed | Expired | System | `BookingExpired` |
-| Confirmed/CheckedIn | Cancelled | Reception/Admin | `BookingCancelled` |
-| CheckedIn | Converted | Reception | `BookingConverted` |
+### Current Implementation
 
-**Forbidden:** `Expired → Converted` (re-book instead); `Converted → Cancelled` direct (must go through Invoice/Payment); `Cancelled → *` (terminal); `PendingReview → CheckedIn` (must pass through Confirmed).
+Implemented operations include:
+
+* create booking;
+* public `PENDING_REVIEW` booking;
+* confirm;
+* check in;
+* cancel.
+
+`EXPIRED` exists in the model but automatic expiry processing is not currently implemented.
+
+### Target Rules
+
+| From                | To            | Actor/Permission             | Status                 |
+| ------------------- | ------------- | ---------------------------- | ---------------------- |
+| *(new)*             | PendingReview | Public booking endpoint      | Implemented foundation |
+| *(new)*             | Confirmed     | Authorized staff             | Implemented            |
+| PendingReview       | Confirmed     | Authorized staff             | Implemented            |
+| PendingReview       | Cancelled     | Authorized staff             | Implemented            |
+| Confirmed           | CheckedIn     | Authorized staff             | Implemented            |
+| Confirmed           | Expired       | System/background job        | Planned                |
+| Confirmed/CheckedIn | Cancelled     | Authorized staff             | Implemented            |
+| CheckedIn           | Converted     | Billing/application workflow | Partial                |
+
+**Forbidden target behavior:** cancelled or expired bookings must not silently become active again. Re-entry should occur through an explicit new/rebook workflow.
 
 ### Invoice
 
-States: `Draft` · `Issued` · `Voided` · `Closed` · `Refunded`
+Current invoice states include concepts equivalent to:
+
+`DRAFT` · `ISSUED` · `VOIDED` · `CLOSED` · `REFUNDED`
 
 ```mermaid
 stateDiagram-v2
     [*] --> Draft
-    Draft --> Issued: finalized
-    Issued --> Voided: admin voids before payment
-    Issued --> Closed: full payment received
-    Closed --> Refunded: refund processed
+    Draft --> Issued
+    Issued --> Closed: fully paid
+    Issued --> Voided: administrative void
+    Closed --> Refunded: approved refund
 ```
 
-| From | To | Actor | Event |
-|---|---|---|---|
-| Draft | Issued | Reception | `InvoiceIssued` |
-| Issued | Voided | **Admin only** | `InvoiceVoided` |
-| Issued | Closed | System (on full `PaymentReceived`) | `InvoiceClosed` |
-| Closed | Refunded | **Admin only** | `InvoiceRefunded` |
+### Current Implementation
 
-**Forbidden:** `Draft → Closed` (must pass through Issued); `Voided → Issued` and `Refunded → Closed` (both terminal). Only Admin can void or refund.
+Implemented:
+
+* invoice creation;
+* line-item price snapshots;
+* manual discounts;
+* partial/full payment tracking;
+* automatic paid/closed-style financial state behavior.
+
+Partial/scaffolded or planned:
+
+* complete invoice void workflow;
+* complete refund workflow;
+* approval/audit behavior around high-risk corrections.
+
+Enum/state representation is not proof that a working UI/API workflow exists.
+
+### Target Rules
+
+* an invoice with collected money should not simply be deleted;
+* financial corrections must retain history;
+* refunds and voids require explicit authorization;
+* refund state must reconcile Payment and Doctor Share behavior;
+* significant actions must create audit records.
 
 ### Payment
 
-States: `Pending` · `PartiallyReceived` · `FullyReceived` · `Voided` · `Refunded` · `Failed`
+Payments currently exist as individual records associated with invoices.
 
-```mermaid
-stateDiagram-v2
-    [*] --> Pending
-    Pending --> PartiallyReceived
-    Pending --> FullyReceived
-    Pending --> Voided: invoice voided
-    Pending --> Failed
-    Failed --> Pending: retry
-    PartiallyReceived --> FullyReceived
-    PartiallyReceived --> Refunded
-    FullyReceived --> Refunded
-```
+The financial business state of an invoice is derived from recorded amounts and balances.
 
-| From | To | Actor | Event |
-|---|---|---|---|
-| Pending | PartiallyReceived / FullyReceived | Reception | `PaymentReceived` |
-| PartiallyReceived | FullyReceived | Reception | `PaymentReceived` (full) |
-| PartiallyReceived / FullyReceived | Refunded | **Admin only** | `PaymentRefunded` |
+### Implemented
 
-**Forbidden:** `Pending → Refunded` direct (use `Voided` — no money was ever collected); `Refunded → *received states*` (terminal, no "un-refunding"). Reception records payment; only Admin refunds.
+* record payment;
+* partial payment;
+* full payment;
+* multiple represented payment methods;
+* outstanding balance calculation.
+
+### Planned / Hardening
+
+* refund processing;
+* void/reversal workflow;
+* concurrency-safe payment-total updates;
+* stronger financial audit trail;
+* future gateway/provider processing.
+
+### Financial Invariant
+
+The source of truth must remain reconcilable from payment records.
+
+Two concurrent payment operations must not be allowed to corrupt invoice totals.
 
 ### Sample
 
-States: `PendingCollection` · `Collected` · `InTransit` · `ReceivedAtLab` · `Accepted` · `Rejected` · `Recollected` · `InTesting` · `Completed` · `Discarded`
+The schema/domain contains a richer sample lifecycle including states such as:
+
+`PENDING_COLLECTION` · `COLLECTED` · `IN_TRANSIT` · `RECEIVED_AT_LAB` · `ACCEPTED` · `REJECTED` · `RECOLLECTED` · `IN_TESTING` · `COMPLETED` · `DISCARDED`
 
 ```mermaid
 stateDiagram-v2
     [*] --> PendingCollection
     PendingCollection --> Collected
     Collected --> InTransit: home collection
-    Collected --> ReceivedAtLab: on-site
+    Collected --> ReceivedAtLab: local collection
     InTransit --> ReceivedAtLab
     ReceivedAtLab --> Accepted
     ReceivedAtLab --> Rejected
@@ -185,72 +406,140 @@ stateDiagram-v2
     Accepted --> InTesting
     InTesting --> Completed
     Completed --> Discarded
-    Rejected --> Discarded: test cancelled
 ```
 
-| From | To | Actor | Event |
-|---|---|---|---|
-| PendingCollection | Collected | Sample Collector/Lab Tech | `SampleCollected` |
-| Collected | InTransit | Sample Collector (home collection) | `SampleInTransit` |
-| Collected/InTransit | ReceivedAtLab | Lab Tech | `SampleReceived` |
-| ReceivedAtLab | Accepted/Rejected | Lab Tech | `SampleAccepted`/`SampleRejected` |
-| Rejected | Recollected | Sample Collector | `SampleRecollected` |
-| Accepted | InTesting | Lab Tech | `TestingStarted` |
-| InTesting | Completed | Lab Tech | `SampleTestingCompleted` |
-| Completed/Rejected | Discarded | Lab Tech/Admin | `SampleDiscarded` |
+### Current Implementation
 
-**Forbidden:** `PendingCollection → Accepted` (must physically arrive first); `Discarded → *` (terminal); `Rejected → Completed` direct (must recollect). Reception has no authority here — separation between money-handling and specimen-handling.
+Substantial workflow exists for:
+
+* collecting;
+* receiving;
+* accepting;
+* rejecting;
+* starting testing;
+* outsourcing/un-outsourcing;
+* sample viewing/search.
+
+Some richer states and transitions such as systematic recollection, transit, completion/disposal policy are not yet complete end-to-end workflows.
+
+### Target Rules
+
+* rejected samples cannot silently become accepted without an explicit corrective action;
+* collection/recollection history should remain traceable;
+* physical sample status must not be inferred solely from result state;
+* branch/tenant ownership must remain consistent.
 
 ### Result
 
-States: `Entered` · `Released` · `Superseded` · `Voided`
+Core states:
+
+`ENTERED` · `RELEASED` · `SUPERSEDED` · `VOIDED`
+
+The old assumption that entry automatically equals release is **superseded**.
+
+Current LabFlow explicitly separates result entry from finalization.
 
 ```mermaid
 stateDiagram-v2
     [*] --> Entered
-    Entered --> Released: lab tech releases (single-step)
-    Entered --> Voided: test cancelled before release
-    Released --> Superseded: correction
+    Entered --> Released: finalize
+    Released --> Superseded: amended
+    Superseded --> Released: replacement result exists separately
+    Entered --> Voided: future/admin correction flow
 ```
 
-| From | To | Actor | Event |
-|---|---|---|---|
-| *(new)* | Entered | Lab Tech | `ResultEntered` |
-| Entered | Released | Lab Tech | `ResultReleased` (+ `CriticalValueDetected` if applicable) |
-| Entered | Voided | Admin | `ResultVoided` |
-| Released | Superseded | Lab Tech/Admin | `ResultAmended` (creates a **new** Result record) |
+### Implemented
 
-**Forbidden:** `Released → Entered` (corrections go forward via Superseded + new record, never backward); `Superseded → Released` and `Voided → Released` (terminal). Only Lab Tech releases — no separate authorization role, per confirmed client workflow, but the authority still sits with clinical staff, not Reception/Admin.
+* result entry;
+* multiple result values/parameters;
+* range comparison;
+* abnormal flags;
+* critical flags;
+* save before finalization;
+* explicit finalize;
+* reopen;
+* amend;
+* old-result supersession.
+
+### Required Domain Invariants
+
+Before a result can be considered clinically released:
+
+* the Test must belong to the relevant patient/invoice/sample context;
+* required Test Parameters must be satisfied;
+* result values must belong to the correct Test definition;
+* finalization must operate on internally trusted relationships rather than accepting arbitrary ID combinations from the client;
+* amendment must preserve the previous released record;
+* patient-facing reporting must use the current released version rather than superseded values.
+
+Some of these invariants require additional code hardening.
+
+### Result Amendment
+
+A correction must create or preserve version history.
+
+Conceptually:
+
+```text
+Released Result v1
+      ↓ amendment
+Superseded Result v1
+      +
+Released Result v2
+```
+
+Never silently overwrite a previously released clinical result.
+
+Future event/audit/notification behavior should ensure relevant recipients and systems can identify that a report was amended.
 
 ### Report
 
-States: `Pending` · `PartialReady` · `Complete` · `Amended` · `Archived`. **`Printed`/`Downloaded` are logged actions, not states** — a report can be printed/downloaded repeatedly without changing its lifecycle stage.
+Current report statuses include concepts around:
 
-```mermaid
-stateDiagram-v2
-    [*] --> Pending
-    Pending --> PartialReady: some results released, policy allows partial
-    Pending --> Complete: all results released
-    PartialReady --> Complete
-    Complete --> Amended: linked result superseded
-    Complete --> Archived
-    Amended --> Archived
-```
+* pending;
+* partial readiness;
+* complete;
+* amended.
 
-| From | To | Actor | Event |
-|---|---|---|---|
-| Pending | PartialReady | System | `ReportPartialReleased` |
-| Pending/PartialReady | Complete | System | `ReportGenerated` |
-| Complete | Amended | System (on `ResultAmended`) | `ReportAmended` |
-| Complete/Amended | Archived | System (retention job) | `ReportArchived` |
+Report readiness derives from laboratory result state.
 
-Logged actions: Print (Reception/Lab Tech) → `ReportPrinted`; Download (Patient) → `ReportDownloaded`.
+### Implemented
 
-**Forbidden:** `Complete → Pending` and `PartialReady → Pending` (no rollback — corrections go via Amended). Entirely system-driven — no staff role directly sets Report state; it's always derived from linked Results, so it can never drift out of sync.
+* report readiness calculation;
+* PDF generation;
+* finalized-result requirement;
+* payment-gated public availability;
+* staff printing;
+* print/reprint tracking;
+* amendment foundations.
+
+### Current Hardening Requirement
+
+Patient-facing generated reports must contain **only the current applicable released results**.
+
+Superseded results belong to internal history and must not appear as duplicate active results in the current patient report.
+
+### Partial Reports
+
+The domain supports the idea of partial readiness.
+
+Full configurable partial-release behavior remains **planned/partial**.
+
+Until configurable release policy exists, documentation/UI must not imply that every `PARTIAL_READY` state is automatically patient-releasable.
 
 ### Notification
 
-States: `Queued` · `Sending` · `Sent` · `Failed` · `Retrying` · `Abandoned`
+Notification states represented by the product include queued/delivery/failure concepts.
+
+### Current Implementation
+
+* Notification persistence;
+* provider send attempts;
+* success/failure state;
+* attempt/error information;
+* SMS integration.
+
+### Planned State Lifecycle
 
 ```mermaid
 stateDiagram-v2
@@ -259,218 +548,529 @@ stateDiagram-v2
     Sending --> Sent
     Sending --> Failed
     Failed --> Retrying
-    Retrying --> Sending
-    Retrying --> Abandoned
+    Retrying --> Sent
+    Retrying --> Failed
+    Failed --> Abandoned: retry threshold
 ```
 
-**Forbidden:** `Sent → *` (terminal — a follow-up message is a new Notification); `Abandoned → Sending` automatic (requires a fresh Notification, prevents infinite retry loops). Entirely system/background-agent driven.
+The automatic dispatcher/retry worker is not yet implemented.
 
-### Commission
+Network communication should ultimately happen after the local business transaction succeeds.
 
-States: `Calculated` · `Payable` · `Paid` · `Reversed` · `ClawbackPending` · `Settled`
+### Commission / Doctor Share
 
-```mermaid
-stateDiagram-v2
-    [*] --> Calculated
-    Calculated --> Payable
-    Calculated --> Reversed: invoice refunded before payout
-    Payable --> Paid
-    Payable --> Reversed
-    Paid --> ClawbackPending: invoice refunded AFTER payout
-    ClawbackPending --> Settled
-```
+Current implementation supports doctor/referral financial calculation.
 
-**Forbidden:** `Paid → Reversed` direct (money already moved — must go via `ClawbackPending → Settled`); `Reversed → Paid` (terminal). Only Admin triggers actual payout or clawback settlement.
+Implemented commercial forms include:
+
+* percentage-based share;
+* fixed share;
+* per-test fixed arrangements.
+
+The applicable amount/rate is snapshotted so later configuration changes should not retroactively alter historical transactions.
+
+### Implemented
+
+* doctor records;
+* referral association;
+* commission/share configuration;
+* calculation;
+* stored historical amounts;
+* doctor dashboards/statements.
+
+### Planned / Partial
+
+* payable lifecycle;
+* payout processing;
+* reversal;
+* refund-related clawback;
+* settlement audit.
 
 ### Sync Job
 
-States: `Queued` · `Syncing` · `Synced` · `Failed` · `Retrying` · `Abandoned`
+`SyncOutbox` exists as schema groundwork.
+
+A complete Sync Job state machine is **designed, not implemented**.
+
+Target states may include:
+
+`QUEUED` · `PROCESSING` · `COMPLETED` · `FAILED` · `ABANDONED`
 
 ```mermaid
 stateDiagram-v2
     [*] --> Queued
-    Queued --> Syncing
-    Syncing --> Synced
-    Syncing --> Failed
-    Failed --> Retrying
-    Retrying --> Syncing
-    Retrying --> Abandoned
+    Queued --> Processing
+    Processing --> Completed
+    Processing --> Failed
+    Failed --> Queued: retry
+    Failed --> Abandoned: retry threshold
 ```
 
-**Forbidden:** `Synced → Syncing` (terminal — a data change creates a new Sync Job, e.g. for an amended report); `Abandoned → Synced` automatic. Entirely system-driven; abandoned jobs should surface on an admin dashboard.
+Production implementation must additionally support:
+
+* idempotency;
+* tenant identity;
+* payload versioning;
+* timestamps;
+* retry counters;
+* last error;
+* authentication;
+* reconciliation.
 
 ## Business Workflows
 
-### Core Patient Journey (normal, walk-in, online booking, home collection, repeat patient)
+### Core Patient Journey
+
+The shared conceptual journey remains:
 
 ```mermaid
 flowchart TD
-    A[Patient arrives/contacts lab] --> B{New or existing?}
-    B -->|New| C[Register patient]
-    B -->|Existing/repeat| D[Search by phone/CNIC -> pull history]
-    C --> E{Visit type}
-    D --> E
-    E -->|Walk-in| F[Select tests/package at counter]
-    E -->|Online booking| G[Booking ID generated -> SMS sent]
-    E -->|Home collection| H[Schedule collector, address, route, time window]
-    F --> I[Generate Invoice]
-    G --> I
-    H --> I
-    I --> J{Payment}
-    J -->|Full| K[Paid]
-    J -->|Partial| L[Partial - balance tracked]
-    J -->|Corporate| M[Deferred - see Corporate flow]
-    K --> N[Sample Collection]
-    L --> N
-    M --> N
-    N --> O{Quality check}
-    O -->|Rejected| P[Sample Rejection flow]
-    O -->|Accepted| Q[Label -> send to lab]
-    Q --> R[Result Entry]
-    R --> S{Critical value?}
-    S -->|Yes| T[Urgent doctor alert]
-    S -->|No| U[Standard path]
-    T --> U
-    U --> V[Report generated]
-    V --> W{Payment status?}
-    W -->|Full| X[SMS: view/download online]
-    W -->|Partial/unpaid| Y[SMS: ready for collection]
-    X --> Z[Archive]
-    Y --> Z
+    A[Patient identified / registered] --> B[Tests or Package selected]
+    B --> C[Invoice created]
+    C --> D[Payment recorded full/partial/pending]
+    D --> E[Sample workflow]
+    E --> F[Result entry]
+    F --> G[Result finalization]
+    G --> H[Report readiness]
+    H --> I{Public access eligible?}
+    I -->|Ready + paid| J[Downloadable report]
+    I -->|Ready + unpaid/partial| K[Ready for collection / payment required]
+    H --> L[Staff report workflow]
 ```
 
-**Key decision points:** patient matching should key on phone/CNIC (typo-tolerant), not name alone. Walk-in and online booking converge into the same Invoice/Booking pipeline — walk-in isn't a lesser path. Home collection needs its own sub-fields (collector, address, route, time window). Payment status ("Partial") gates only what the website shows, not whether service proceeds. Critical-value alerts are additive to the standard release, not a replacement for it.
+A Booking may precede invoicing, especially for:
 
-**Decided — Home collection:** built as part of v1 even though not originally in the client's own requirement list (a vendor-recommended addition) — radius, fee, maximum bookings per day, and scheduling windows are all configurable rather than hardcoded (see Configuration vs. Hardcoded below).
+* public online booking;
+* scheduled work;
+* future home collection.
 
-**Decided — Online booking payment:** no upfront payment required. An online booking only reserves a slot; payment is collected at reception or at the point of home collection. A future SaaS deployment can enable deposits as an optional, configurable feature — not built now.
+A walk-in operational flow may proceed directly through registration and invoice creation without requiring the user experience to expose every theoretical domain step.
+
+### Walk-In
+
+1. search for existing Patient;
+2. register if necessary;
+3. choose Tests/Package;
+4. optionally choose referring Doctor;
+5. apply allowed discount;
+6. create Invoice;
+7. record payment if collected;
+8. create/collect Sample;
+9. enter Results;
+10. finalize Results;
+11. mark/report readiness;
+12. print or expose report according to business rules.
+
+### Repeat Patient
+
+Patient identity is reused.
+
+A repeat visit must create new transactional records rather than mutating historical invoice/sample/result/report records.
+
+A future "book again" UX may preload previous selections but must produce a new transaction.
+
+### Online Booking
+
+Current public website can create a booking request.
+
+Target journey:
+
+```text
+Patient submits request
+       ↓
+Pending Review
+       ↓
+Staff confirms
+       ↓
+Patient arrives/checks in
+       ↓
+Normal billing/laboratory journey
+```
+
+For Offline / Enterprise, future hosted booking synchronization must enter through a controlled queue/review boundary rather than unrestricted public writes to the local operational database.
+
+### Home Collection
+
+Home-collection fields and concepts exist in the domain/schema.
+
+The complete product workflow is **partial/scaffolded**.
+
+Target workflow eventually includes:
+
+* address;
+* scheduling window;
+* collection fee;
+* service-area rules;
+* assigned collector;
+* collection status;
+* transit/receipt;
+* possible route planning;
+* failed/recollection scenarios.
+
+Do not describe Home Collection as operationally complete until these pieces exist across backend and user interfaces.
+
+### Payment & Report Access
+
+Clinical result finalization is distinct from patient online report access.
+
+The patient-facing public rule currently aims for:
+
+```text
+Result finalized?
+    no  → Not ready
+    yes ↓
+
+Invoice fully paid?
+    no  → Ready for collection / payment required
+    yes → Report available
+```
+
+The medical record must not be deleted or historically rewritten merely because payment status changes later.
 
 ### Exception Flows
 
-**Sample Rejection/Recollection:** rejected sample → immediate recollection if patient on-site, else SMS/call to return; recharge only if patient-caused (fasting not observed), never for lab-side error. Recollection must trace back to the same invoice/booking, never a phantom duplicate.
+#### Sample Rejected
 
-**Cancelled Test:** cancellation before collection is a simple line-item removal; after collection but before processing, discards the sample and adjusts the invoice; after a result exists, it cannot be "cancelled" — use Refund/Void instead. Commission reverses if it was already calculated. Cancelling one test within a Package needs a repricing rule (see Pricing Engine).
+Target behavior:
 
-**Refund — decided policy:** if the test was **not yet performed**, refund in full. If the test **was already performed**, no refund. For a **package**, only the cancelled/not-performed portion is refunded, recalculated through the Pricing Engine's repricing rule — never a flat pro-rata split. Results are **never deleted** regardless of refund outcome — a released report is never hidden by a later refund; the medical record stands. Patient-dispute refunds still require Admin approval per the state machine. If commission was already paid before the refund, it routes through the Commission clawback state, not a silent reversal.
+* retain rejection reason/history;
+* prevent normal testing progression from pretending the rejected specimen remained valid;
+* support future recollection;
+* optionally notify patient/staff.
 
-**Partial Payments:** result release proceeds regardless of payment status (per client's confirmed no-authorization-gate policy); the website portal is the only thing gated by balance — full balance unlocks the downloadable report, partial shows "ready for collection" only.
+Recollection workflow is not yet fully implemented.
 
-**Result Amendment:** a correction always creates a new, versioned Result (`Superseded` + new `Entered→Released` record), never an edit-in-place. **Decided:** an amendment notifies everyone who touched the original — patient (SMS: "your report has been updated"), the referring doctor, the audit log, and the website (new sync push replacing the prior version) — on the principle that everyone who previously received the report should know it changed.
+#### Test Cancelled
 
-**Partial Report Release — decided:** configurable per lab policy, **defaulting to waiting for the complete report** rather than releasing partial results. Some labs want partial release for long-running tests (e.g., culture, 48h); others never want a partial report in a patient's hands. This is a setting, not a hardcoded behavior — when enabled, the `PartialReady` report carries an "X of Y complete" label and its own SMS, and the final complete report supersedes it via the same amendment mechanism, never as an unrelated new report.
+A complete product cancellation/refund workflow remains planned.
 
-### Corporate Accounts
+The final design must coordinate:
+
+* test state;
+* sample work already performed;
+* refund eligibility;
+* package repricing;
+* doctor share/commission;
+* report history;
+* audit records.
+
+#### Refund
+
+The domain direction is:
+
+* refund/void must be explicit;
+* money movement must remain auditable;
+* completed clinical results must not disappear merely because a refund occurs;
+* doctor financial effects must be reconciled rather than silently edited.
+
+Exact refund-policy configuration and UI remain to be completed.
+
+#### Result Amendment
+
+Implemented foundation:
+
+* reopen/amend;
+* supersede old result;
+* release replacement.
+
+Target completion:
+
+* complete audit attribution;
+* public report replacement;
+* appropriate patient/doctor notification;
+* clean version history.
+
+#### Partial Report Release
+
+The concept belongs to the product.
+
+Policy should eventually be configurable by tenant/laboratory.
+
+The current implementation should not be described as a finished configurable partial-release system.
+
+## Corporate Accounts
+
+Corporate Accounts belong to the LabFlow product domain but are currently **partial/scaffolded**.
+
+Schema foundations include Company and patient/company relationships.
+
+Target workflow:
 
 ```mermaid
 flowchart TD
-    A[Company account registered] --> B[Employees linked to Company]
-    B --> C[Employee visits for test]
-    C --> D{Billing mode}
-    D -->|Company pays all| E[Invoice tagged to Company]
-    D -->|Split/co-pay| F[Split invoice: company + employee portions]
-    E --> G[Monthly consolidated invoice to Company]
+    A[Company account] --> B[Employees / patients linked]
+    B --> C[Employee receives laboratory services]
+    C --> D{Billing arrangement}
+    D -->|Company pays| E[Company-sponsored invoice]
+    D -->|Split/co-pay| F[Shared financial responsibility]
+    E --> G[Company statement / settlement]
     F --> G
-    G --> H[Itemized statement + reconciliation]
 ```
 
-**Decided:** result-sharing policy is configurable **per company contract** — some corporate accounts receive billing-only visibility, others receive full medical reports for their linked employees, set at Company-account level rather than a single global rule.
+Future corporate product behavior may include:
 
-### Doctor Referrals
+* contracted rates;
+* employee eligibility;
+* company-paid services;
+* patient co-pay;
+* monthly statements;
+* credit limits;
+* company-specific result-sharing policy;
+* account reconciliation.
+
+These workflows are **not currently implemented end-to-end**.
+
+Corporate data models must remain tenant-scoped.
+
+## Doctor Referrals
+
+Doctor referral functionality is substantially more mature.
+
+Current flow:
 
 ```mermaid
 flowchart TD
-    A[Patient registers with referring doctor] --> B[Invoice lines linked to doctor]
-    B --> C{Commission type}
-    C -->|Fixed %| D[Commission = amount x rate, snapshotted at invoice time]
-    C -->|Per-test fixed amount| E[Commission = sum of per-test amounts]
-    D --> F[Recorded, pending payout]
-    E --> F
-    F --> G{Invoice later refunded?}
-    G -->|Yes| H[Reverse/clawback per Commission state machine]
-    G -->|No| I[Included in monthly summary -> payout]
+    A[Referring doctor selected] --> B[Invoice/transaction linked]
+    B --> C[Share arrangement snapshotted]
+    C --> D[Doctor share calculated]
+    D --> E[Analytics / Statement]
 ```
 
-Commission rate is snapshotted at invoice time so a later rate change never retroactively alters historical figures. **Decided:** doctors paying on behalf of patients is not required for v1, but the architecture supports doctor credit accounts as a future extension, with dynamic commission configuration (percentage-based or fixed-amount, per doctor) rather than a single hardcoded model — so a doctor's arrangement (refer-for-commission vs. refer-and-pay) is a configuration choice, not a schema change.
+Current implementation includes:
 
-### Package Tests
+* doctor management;
+* doctor selection during operational workflow;
+* multiple share/commission models;
+* historical snapshot;
+* analytics;
+* statement PDF.
+
+Future completion includes payout/reversal/clawback lifecycle and related audit controls.
+
+A doctor's commission and any patient discount must remain separate business concepts.
+
+## Package Tests
+
+Packages are currently **catalog/billing foundations**, not a complete laboratory workflow.
+
+Current behavior supports:
+
+* creating/managing packages;
+* associating tests with a package;
+* selecting a package in billing;
+* storing a package invoice line.
+
+The current implementation does **not yet reliably perform the complete operational expansion required for laboratory processing/reporting**.
+
+Target package workflow:
 
 ```mermaid
 flowchart TD
-    A["Package selected, e.g. 'Diabetes Package'"] --> B[Expands to constituent tests]
-    B --> C{Nested package?}
-    C -->|Yes| D[Recursively expand nested package]
-    C -->|No| E[Flat list of tests]
-    D --> F[Determine sample requirements across all tests]
-    E --> F
-    F --> G[One sample may serve multiple tests]
-    G --> H[Invoice shows package price, not sum of individual prices]
-    H --> I{Extra test added outside package?}
-    I -->|Yes| J[Standalone-priced line item]
+    A[Package selected] --> B[Resolve constituent Tests]
+    B --> C[Create operational test requirements]
+    C --> D[Determine sample needs]
+    D --> E[Process each required Test]
+    E --> F[Produce Results]
+    F --> G[Report constituent Results]
+    G --> H[Preserve package commercial price on Invoice]
 ```
 
-**Decided:** repricing when a package loses one constituent test is a configurable pricing-engine rule (see Pricing Engine below), defaulting to automatic recalculation through the pipeline — never hardcoded as a fixed pro-rata split.
+### Required Invariants
+
+* package selection must create operational test obligations;
+* every constituent test must be processable in Laboratory workflow;
+* report readiness must account for package tests;
+* invoice can retain package commercial presentation;
+* package composition/rates at transaction time must not retroactively mutate historical invoices;
+* nested package support, if retained as a product requirement, must prevent cycles;
+* cancellations require explicit repricing rules.
+
+Package expansion is a high-priority gap because catalog/billing visibility without laboratory expansion creates a misleading "implemented" state.
 
 ## Pricing Engine
 
-**Principle:** price is never a flat column on a Test row — it's the output of a rule pipeline evaluated at invoice time and then snapshotted (so later rule changes never retroactively alter a historical invoice).
+The long-term product supports a pricing pipeline, but today's code implements only part of it.
+
+### Current Implemented Pricing Foundation
+
+Current invoice creation supports concepts including:
+
+* catalog base price;
+* invoice-line price snapshot;
+* manual discount;
+* discount reason;
+* doctor share/commission calculated separately.
+
+Conceptually today:
 
 ```mermaid
 flowchart LR
-    A[Base Price] --> B[Doctor/Referral Discount]
-    B --> C[Corporate Discount]
-    C --> D[Campaign/Seasonal Offer]
-    D --> E[Manual Discount - requires reason + authorized role]
-    E --> F[Tax, if applicable]
-    F --> G[Final Price - snapshotted on the Invoice line]
+    A[Catalog Price] --> B[Manual Discount]
+    B --> C[Final Invoice-Line Amount]
 ```
 
-- **Base Price** — the standalone Test or Package price from the catalog.
-- **Doctor/Referral Discount** — if the referring doctor has a negotiated patient discount (distinct from their own commission — these are two separate numbers, not opposite sides of the same one).
-- **Corporate Discount** — rate agreed with a linked Company account.
-- **Campaign/Seasonal Offer** — time-boxed promotional pricing (e.g., a "Ramadan Offer"), configured with a start/end date so it naturally expires rather than needing manual removal.
-- **Manual Discount** — a staff-applied override, which should require a reason code and be limited to a role (Admin, or Reception up to a configured ceiling) — this is an audit-log entry, not a silent price edit.
-- **Tax** — applied last if/when applicable (not currently required to be modeled with a specific rate — flagged as configuration, see `02_Technical_Architecture.md § Feature Flags`/Configuration below).
-- **Package repricing on partial cancellation — decided:** removing one test from a package triggers automatic recalculation through this same pipeline (not a flat pro-rata split, and not hardcoded) — configurable per package if a specific package needs a different rule (e.g., a minimum-tests-remaining threshold to keep the package rate).
+### Target Product Pricing Engine
+
+```mermaid
+flowchart LR
+    A[Base Price] --> B[Contract / Referral Rule]
+    B --> C[Corporate Rule]
+    C --> D[Promotion / Campaign]
+    D --> E[Authorized Manual Discount]
+    E --> F[Tax if applicable]
+    F --> G[Final Snapshotted Amount]
+```
+
+Potential layers include:
+
+* base Test/Package price;
+* doctor/referral patient pricing arrangement;
+* corporate contract price;
+* promotion/campaign;
+* manual override;
+* tax where applicable.
+
+### Pricing Rules
+
+* final transactional values are snapshotted;
+* changing a catalog price must not alter historical invoices;
+* a doctor's commission is not simply the inverse of a patient discount;
+* manual discount authority should be permission/configuration controlled;
+* significant overrides should be auditable;
+* package repricing must use explicit product rules rather than accidental arithmetic;
+* tenant configuration may influence pricing behavior.
+
+Do not describe the complete pipeline as implemented until each rule layer exists.
 
 ## Database Design
 
-**Engine:** PostgreSQL, self-hosted. Chosen over SQL Server (licensing cost conflicts with one-time-purchase model), MySQL/MariaDB (weaker constraint/integrity guarantees), and SQLite (fine for an embedded cache, not for multi-user concurrent operational data).
+**Current engine:** PostgreSQL through Prisma.
 
-**Multi-tenancy pattern:** every operationally-scoped table carries `tenant_id` and (once multi-branch is active) `branch_id`. Fixed to one value for this client, never exposed in the UI — exists so the same schema serves the future SaaS product without a migration.
+PostgreSQL remains appropriate across LabFlow's product models.
 
-**Core entities:** `patients`, `doctors`, `tests`, `test_reference_ranges` (with gender/age-band variants and critical thresholds), `packages`, `bookings`, `samples`, `results` (with `amended_from_result_id` for versioning), `invoices`/`payments`, `doctor_commissions` (rate snapshotted at invoice time), `companies`, `users`/`roles`/`permissions`, `audit_log` (append-only), `sync_outbox`, `branches`/`tenants`.
+### SaaS
 
-**Key design rules:** no silent overwrites on released results (versioned instead); sample rejection/recollection is a first-class status, not a workaround; commission calculation is snapshotted at invoice time, never retroactively recalculated from a doctor's current rate.
+Hosted deployments use tenant-aware PostgreSQL infrastructure managed by the platform.
 
-**Backup & recovery:** nightly automated `pg_dump` or continuous WAL archiving for point-in-time recovery, to a separate local disk plus a periodically rotated offsite/external copy. Restore procedure tested at delivery.
+The exact hosting/service provider is an infrastructure decision, not a domain-model change.
+
+### Offline / Enterprise
+
+Local PostgreSQL remains the authoritative operational store.
+
+### Core Entity Families
+
+The schema currently contains or anticipates entities for:
+
+* tenants;
+* branches;
+* users;
+* patients;
+* bookings;
+* doctors;
+* tests;
+* test parameters;
+* reference ranges;
+* packages;
+* package items;
+* invoices;
+* invoice lines;
+* payments;
+* samples;
+* results;
+* result values;
+* reports;
+* doctor shares/commissions;
+* companies;
+* patient-company relationships;
+* notifications;
+* audit logs;
+* sync outbox;
+* feature flags;
+* configuration;
+* cash shifts.
+
+### Important Rule
+
+> Schema presence means the domain has been anticipated. It does not prove the corresponding business workflow is complete.
+
+Examples:
+
+* `Company` does not mean Corporate Billing is complete.
+* `SyncOutbox` does not mean synchronization is running.
+* `FeatureFlag` does not mean product entitlement enforcement is running.
+* refund enum values do not mean refund processing exists.
+* reserved Role values do not mean those roles are active.
+
+### Multi-Tenancy
+
+Operational records should remain tenant-scoped.
+
+Branch-scoped records should additionally preserve branch context.
+
+Future SaaS hardening must ensure tenant isolation is enforced at every access path, not merely represented as columns.
+
+### Clinical History
+
+Previously released clinical information must not be destructively replaced.
+
+Amendments must preserve history.
+
+### Financial History
+
+Historical invoices/payments must remain reconstructable from stored transaction records and snapshots.
 
 ## Design Principles (recap, domain-specific)
 
-- Events are past-tense facts, raised through an in-process dispatcher, not commands.
-- Every entity's state machine explicitly forbids the transitions that look tempting but are wrong (see each "Forbidden" list above) — these are as important as the allowed transitions.
-- Pricing is a pipeline, evaluated once and snapshotted, never a mutable single column.
-- Bounded contexts own their models; cross-context needs are met via events, not direct data access.
+* Product tiers share domain rules wherever deployment differences do not require different behavior.
+* Tenant boundaries are business boundaries, not UI filters.
+* Result entry and result finalization are separate operations.
+* Released clinical information is versioned/amended rather than silently overwritten.
+* Historical prices and doctor-share calculations are snapshotted.
+* Schema scaffolding must not be confused with completed product workflow.
+* Product entitlement and employee permission are separate concepts.
+* Bounded contexts own their rules even while implemented within a modular monolith.
+* External reactions should progressively move toward event-driven boundaries where that improves decoupling.
+* State transitions should be explicit for clinically or financially important workflows.
+* Business invariants must be enforced server-side.
 
 ## Configuration vs. Hardcoded
 
-Business rules that must be configurable, not hardcoded, because they will change without a code deployment:
+The following categories should progressively become configurable rather than customer-specific code forks:
 
-- SMS retry count and backoff interval
-- Commission clearance delay (time between `Calculated` and `Payable`)
-- Report/Sample retention period before archival/discard
-- Critical value thresholds (per test, per gender/age band)
-- Home collection fee, service radius, maximum bookings per day, and scheduling windows
-- Feature toggles (Inventory, Machine Integration, WhatsApp, Doctor Portal, Multi-Branch, Analytics)
-- Online booking expiry window (time before a `Confirmed` booking becomes `Expired`)
-- Partial report release policy (allow/disallow, per test type if needed)
-- Corporate result-sharing policy (per company contract)
-- Package repricing rule on partial cancellation
-- Tax rate, if/when applicable
-- Sync interval and max retry counts for Notification/Sync Job
+* tenant branding;
+* branch configuration;
+* product entitlements;
+* enabled operational modules;
+* SMS provider credentials;
+* message templates;
+* SMS retry policy;
+* report layout settings;
+* letterhead margins;
+* critical thresholds where clinically appropriate;
+* home-collection pricing/service rules;
+* booking-expiry rules;
+* partial-report policy;
+* corporate account policies;
+* pricing/discount authority;
+* doctor-share arrangements;
+* package behavior where configuration is appropriate;
+* tax rules if introduced;
+* synchronization interval/retry;
+* data-retention policy;
+* backup policy;
+* licensing/offline grace policy for Offline / Enterprise.
+
+Configuration must not be used to weaken mandatory security or clinical-integrity rules.
 
 ---
 
-**Dependencies:** `01_Product_Specification.md` (business requirements this model implements).
-**Related chapters:** `02_Technical_Architecture.md` (infrastructure hosting this domain), `04_Application_Modules.md` (screens/roles interacting with these entities).
-**Future extensions:** Inventory as a new bounded context; Analyzer Integration as a new Sample-entry actor ("System" instead of "Lab Tech" for `ResultEntered`); Report Template Engine replacing the current hardcoded report layout.
-**Remaining open questions:** none from the original list — see `README.md § Decisions Log` for how each was resolved. Any new business-rule questions that surface during implementation should be added here as they arise.
+**Dependencies:** `01_Product_Specification.md` defines the product requirements and `10_Product_Tiers_and_SaaS_Scope.md` defines the commercial/deployment model.
+
+**Related chapters:** `02_Technical_Architecture.md` defines infrastructure supporting this domain; `04_Application_Modules.md` defines user-facing surfaces; `12_RBAC_and_Operator_Dashboard.md` defines current permission implementation.
+
+**Current implementation summary:** patient, billing, payment, test catalog, sample processing, result entry/finalization/amendment foundations, reporting, doctor/referral calculations, analytics, booking foundations, notifications, tenant/branch schema foundations, and related operational modules are substantially implemented. Packages, corporate workflows, complete refunds, audit, event dispatching, sync, configurable partial reports, background notification processing, and several richer state transitions remain partial or planned.
+
+**Future extensions:** analyzer integration, inventory/reagent domain, richer corporate billing, expanded portals, advanced pricing, product entitlements, synchronization, additional communication channels, and other reusable bounded contexts as LabFlow expands.
+
+**Remaining open questions:** new business rules should be added here as explicit product-domain decisions. Implementation status must be updated when a planned workflow becomes operational.

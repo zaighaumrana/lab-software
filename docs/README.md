@@ -1,57 +1,252 @@
 # Laboratory Management System — Architecture Handbook
 
-**Status:** Design complete, pre-implementation. This is the authoritative documentation set for the project — supersedes the earlier per-topic file set.
+**Product:** LabFlow
+
+**Status:** Active product development and documentation modernization. This is the authoritative documentation set for the LabFlow product platform.
+
+> **Documentation precedence:** `01_Product_Specification.md` defines the current LabFlow product direction. Documents `02_Technical_Architecture.md`, `03_Core_Domain_Design.md`, and `04_Application_Modules.md` have now been modernized to follow the same product precedent. Remaining downstream documents are being reviewed individually. Where an older, not-yet-modernized document conflicts with Docs 01–04, the modernized documents take precedence.
 
 ## Project Overview
 
-A Laboratory Management System (LMS) and public website, replacing a client's current H2 Cloud software. The client's core complaint with H2 Cloud — it requires internet to function — is the reason this entire project exists, so **offline-first** is the property everything else is designed around, not a feature bullet point.
+**LabFlow** is a laboratory management platform designed for diagnostic laboratories ranging from small independent labs to larger multi-branch organizations.
 
-The client's deployment is single-lab, self-hosted, on a recurring license (yearly/monthly/usage-based — see Decision #17 below), no cloud dependency for daily operation. The same codebase is architected to become the vendor's own multi-tenant SaaS product for future clients, without a rewrite — this dual purpose shapes several decisions throughout (see `03_Core_Domain_Design.md § Future SaaS Evolution` in `01_Product_Specification.md`).
+The product originally grew from a practical requirement for laboratory software that could continue operating without internet connectivity. That original offline-first implementation provided the foundation for the current system, but it no longer defines the boundaries of the product.
+
+LabFlow is now being developed as a reusable commercial platform with **three product tiers**:
+
+1. **Basic Cloud**
+2. **Pro Cloud**
+3. **Offline / Enterprise**
+
+All three tiers belong to the same LabFlow product family and are intended to share the same core domain model, business rules, APIs, application architecture, and reusable modules wherever practical.
+
+The major differences between tiers are:
+
+* deployment model;
+* infrastructure ownership;
+* product entitlements;
+* operational capabilities;
+* service level;
+* offline requirements;
+* enterprise deployment requirements.
+
+The goal is **one LabFlow product core, not three separate applications**.
+
+Cloud tiers are vendor-managed SaaS deployments.
+
+Offline / Enterprise is the locally deployed or hybrid edition for laboratories requiring local infrastructure ownership, offline operation, stronger deployment control, or enterprise capabilities.
+
+The existing codebase already contains a substantial shared laboratory-management core and is progressively being productized around this three-tier model.
 
 ## Project Goals
 
-1. Eliminate all internet dependency for daily lab operations.
-2. Give the client full ownership and control of their data.
-3. Match the UX benefits of cloud LMS software (dashboards, SMS, online lookup) without the cloud dependency.
-4. Build a technical foundation the vendor can extend into a SaaS product without re-architecting.
+1. Build one reusable LabFlow product platform serving Basic Cloud, Pro Cloud, and Offline / Enterprise.
+
+2. Avoid customer-specific code forks by solving differences through configuration, product entitlements, branding, integrations, and reusable modules.
+
+3. Provide a complete laboratory operating workflow covering patients, billing, samples, results, reports, staff permissions, analytics, notifications, and business administration.
+
+4. Maintain strict tenant isolation for SaaS deployments.
+
+5. Treat branches as first-class product/domain concepts rather than later customizations.
+
+6. Allow Offline / Enterprise laboratories to perform core daily operations without internet connectivity.
+
+7. Allow Basic Cloud and Pro Cloud customers to use LabFlow without operating local server infrastructure.
+
+8. Keep product entitlement separate from employee RBAC:
+
+   * subscription/tier determines what the laboratory owns;
+   * permissions determine what an individual employee may use.
+
+9. Give laboratories ownership and portability of their operational data.
+
+10. Build infrastructure that can evolve across cloud, local, and hybrid deployments without re-architecting the core product.
 
 ## Product Philosophy (summary)
 
-Full text in `01_Product_Specification.md`. In short: local-first, one codebase serving multiple deployment modes, every integration replaceable and optional, business logic in the backend only, audit everything, no vendor lock-in, data belongs to the customer, offline is the default and online is an enhancement, future SaaS needs configuration rather than rewrites.
+Full text is in `01_Product_Specification.md`.
+
+In short:
+
+* one product, multiple tiers;
+* shared core, no permanent customer forks;
+* tenant isolation is foundational;
+* branches are first-class domain concepts;
+* offline capability belongs primarily to Offline / Enterprise rather than defining the entire product;
+* product entitlements and employee permissions are separate concerns;
+* business logic belongs in the backend;
+* clinically and financially significant changes must be auditable;
+* external integrations should be replaceable where practical;
+* integrations must not unnecessarily control core laboratory availability;
+* customer data belongs to the customer;
+* configuration should be preferred over customization;
+* product tiers are entitlement boundaries, not codebase boundaries;
+* architecture must evolve without breaking existing deployments;
+* documentation must distinguish between implemented, partial/scaffolded, designed/planned, deferred, and superseded functionality.
+
+## Product Model
+
+```mermaid id="fpgu80"
+flowchart TD
+    CORE[LabFlow Product Core]
+
+    CORE --> BASIC[Basic Cloud]
+    CORE --> PRO[Pro Cloud]
+    CORE --> ENT[Offline / Enterprise]
+
+    BASIC --> BC[Vendor-managed cloud]
+    PRO --> PC[Vendor-managed cloud]
+    ENT --> OE[Local / Hybrid deployment]
+
+    BC --> BENT[Basic feature entitlement]
+    PC --> PENT[Expanded feature entitlement]
+    OE --> EENT[Offline + Enterprise entitlement]
+```
+
+The tiers must remain configurations of the same LabFlow product wherever deployment-specific infrastructure does not require different behavior.
+
+Detailed tier strategy is defined in `10_Product_Tiers_and_SaaS_Scope.md`.
+
+## Documentation Modernization Status
+
+The documentation set originated while LabFlow was still centered around a smaller single-laboratory implementation.
+
+The product has since expanded substantially.
+
+The documentation is therefore being reviewed **one document at a time** against:
+
+* the current codebase;
+* the current three-tier product model;
+* actual implemented functionality;
+* partially implemented/scaffolded functionality;
+* accepted but not-yet-implemented platform architecture;
+* superseded historical assumptions.
+
+### Current authority status
+
+| Document                                                | Current status                                                                                      |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `01_Product_Specification.md`                           | **Updated — current product source of truth**                                                       |
+| `02_Technical_Architecture.md`                          | **Updated — current shared technical/deployment architecture**                                      |
+| `03_Core_Domain_Design.md`                              | **Updated — current shared domain/business-rule authority with implementation-status distinctions** |
+| `04_Application_Modules.md`                             | **Updated — current product-module and user-surface definition**                                    |
+| `05_Analytics_Architecture.md`                          | Significantly outdated — analytics has since been substantially implemented                         |
+| `06_Dependencies_and_Tooling.md`                        | Generally useful — dependency/version refresh pending                                               |
+| `07_Website_Separation_and_Offline_Online_Hybrid.md`    | Current planning document for Offline / Enterprise hybrid architecture                              |
+| `08_Windows_Packaging_and_Installer_Roadmap.md`         | Current planning document for Offline / Enterprise packaging                                        |
+| `09_LabFlow_Licensing_and_Subscription_Architecture.md` | Current design document for Offline / Enterprise licensing                                          |
+| `10_Product_Tiers_and_SaaS_Scope.md`                    | **Current strategic product-tier document**                                                         |
+| `12_RBAC_and_Operator_Dashboard.md`                     | Recent implementation document; mostly current                                                      |
+| `13_Testing.md`                                         | Recent implementation document; mostly current                                                      |
+
+Docs 01–04 now share the same SaaS/product precedent.
+
+Remaining older documents should be modernized without reintroducing assumptions from the original single-laboratory implementation.
 
 ## Reading Order
 
-1. **`01_Product_Specification.md`** — start here. What we're building and why, for anyone (technical or not).
-2. **`02_Technical_Architecture.md`** — how the system is deployed, secured, and kept running offline/synced.
-3. **`03_Core_Domain_Design.md`** — the business logic bible: domain model, glossary, events, state machines, workflows, pricing. Read before writing any backend code.
-4. **`04_Application_Modules.md`** — the user-facing surface: screens, roles, portals, module-by-module behavior.
-5. **`05_Analytics_Architecture.md`** — admin analytics dashboard design (planning only, not yet implemented).
-6. **`06_Dependencies_and_Tooling.md`** — full inventory of every third-party package and DB tool actually used in the repo, why each was chosen, and what each means for building a packaged/distributable bundle. Read before packaging a release.
-7. **`07_Website_Separation_and_Offline_Online_Hybrid.md`** — plan for pulling `apps/website` out of the local dev/deployment path once the core software is built and tested, and the scope for how the offline lab and the online website connect without breaking the offline-first guarantee. Read before hosting the website for real.
-8. **`08_Windows_Packaging_and_Installer_Roadmap.md`** — roadmap for a two-installer Windows deployment (`LMS-Server-Setup.exe` + `LMS-Workstation-Setup.exe`) reflecting the server/LAN-workstation architecture, ending in one desktop icon per PC and no terminals. Read before packaging a client-facing release.
-9. **`09_LabFlow_Licensing_and_Subscription_Architecture.md`** — design-only architecture for LabFlow's subscription/license system: activation, periodic validation, offline grace behavior, clock-tamper resistance. Scoped to the offline/enterprise tier only — see doc 10. Read before writing any licensing code.
-10. **`10_Product_Tiers_and_SaaS_Scope.md`** — design-only scope for the planned multi-tier product (Basic/Pro cloud tiers + the offline/enterprise tier this repo currently builds), and why the online/offline split — not feature count — is what actually separates them. Read before deciding what belongs in which tier, or before assuming doc 9's licensing mechanisms apply everywhere.
-12. **`12_RBAC_and_Operator_Dashboard.md`** — the centralized role/permission authorization system (ADMIN vs. LAB_OPERATOR) and the new Operator Dashboard. Read before adding a new route, a new role, or changing what either active role can access. (Numbering note: `11` is a handoff-only document that exists in separate packaged copies of this codebase, not in this repo — see `docs/07`/`08` for the separation pattern this follows.)
-13. **`13_Testing.md`** — what the automated test suite covers (and doesn't), how to run it, and conventions for adding to it. Read before touching `common/auth/`, `common/guards/permission.guard.ts`, or adding a new controller.
+1. **`01_Product_Specification.md`** — start here. Defines what LabFlow is now: the shared product platform, three-tier commercial model, product principles, current capability boundaries, platform requirements, and roadmap.
+
+2. **`10_Product_Tiers_and_SaaS_Scope.md`** — read early when making product or commercial decisions. Defines Basic Cloud, Pro Cloud, and Offline / Enterprise and explains why deployment/infrastructure and entitlement boundaries matter more than maintaining separate feature codebases.
+
+3. **`02_Technical_Architecture.md`** — defines the shared technical architecture, current implementation, SaaS deployment model, Offline / Enterprise topology, security, synchronization direction, integrations, background services, feature entitlements, backups, and disaster recovery.
+
+4. **`03_Core_Domain_Design.md`** — the business/domain authority: domain model, glossary, events, state machines, workflows, pricing, packages, corporate concepts, laboratory invariants, tenant rules, and implementation-state distinctions. Read before changing backend business behavior.
+
+5. **`04_Application_Modules.md`** — defines the user-facing product surface: internal modules, staff workflows, Admin and Operator experiences, public portal, reporting, SaaS administration direction, branch management, Corporate modules, and entitlement-aware application behavior.
+
+6. **`05_Analytics_Architecture.md`** — analytics architecture. Originally written as planning-only, but substantial analytics functionality has since been implemented and this document is pending an implementation-state rewrite.
+
+7. **`06_Dependencies_and_Tooling.md`** — inventory of third-party packages and database/tooling dependencies, why they were chosen, and packaging/native-binary implications. Read before packaging or changing core infrastructure dependencies.
+
+8. **`07_Website_Separation_and_Offline_Online_Hybrid.md`** — architecture for separating the public website from local Offline / Enterprise deployments and synchronizing selected online functionality without making local operations internet-dependent.
+
+9. **`08_Windows_Packaging_and_Installer_Roadmap.md`** — roadmap for productizing Offline / Enterprise into Windows server/workstation installers and removing development-tool requirements from customer deployments.
+
+10. **`09_LabFlow_Licensing_and_Subscription_Architecture.md`** — design architecture for Offline / Enterprise recurring licensing: activation, validation, offline grace behavior, and tamper resistance. Cloud subscription entitlement is a related but separate SaaS concern.
+
+11. **`12_RBAC_and_Operator_Dashboard.md`** — centralized role/permission authorization architecture and the current ADMIN/LAB_OPERATOR implementation. Read before adding routes, roles, permissions, or changing protected application functionality.
+
+12. **`13_Testing.md`** — current automated test foundations, what is covered, what remains uncovered, and conventions for adding tests.
+
+**Numbering note:** document `11` is not currently present in this repository. Existing references to it will be reviewed as the documentation set is modernized.
 
 ## Document Dependency Map
 
-```mermaid
-flowchart LR
-    README --> P[01_Product_Specification]
-    P --> T[02_Technical_Architecture]
-    P --> D[03_Core_Domain_Design]
+```mermaid id="hey989"
+flowchart TD
+    README --> P[01 Product Specification]
+
+    P --> TIERS[10 Product Tiers & SaaS Scope]
+
+    P --> T[02 Technical Architecture]
+    P --> D[03 Core Domain Design]
+
+    TIERS --> T
+    TIERS --> D
+
     T --> D
-    D --> A[04_Application_Modules]
+
+    D --> A[04 Application Modules]
     T --> A
+    TIERS --> A
+
+    T --> HYBRID[07 Website / Hybrid Architecture]
+    TIERS --> HYBRID
+
+    TIERS --> PACK[08 Windows Packaging]
+    T --> PACK
+
+    TIERS --> LIC[09 Licensing Architecture]
+    T --> LIC
+
+    D --> ANALYTICS[05 Analytics Architecture]
+    A --> ANALYTICS
+
+    T --> DEPS[06 Dependencies & Tooling]
+
+    D --> RBAC[12 RBAC & Operator Dashboard]
+    A --> RBAC
+
+    RBAC --> TEST[13 Testing]
+    T --> TEST
 ```
 
-`03_Core_Domain_Design` is the dependency root for implementation — both the technical architecture and the application modules build on the domain model and rules defined there.
+### Authority Chain
+
+The modernized documentation now follows this hierarchy:
+
+```text id="pt17ra"
+01 Product Specification
+        ↓
+10 Product Tiers & SaaS Scope
+        ↓
+02 Technical Architecture
+        ↓
+03 Core Domain Design
+        ↓
+04 Application Modules
+        ↓
+Feature / Deployment / Implementation Documents
+```
+
+`01_Product_Specification.md` is the **product authority**.
+
+`10_Product_Tiers_and_SaaS_Scope.md` defines commercial/deployment tier boundaries.
+
+`02_Technical_Architecture.md` defines the shared technical architecture.
+
+`03_Core_Domain_Design.md` defines shared business/domain behavior.
+
+`04_Application_Modules.md` defines how those capabilities surface to users.
+
+A downstream implementation document should not silently redefine these layers.
 
 ## Folder Structure
 
-```
-Research/
+```text id="yws09z"
+docs/
 ├── README.md
 ├── 01_Product_Specification.md
 ├── 02_Technical_Architecture.md
@@ -67,63 +262,413 @@ Research/
 └── 13_Testing.md
 ```
 
-## High-Level Architecture
+## High-Level Product Architecture
 
-```mermaid
+```mermaid id="vq3ovm"
 flowchart TD
-    subgraph LAN["Lab LAN — no internet required"]
-        WS[Workstations: browser only]
-        SRV[Local Server: Web app + API + PostgreSQL + Sync Agent + Print Agent]
-        WS <--> SRV
+    CORE[LabFlow Shared Product Core]
+
+    subgraph CLOUD["LabFlow Cloud Platform"]
+        BASIC[Basic Cloud Tenant]
+        PRO[Pro Cloud Tenant]
+        SAAS[Managed Application + API + PostgreSQL Infrastructure]
+
+        BASIC --> SAAS
+        PRO --> SAAS
     end
-    SRV -->|HTTPS, when available| WEB[Website + Public API + its own DB]
+
+    subgraph ENTERPRISE["Offline / Enterprise"]
+        WS[Laboratory Workstations]
+        LOCAL[Local LabFlow Server + Local PostgreSQL]
+        WS <--> LOCAL
+
+        HYBRID[Optional Hosted Public Services / Cloud Integration]
+        LOCAL <-->|Sync when available| HYBRID
+    end
+
+    CORE --> CLOUD
+    CORE --> ENTERPRISE
 ```
 
-Full detail in `02_Technical_Architecture.md`.
+This is the **product-level target architecture**.
+
+Current implementation includes a large portion of the shared core.
+
+Not every infrastructure component shown above is complete.
+
+Full technical status belongs in `02_Technical_Architecture.md`.
+
+## Current Implemented Technical Core
+
+The current codebase substantially implements:
+
+* React/Vite staff application;
+* NestJS API;
+* PostgreSQL;
+* Prisma;
+* REST APIs;
+* Socket.IO;
+* session authentication;
+* bcrypt password hashing;
+* permission-based RBAC;
+* ADMIN superuser model;
+* LAB_OPERATOR operational permission bundle;
+* tenant/branch schema foundations;
+* patient management;
+* test catalog and parameters;
+* invoicing and payments;
+* sample workflow;
+* outsourcing;
+* result entry;
+* result finalization;
+* result reopen/amendment foundations;
+* reporting;
+* Puppeteer PDF generation;
+* invoice PDFs;
+* report PDFs;
+* doctor statement PDFs;
+* print/reprint tracking;
+* doctor/referral management;
+* doctor share calculations;
+* analytics subsystem;
+* Operator Dashboard;
+* Cash Shift;
+* separate Next.js public website;
+* public booking foundations;
+* public report lookup foundations;
+* SMS gateway abstraction;
+* SendPK implementation;
+* Notification persistence.
+
+This list describes substantial shared product capability, not the completion of every surrounding product workflow.
+
+## Entitlement vs. RBAC
+
+LabFlow requires two separate access-control layers.
+
+```text id="am35g4"
+Laboratory / Tenant
+        │
+        ▼
+Subscription / License
+        │
+        ▼
+Product Tier
+        │
+        ▼
+Feature Entitlements
+        │
+        ▼
+User Role
+        │
+        ▼
+Permissions
+```
+
+### Product entitlement answers:
+
+> Has this laboratory purchased or been assigned access to this product capability?
+
+Examples:
+
+* advanced analytics;
+* multi-branch capability;
+* corporate accounts;
+* offline deployment;
+* advanced business modules.
+
+### RBAC answers:
+
+> Is this particular employee allowed to perform this operation?
+
+Examples:
+
+* create patients;
+* receive samples;
+* enter results;
+* finalize results;
+* view financial analytics;
+* manage settings.
+
+A permission must not automatically imply that the tenant owns the feature, and a tenant entitlement must not automatically give every employee access to it.
+
+The current code has a functioning permission-based RBAC foundation.
+
+Full product-tier entitlement enforcement remains a platform requirement.
+
+## Domain Foundation
+
+The LabFlow domain is shared across tiers.
+
+The central operational journey is:
+
+```text id="8y4jci"
+Tenant
+  ↓
+Branch
+  ↓
+Patient
+  ↓
+Booking / Visit
+  ↓
+Invoice
+  ↓
+Sample
+  ↓
+Test
+  ↓
+Result
+  ↓
+Report
+```
+
+Supporting concepts include:
+
+* Payment;
+* Package;
+* Doctor;
+* Doctor Share / Commission;
+* Company;
+* Notification;
+* Audit;
+* Sync Outbox.
+
+Detailed state machines, invariants, workflows, pricing rules, and implementation status are defined in `03_Core_Domain_Design.md`.
+
+## Application Modules
+
+The current internal/public product surface includes or substantially includes:
+
+* Patient Management;
+* Reception / Visit workflow;
+* Billing & Payments;
+* Laboratory;
+* Reporting;
+* Catalog;
+* Doctor Management;
+* Admin Dashboard;
+* Operator Dashboard;
+* Analytics / Insights;
+* Settings;
+* Cash Shift;
+* public website;
+* public booking foundations;
+* public report lookup.
+
+Partial or planned product surfaces include:
+
+* Corporate Accounts;
+* complete Home Collection;
+* Notification administration;
+* SMS configuration UI;
+* branch management;
+* tier/entitlement management;
+* SaaS platform administration;
+* synchronization administration;
+* backup administration;
+* full website CMS;
+* barcode/device workflow.
+
+Detailed module behavior is defined in `04_Application_Modules.md`.
+
+## Product Capability Status Language
+
+All documentation should use the following language so architecture and implementation are not confused:
+
+| Marker                   | Meaning                                                                                                |
+| ------------------------ | ------------------------------------------------------------------------------------------------------ |
+| **Implemented**          | Working product functionality exists across the necessary layers                                       |
+| **Partial / Scaffolded** | Some schema, backend, frontend, or architectural foundation exists, but the complete workflow does not |
+| **Designed / Planned**   | Accepted product or architectural direction with no complete implementation yet                        |
+| **Deferred**             | Intentionally outside the current development phase                                                    |
+| **Superseded**           | Historical requirement or architecture replaced by the current product direction                       |
+
+### Important interpretation rule
+
+The presence of any of the following does **not**, by itself, mean a feature is implemented:
+
+* Prisma model;
+* enum;
+* field;
+* migration;
+* configuration value;
+* interface;
+* TODO;
+* unused frontend route;
+* placeholder UI.
+
+Examples:
+
+* `Company` does not mean Corporate Billing is complete.
+* `SyncOutbox` does not mean synchronization is operational.
+* `FeatureFlag` does not mean product entitlement enforcement exists.
+* Role enum values do not mean all roles are active.
+* refund states do not mean refund workflows exist.
 
 ## Where Every Topic Lives
 
-| Topic | Document |
-|---|---|
-| Business requirements, scope, roadmap, philosophy | `01_Product_Specification.md` |
-| Server/DB architecture, offline & sync, security, SMS/printing infra, deployment, DR, risks | `02_Technical_Architecture.md` |
-| Domain model, glossary, bounded contexts, domain events, state machines, workflows, pricing, DB schema | `03_Core_Domain_Design.md` |
-| UI/UX principles, screens, portals, role-specific views | `04_Application_Modules.md` |
-| Admin analytics dashboard design | `05_Analytics_Architecture.md` |
-| Every third-party dependency and DB tool used, why it was chosen, packaging/native-binary considerations | `06_Dependencies_and_Tooling.md` |
-| Separating the public website into its own hosting/DB, and the offline-first/online-hybrid sync scope | `07_Website_Separation_and_Offline_Online_Hybrid.md` |
-| Two-installer Windows deployment (server + workstation), firewall/backup/health-check requirements | `08_Windows_Packaging_and_Installer_Roadmap.md` |
-| Licensing/subscription architecture: activation, offline grace period, clock-tamper resistance (design only) | `09_LabFlow_Licensing_and_Subscription_Architecture.md` |
-| Product tier strategy: Basic/Pro cloud tiers vs. the offline/enterprise tier, and why (design only) | `10_Product_Tiers_and_SaaS_Scope.md` |
-| RBAC/permission system (ADMIN vs. LAB_OPERATOR), server-side enforcement, and the Operator Dashboard | `12_RBAC_and_Operator_Dashboard.md` |
-| Automated test suite: what it covers, how to run it, conventions for adding tests | `13_Testing.md` |
+| Topic                                                                                                    | Document                                                |
+| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| LabFlow product definition, product principles, current scope, platform requirements, roadmap            | `01_Product_Specification.md`                           |
+| Basic Cloud / Pro Cloud / Offline Enterprise product-tier strategy                                       | `10_Product_Tiers_and_SaaS_Scope.md`                    |
+| Server/database architecture, deployment, security, integrations, synchronization architecture, DR       | `02_Technical_Architecture.md`                          |
+| Domain model, glossary, state machines, business workflows, pricing, packages, corporate concepts        | `03_Core_Domain_Design.md`                              |
+| UI/UX principles, application modules, screens, public portal, role-specific views, SaaS admin direction | `04_Application_Modules.md`                             |
+| Analytics architecture and implemented analytical capabilities                                           | `05_Analytics_Architecture.md`                          |
+| Third-party dependencies, tooling, package/native-binary considerations                                  | `06_Dependencies_and_Tooling.md`                        |
+| Public website separation and Offline / Enterprise online-hybrid synchronization                         | `07_Website_Separation_and_Offline_Online_Hybrid.md`    |
+| Offline / Enterprise Windows deployment, server/workstation installers, health/backup requirements       | `08_Windows_Packaging_and_Installer_Roadmap.md`         |
+| Offline / Enterprise recurring license architecture                                                      | `09_LabFlow_Licensing_and_Subscription_Architecture.md` |
+| Permission-based authorization and current ADMIN/LAB_OPERATOR implementation                             | `12_RBAC_and_Operator_Dashboard.md`                     |
+| Automated testing foundations, current coverage, and testing conventions                                 | `13_Testing.md`                                         |
 
 ## Decisions Log
 
-The 17 open items originally listed here have all been answered and are now folded into the relevant documents rather than tracked separately. Quick-reference summary (full detail in the linked section):
+The original Decisions Log was created while LabFlow was centered around the first small-laboratory implementation.
 
-| # | Decision | Where |
-|---|---|---|
-| 1 | Full RBAC role list designed; only Admin/Reception/Sample Collector/Lab Tech enabled for this client | `02_Technical_Architecture.md § Authorization Matrix`, `04_Application_Modules.md § Admin Portal` |
-| 2 | Cash, Bank Transfer, EasyPaisa, JazzCash supported; card disabled but interface-ready | `02_Technical_Architecture.md § Integration Strategy`, `03_Core_Domain_Design.md § Database Design` |
-| 3 | H2 Cloud migration: unknown until client confirms; one-time import tool supported (CSV/Excel/SQL/API) | `01_Product_Specification.md § Non-Goals` |
-| 4 | Website matches client branding; internal software neutral/modern; English-only v1, localization-ready | `04_Application_Modules.md § UI/UX Principles` |
-| 5 | Home collection built (vendor add, not originally requested); radius/fee/max-bookings/scheduling all configurable | `03_Core_Domain_Design.md § Configuration vs. Hardcoded`, `§ Business Workflows` |
-| 6 | No upfront payment on online booking — reserves a slot only; payment at reception/home collection | `03_Core_Domain_Design.md § Business Workflows: Core Patient Journey` |
-| 7 | Refund: full if not performed, none if performed, package refunds partial per pricing engine; results never deleted | `03_Core_Domain_Design.md § Business Workflows: Exception Flows` |
-| 8 | Corporate result-sharing (billing-only vs. full reports) configurable per company contract | `03_Core_Domain_Design.md § Business Workflows: Corporate Accounts` |
-| 9 | Package repricing on test removal: configurable pricing-engine rule, defaults to recalculation | `03_Core_Domain_Design.md § Pricing Engine` |
-| 10 | Doctor-pays-for-patient not required v1; architecture supports doctor credit accounts, dynamic commission (%/fixed) | `03_Core_Domain_Design.md § Business Workflows: Doctor Referrals` |
-| 11 | Amendments notify patient, referring doctor, audit log, and website | `03_Core_Domain_Design.md § State Machines: Result/Report` |
-| 12 | Partial report release configurable per lab policy, defaults to waiting for complete | `03_Core_Domain_Design.md § State Machines: Report` |
-| 13 | Server purchased by client; mini-PC, 16GB RAM, 500GB SSD, UPS; vendor installs | `02_Technical_Architecture.md § Deployment Model` |
-| 14 | Assume shared (non-isolated) LAN; implement internal HTTPS at minimum | `02_Technical_Architecture.md § Security` |
-| 15 | Client owns backups; software automates; vendor trains; maintenance can include verification | `02_Technical_Architecture.md § Security`, `§ Deployment Strategy` |
-| 16 | No existing SMS provider; interface-based, bake-off among eOcean/Jazz Business/Zong Business at deployment | `02_Technical_Architecture.md § SMS Architecture` |
-| 17 | Client owns data/deployment for the duration of an active license — **recurring license (yearly/monthly/usage-based), not perpetual/one-time**; vendor retains source/IP and reuse rights — must be explicit contract clause | `01_Product_Specification.md § Business Context`, `09_LabFlow_Licensing_and_Subscription_Architecture.md` |
+Those decisions remain useful historical context, but the following product-wide decisions now govern LabFlow.
 
-No unresolved decisions remain at this stage.
+| #  | Current Product Decision                                                                                                                             | Status / Where                                                                            |
+| -- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| 1  | LabFlow is one commercial product platform with **Basic Cloud, Pro Cloud, and Offline / Enterprise** tiers                                           | `01_Product_Specification.md`, `10_Product_Tiers_and_SaaS_Scope.md`                       |
+| 2  | Tier differences should primarily be handled through deployment architecture, configuration, and product entitlements rather than separate codebases | `01_Product_Specification.md`, `10_Product_Tiers_and_SaaS_Scope.md`                       |
+| 3  | SaaS tenants require strict tenant isolation                                                                                                         | `01_Product_Specification.md`, `02_Technical_Architecture.md`, `03_Core_Domain_Design.md` |
+| 4  | Branches remain first-class domain concepts across the product                                                                                       | Docs 01–04                                                                                |
+| 5  | Offline operation is mandatory for **Offline / Enterprise**, not a requirement defining every LabFlow tier                                           | Docs 01, 02, 07, 10                                                                       |
+| 6  | Core clinical and financial business rules belong in the shared backend/domain layer                                                                 | Docs 01–03                                                                                |
+| 7  | Product entitlement and employee RBAC are separate authorization concerns                                                                            | Docs 01, 02, 04, 10, 12                                                                   |
+| 8  | Current implemented RBAC bundles are **ADMIN** and **LAB_OPERATOR**; additional roles remain expandable through permission bundles                   | Docs 02, 04, 12                                                                           |
+| 9  | Customer requirements should be solved through reusable configuration/features rather than permanent forks                                           | Doc 01                                                                                    |
+| 10 | Customer laboratory data belongs to the customer and must remain portable/recoverable                                                                | Docs 01–03                                                                                |
+| 11 | Clinically and financially significant corrections must preserve history and attribution                                                             | Docs 01–03                                                                                |
+| 12 | Result entry and result release/finalization are separate operations                                                                                 | Docs 01, 03, 04                                                                           |
+| 13 | Released result amendments preserve previous result versions rather than silently overwriting them                                                   | Doc 03                                                                                    |
+| 14 | Cloud tiers use vendor-managed SaaS infrastructure; Offline / Enterprise uses local/hybrid deployment architecture                                   | Docs 01, 02, 10                                                                           |
+| 15 | Offline / Enterprise is intended to receive production Windows packaging and local deployment tooling                                                | Docs 02, 08                                                                               |
+| 16 | Offline / Enterprise licensing is a recurring commercial entitlement with its own technical licensing architecture                                   | Docs 01, 02, 09                                                                           |
+| 17 | Public online services must not make Offline / Enterprise core laboratory operations internet-dependent                                              | Docs 01, 02, 07                                                                           |
+| 18 | External integrations should use replaceable service boundaries where practical; **SendPK is the currently implemented SMS provider**                | Docs 01, 02                                                                               |
+| 19 | Package catalog/billing support does not count as complete until constituent Tests participate correctly in lab/report workflows                     | Docs 01, 03, 04                                                                           |
+| 20 | Corporate Accounts belong to the product domain but are currently partial/scaffolded                                                                 | Docs 01, 03, 04                                                                           |
+| 21 | SaaS Platform Administration and Tenant Administration are separate security/operational concerns                                                    | Doc 04                                                                                    |
+| 22 | Documentation must explicitly distinguish implemented, partial/scaffolded, planned, deferred, and superseded behavior                                | Docs 01–04, this README                                                                   |
+
+Older implementation-specific decisions remain in downstream documents and will be reconciled as each document is modernized.
+
+## Current Product Core
+
+The current codebase already contains substantial working foundations including:
+
+* patient management;
+* test catalog;
+* parameters/reference ranges;
+* package catalog foundations;
+* invoicing and payments;
+* manual discounts;
+* laboratory sample workflows;
+* outsourcing;
+* manual result entry;
+* abnormal/critical result evaluation;
+* explicit result finalization;
+* amendments/reopening foundations;
+* PDF reporting;
+* invoice printing;
+* doctor statements;
+* print/reprint tracking;
+* doctor/referral management;
+* doctor commission/share calculation;
+* Admin analytics;
+* Operator Dashboard;
+* financial analytics;
+* operational analytics;
+* test analytics;
+* doctor analytics;
+* outsourcing analytics;
+* business insights;
+* cash-shift reconciliation;
+* permission-based RBAC;
+* tenant/branch-aware schema foundations;
+* public website;
+* public booking foundations;
+* public report lookup;
+* SMS gateway abstraction;
+* SendPK integration;
+* Notification persistence.
+
+This does **not** mean every workflow represented in the schema is complete.
+
+## Major Platform Work Still Ahead
+
+Major product/platform work includes:
+
+* SaaS tenant provisioning;
+* subscription management;
+* product-tier entitlement enforcement;
+* full role expansion;
+* complete package-to-test processing;
+* Corporate Accounts and billing;
+* complete Home Collection;
+* application-wide audit logging;
+* notification retry/background workers;
+* complete refund/void flows;
+* complete doctor payout accounting;
+* barcode/label/scanner workflows;
+* public CMS/website administration;
+* hosted website/public API separation for Offline / Enterprise;
+* local/cloud synchronization;
+* Windows production packaging;
+* automated backup and restore;
+* Offline / Enterprise licensing implementation;
+* cloud operational control plane;
+* branch-management product surface;
+* SaaS platform administration;
+* production observability and deployment automation;
+* public-report security hardening;
+* clinical/result-integrity hardening;
+* automated test expansion.
+
+These are product roadmap items, not evidence that the current product should be reduced back to its original MVP scope.
+
+## Documentation Work Remaining
+
+The next documentation priorities are:
+
+1. **`05_Analytics_Architecture.md`**
+   Rewrite from "planning only" into an implemented analytics architecture with clearly marked remaining future work.
+
+2. **`06_Dependencies_and_Tooling.md`**
+   Refresh versions, dependency counts, testing dependencies, and current shared-package usage.
+
+3. **`07_Website_Separation_and_Offline_Online_Hybrid.md`**
+   Retain its planning architecture while aligning terminology with the modernized Docs 01–04.
+
+4. **`08_Windows_Packaging_and_Installer_Roadmap.md`**
+   Align deployment assumptions with the current Offline / Enterprise architecture.
+
+5. **`09_LabFlow_Licensing_and_Subscription_Architecture.md`**
+   Align licensing language with the current SaaS/tier model while preserving its design-only status.
+
+6. **`10_Product_Tiers_and_SaaS_Scope.md`**
+   Review against the now-modernized Docs 01–04 and refine exact entitlement strategy where needed.
+
+7. **`12_RBAC_and_Operator_Dashboard.md`**
+   Update the obsolete "no automated tests" statement and clarify active versus reserved roles.
+
+8. **`13_Testing.md`**
+   Refresh current controller/test references and remove or resolve broken Doc 11 references.
 
 ## Future Roadmap Summary
 
-Nine-phase evolution from single lab to full SaaS platform — full detail in `01_Product_Specification.md § Product Roadmap`: **Single Lab → Multi-Branch → Central Dashboard → Hosted SaaS → Marketplace → AI Features → Analyzer Integrations → Doctor Portal → Patient Mobile App.**
+The roadmap is the evolution of **one shared LabFlow product platform**:
+
+**Core Product Hardening → Entitlements & RBAC Expansion → SaaS Control Plane → Basic & Pro Cloud → Offline / Enterprise Productization → Hybrid Sync & Multi-Branch → Advanced Business Modules → Integrations & Portals → Ecosystem, AI & Mobile**
+
+Full detail is in `01_Product_Specification.md § Product Roadmap`.
+
+The roadmap must not be interpreted as:
+
+> build one laboratory system first, then someday turn it into SaaS.
+
+LabFlow is **the product now**.
+
+The remaining work is the continued productization and hardening of its cloud, enterprise, entitlement, deployment, integration, clinical, financial, and advanced-business capabilities.

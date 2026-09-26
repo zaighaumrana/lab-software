@@ -1,223 +1,1002 @@
-# 02 — Technical Architecture
+# 02 – Technical Architecture
 
-**Purpose:** defines how the system is built, deployed, secured, and kept running without internet dependency.
-**Why it exists:** translates the product requirements in `01_Product_Specification.md` into concrete infrastructure and architectural decisions.
-**Read this:** before setting up any environment, writing deployment scripts, or making a decision about a third-party integration.
+**Purpose:** defines how LabFlow is built, deployed, secured, integrated, and operated across Basic Cloud, Pro Cloud, and Offline / Enterprise.
+
+**Why it exists:** translates the product requirements in `01_Product_Specification.md` and the tier model in `10_Product_Tiers_and_SaaS_Scope.md` into concrete infrastructure and architectural decisions.
+
+**Read this:** before setting up an environment, designing deployment infrastructure, adding an external integration, introducing background processing, changing tenant boundaries, or making decisions that differ between cloud and Offline / Enterprise.
 
 ---
 
 ## Executive Summary
 
-**Local server (LAN) + browser-based web app + local REST API + PostgreSQL**, with a background sync agent bridging to a separate, internet-facing website. Every integration (SMS, payment, storage, printing) sits behind a swappable interface. The schema and API are multi-tenant-capable from day one but deployed single-tenant for this client.
+LabFlow is built as **one shared product platform with multiple deployment models**.
+
+The shared application core consists of:
+
+* browser-based staff application;
+* NestJS backend/API;
+* PostgreSQL through Prisma;
+* shared laboratory domain logic;
+* permission-based authorization;
+* reporting/printing services;
+* analytics;
+* notifications;
+* tenant and branch scoping.
+
+The same product core is intended to support:
+
+1. **Basic Cloud** through vendor-managed hosted infrastructure;
+2. **Pro Cloud** through vendor-managed hosted infrastructure with expanded product entitlements;
+3. **Offline / Enterprise** through locally deployed infrastructure with optional online/hybrid synchronization.
+
+The current codebase already implements the core application architecture, local PostgreSQL operation, REST APIs, WebSockets, authentication, centralized RBAC, PDF generation, analytics, public website foundations, and an abstracted SMS gateway with SendPK as the current implementation.
+
+Several broader platform components are intentionally part of the target architecture but are not yet complete, including the SaaS control plane, production synchronization agent, separate hosted public-data store for Offline / Enterprise, automated backups, internal HTTPS automation, printer-driver abstraction, tier entitlement enforcement, and several background workers.
+
+Architecture documentation must therefore distinguish **implemented infrastructure** from **scaffolded infrastructure** and **target platform architecture**.
 
 ## System Architecture
 
-### Deployment Topology (lab side) — Confirmed v1 Setup
-
-Two machines: the **owner's office PC** runs the local server and is also where the owner works; the **lab PC** is a single workstation where one combined role (registration, result entry, printing) handles everything on the floor — no separate Reception/Sample Collector/Lab Tech logins for this build (see `04_Application_Modules.md § Admin Portal`). Lab equipment does not write directly into the system; all entry is manual.
+### Shared Product Core
 
 ```mermaid
 flowchart TD
-    subgraph LAN["Lab LAN — no internet needed"]
-        LABPC["Lab PC: register / enter results / print"] --> SRV
-        SRV["Owner's Office PC — Local Server: Web app + REST API + PostgreSQL + Sync Agent + Print Agent"]
-    end
-    SRV -->|"HTTPS, only for SMS + website sync"| WEB[Website + Public API + own DB]
+    CORE[LabFlow Shared Product Core]
+
+    CORE --> WEBAPP[Staff Web Application]
+    CORE --> API[NestJS API / Domain Services]
+    API --> DB[(PostgreSQL)]
+    API --> AUTH[Authentication + RBAC]
+    API --> REPORT[Reporting / PDF]
+    API --> ANALYTICS[Analytics]
+    API --> NOTIFY[Notifications]
+    API --> REALTIME[Socket.IO / Realtime]
+
+    CORE --> CLOUD[Cloud Deployment]
+    CORE --> ENTERPRISE[Offline / Enterprise Deployment]
 ```
 
-### Why this over the alternatives
+The product should reuse these shared components wherever infrastructure differences do not require different behavior.
 
-| Option | Verdict |
-|---|---|
-| Windows desktop app (WinForms/WPF) | Rejected: per-machine install/update burden, harder multi-user support, no code reuse with the website |
-| Electron | Rejected: heavy footprint per workstation, no benefit over a browser once a local server exists |
-| Pure PWA | Rejected for the lab core (fine for the public website): IndexedDB isn't built for shared, concurrent, transactional multi-user workloads like invoicing |
-| Desktop + Web hybrid (two frontends) | Rejected: doubles maintenance/QA for marginal benefit; a browser today can reach hardware (WebUSB/WebSerial, or a small print-agent service) |
-| **Local server + browser frontend (chosen)** | One install to maintain, every workstation just needs a browser, same codebase later serves the website's admin CMS |
+### Current Implemented Application Architecture
 
-### Components
+The current codebase operates as a modular web application:
 
-- **Web app (frontend):** single browser-based application used by every workstation on the LAN; same codebase later serves the website's admin CMS.
-- **Local REST API:** all business logic lives here — the frontend never talks to the database directly.
-- **PostgreSQL:** single local instance; every relevant table carries `tenant_id`/`branch_id` from day one (see `03_Core_Domain_Design.md § Database Design`).
-- **Sync agent:** background service reading an outbox/queue table, pushing sync-relevant events to the website API when internet is reachable (see Synchronization Strategy below).
-- **Print agent:** small local helper (or WebUSB/WebSerial) bridging the browser to receipt/barcode/label printers.
+```mermaid
+flowchart TD
+    STAFF[React Staff Application] -->|REST| API[NestJS API]
+    STAFF <-->|Socket.IO| API
+    API --> PRISMA[Prisma]
+    PRISMA --> DB[(PostgreSQL)]
 
-### Multi-Tenant-Ready, Single-Tenant-Deployed
+    API --> PDF[Puppeteer PDF Generation]
+    API --> SMS[SmsGateway]
+    SMS --> SENDPK[SendPK]
 
-Schema and API are multi-tenant-capable (`tenant_id` everywhere), but this client's deployment is configured as a single fixed tenant — invisible in their UI, zero shared infrastructure, zero dependency on any vendor-hosted service. This is what lets the vendor reuse the same core for a future hosted SaaS offering without a data-layer retrofit.
+    PUBLIC[Next.js Public Website] --> API
+```
 
-### Multi-Branch Model (future)
+This represents the **current development architecture**, not the final production topology for every tier.
 
-**Federated model**, not hub-and-spoke: each future branch runs its own local server/DB, fully offline-capable independently. A background reconciliation process rolls branch data up to a central reporting view, using the same outbox/sync mechanism already built for the website. This preserves the offline guarantee per branch — the exact property the client is paying to get, so branch #2 shouldn't lose it just to report up to head office.
+Current implementation includes:
+
+* React/Vite staff application;
+* NestJS API;
+* Prisma/PostgreSQL;
+* REST communication;
+* Socket.IO;
+* session authentication;
+* centralized permission-based RBAC;
+* Puppeteer-based PDF generation;
+* SendPK through an SMS gateway abstraction;
+* public Next.js website;
+* tenant and branch schema foundations.
+
+### Product Deployment Models
+
+#### Basic Cloud
+
+Target model:
+
+```mermaid
+flowchart TD
+    USERS[Laboratory Users] --> HTTPS[HTTPS]
+    HTTPS --> APP[LabFlow Managed Cloud Application]
+    APP --> API[Shared LabFlow API]
+    API --> DB[(Managed Tenant-Aware PostgreSQL)]
+```
+
+The vendor operates infrastructure, deployments, upgrades, backups, monitoring, and tenant provisioning.
+
+#### Pro Cloud
+
+Uses the same fundamental managed-cloud architecture as Basic Cloud.
+
+Differences should primarily come from:
+
+* product entitlements;
+* enabled modules;
+* operational scale;
+* branch capabilities;
+* analytics/business functionality;
+* support/service levels.
+
+Basic and Pro must not become separate codebases.
+
+#### Offline / Enterprise
+
+Target model:
+
+```mermaid
+flowchart TD
+    subgraph LAN["Laboratory LAN"]
+        WS1[Workstation]
+        WS2[Workstation]
+        WSN[Additional Workstations]
+
+        WS1 --> SERVER
+        WS2 --> SERVER
+        WSN --> SERVER
+
+        SERVER[Local LabFlow Server]
+        SERVER --> LOCALDB[(Local PostgreSQL)]
+    end
+
+    SERVER <-->|Optional HTTPS Sync| CLOUD[LabFlow Hosted Services]
+```
+
+The local environment remains authoritative for core laboratory operations and must continue functioning when internet access is unavailable.
+
+### Why Browser-Based Staff Software Remains the Core UI
+
+| Option                                                       | Architectural decision                                                                                                                                               |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Traditional WinForms/WPF client                              | Not the shared product UI. Creates per-workstation deployment/update burden and separates local and cloud frontend architecture unnecessarily.                       |
+| Electron                                                     | Not currently justified for the primary product UI. Adds desktop runtime overhead without replacing the need for backend infrastructure.                             |
+| Pure client-side PWA with IndexedDB as operational authority | Rejected for shared laboratory transactional data.                                                                                                                   |
+| Separate desktop and browser product frontends               | Avoid unless a specific product capability truly requires it. Permanent duplicate frontends increase maintenance and QA cost.                                        |
+| **Shared browser-based application**                         | **Current direction.** Supports cloud deployments directly and allows Offline / Enterprise workstations to connect to a local server using the same product surface. |
+| Thin native workstation shell                                | May be introduced for Offline / Enterprise packaging where useful, without replacing the shared web application. See Doc 08.                                         |
+
+## Components
+
+### Implemented
+
+* **Staff web application**
+  React/Vite application for laboratory staff.
+
+* **NestJS API**
+  Contains application/domain logic. Frontends do not connect directly to PostgreSQL.
+
+* **PostgreSQL + Prisma**
+  Current transactional data store and ORM/data-access layer.
+
+* **Socket.IO**
+  Used for real-time application updates where needed.
+
+* **Authentication**
+  Session-based authentication with bcrypt password hashing and account/login protections.
+
+* **Permission-based RBAC**
+  Backend controllers authorize against granular permissions rather than scattered role checks.
+
+* **Reporting/PDF service**
+  Puppeteer generates reports, invoices, and doctor statements.
+
+* **Analytics subsystem**
+  Dedicated analytics module and query layers.
+
+* **SMS abstraction**
+  `SmsGateway` architecture exists with SendPK as the current provider implementation.
+
+### Partial / Scaffolded
+
+* **Tenant/branch architecture**
+  Tenant and branch concepts are deeply represented in the schema and many service queries, but full hosted SaaS tenant provisioning and cross-tenant operational infrastructure remain unfinished.
+
+* **`SyncOutbox`**
+  Database model exists, but production event capture/draining and synchronization processing are not yet complete.
+
+* **`FeatureFlag`**
+  Schema/seeding foundations exist, but feature entitlement is not yet a complete runtime platform system.
+
+* **`AuditLog`**
+  Schema exists, but application-wide append-only audit recording is not yet consistently implemented.
+
+* **Public website separation**
+  A separate Next.js application exists, but it currently communicates with the operational API rather than a fully separated hosted public-data architecture for Offline / Enterprise.
+
+### Designed / Planned
+
+* production Sync Agent;
+* SaaS tenant control plane;
+* subscription/tier entitlement system;
+* separate Offline / Enterprise hosted public-data store;
+* cloud-to-local booking queue;
+* production Print Manager abstraction;
+* receipt/label physical-printer adapters;
+* `PaymentMethodInterface`;
+* `StorageInterface`;
+* `AuthProviderInterface`;
+* automated backup service;
+* background notification dispatcher;
+* booking-expiry worker;
+* retention/archive worker;
+* production health/monitoring plane;
+* automated internal HTTPS setup for Offline / Enterprise.
+
+## Multi-Tenant Architecture
+
+Multi-tenancy is now a **product requirement**, not speculative SaaS future-proofing.
+
+Cloud tiers are expected to host multiple independent laboratory organizations while maintaining strict isolation.
+
+Conceptually:
+
+```text
+LabFlow Cloud
+├── Tenant A
+│   ├── Branch 1
+│   └── Branch 2
+├── Tenant B
+│   └── Branch 1
+└── Tenant C
+    ├── Branch 1
+    ├── Branch 2
+    └── Branch 3
+```
+
+### Tenant Rules
+
+* operational data must be tenant-scoped;
+* API access must derive tenant context from authenticated/trusted context rather than arbitrary client input wherever possible;
+* analytics must remain tenant-scoped;
+* reporting must remain tenant-scoped;
+* background workers must preserve tenant boundaries;
+* synchronization jobs must preserve tenant identity;
+* public APIs must never allow tenant-boundary escape;
+* files/documents must eventually inherit the same isolation rules as relational data.
+
+Tenant architecture is not complete merely because `tenantId` exists in the schema.
+
+Full SaaS productization additionally requires:
+
+* tenant provisioning;
+* tenant lifecycle;
+* subscription state;
+* entitlement assignment;
+* tenant branding/configuration;
+* operational monitoring;
+* tenant-aware background processing;
+* cloud deployment automation.
+
+## Multi-Branch Model
+
+Branches are first-class domain concepts.
+
+A tenant may have one or multiple branches.
+
+The exact deployment topology may differ by tier.
+
+### Cloud
+
+Multiple branches can operate against the centrally managed LabFlow platform while remaining branch-scoped where appropriate.
+
+### Offline / Enterprise
+
+Two patterns may eventually be supported depending on customer scale:
+
+1. one local server serving multiple connected branches where network architecture allows it;
+2. federated branch servers with synchronization/central reconciliation where branches must remain independently offline-capable.
+
+The federated model must use durable synchronization rather than direct cross-branch database coupling.
 
 ## Deployment Model
 
-### Server Hardware (lab side) — Decided
+### Cloud Tiers
 
-Purchased by the **client**; vendor installs the software. Recommended spec: mini-PC, **16GB RAM, 500GB SSD**, wired Ethernet where possible, and a **UPS** — the UPS matters as much as the spec given power reliability realities, since a mid-transaction power cut is a realistic, recurring failure mode, not an edge case. This exceeds the bare minimum current volume (<50/day) would need, leaving headroom as the client's usage grows.
+Vendor responsibility includes:
 
-### Installation
+* application hosting;
+* database hosting;
+* HTTPS;
+* deployment;
+* upgrades;
+* backup;
+* monitoring;
+* service health;
+* tenant provisioning;
+* security patching;
+* infrastructure scaling.
 
-- Server: one-time setup installs PostgreSQL, the API/backend, sync agent, and print agent as local services (auto-start, auto-restart on crash).
-- Workstations: no install beyond a modern browser, pointed at the local server's LAN address.
-- Print/barcode hardware: configured once per workstation during setup.
+Exact cloud infrastructure remains a deployment implementation decision and should not leak into business/domain logic.
 
-### Update Delivery (recurring-license model)
+### Offline / Enterprise
 
-Since the client's server has no obligation to be online, updates ship as versioned, installable local update packages applied via a simple installer/script — not a silent auto-updater pulling from a vendor server, which would reintroduce the exact cloud dependency the client rejected. This is a deliberately separate mechanism from license validation (`09_LabFlow_Licensing_and_Subscription_Architecture.md`): a lapsed license blocks application access, it does not block the client from continuing to run whatever version they last installed, and license checks never gate whether an update package can be applied.
+The laboratory operates a local LabFlow environment.
+
+Target production packaging is defined in `08_Windows_Packaging_and_Installer_Roadmap.md`.
+
+A production deployment should eventually install and manage:
+
+* PostgreSQL;
+* LabFlow API;
+* compiled staff application;
+* background services;
+* health checks;
+* backup tooling;
+* licensing component;
+* optional synchronization;
+* optional local hardware adapters.
+
+Workstations should require minimal configuration.
+
+### Offline / Enterprise Hardware
+
+Hardware sizing should be based on:
+
+* user count;
+* branch count;
+* document/report retention;
+* expected patient volume;
+* backup requirements;
+* local synchronization workload.
+
+A suitable small deployment may still use a mini-PC with SSD storage and UPS protection, but the product specification must not hardcode one historical laboratory's hardware as the universal LabFlow architecture.
+
+### Update Delivery
+
+#### Cloud
+
+Vendor-controlled deployment pipeline.
+
+#### Offline / Enterprise
+
+Updates should be distributed through controlled versioned packages or installer upgrades.
+
+Update architecture must:
+
+* preserve customer data;
+* run controlled database migrations;
+* support rollback/recovery strategy;
+* avoid requiring permanent internet connectivity;
+* remain separate from license enforcement.
+
+Licensing determines entitlement to use the application.
+
+Software-update mechanics determine which application version is installed.
+
+These concerns must remain separate.
 
 ## Offline-First Strategy
 
-The lab system has **zero runtime dependency on internet connectivity**. Registration, invoicing, sample tracking, result entry, and report printing all happen against the local PostgreSQL instance over the LAN. Internet is used only to *push* already-completed data outward — never required to complete a lab operation.
+Offline-first operation applies specifically to **Offline / Enterprise**.
+
+Core workflows must not require internet access:
+
+* patient registration;
+* test selection;
+* invoicing;
+* payments;
+* sample handling;
+* result entry;
+* result finalization;
+* report generation;
+* local report printing;
+* local administration required for daily operations.
+
+Online integrations may fail or become unavailable without making these core workflows unusable.
+
+Examples of optional internet-dependent functionality include:
+
+* SMS delivery;
+* cloud synchronization;
+* hosted public report access;
+* cloud booking retrieval;
+* license validation outside an allowed offline grace model;
+* future external integrations.
+
+Cloud editions are not expected to function without network access to the managed LabFlow platform.
 
 ## Synchronization Strategy
 
-**Outbox pattern + scheduled push**, chosen over WebSockets (unnecessary complexity; a report appearing on the website a minute or two after release is acceptable, and a persistent connection is more fragile with variable connectivity) and over VPN/tunnel-based direct DB access (bigger attack surface, and makes the lab dependent on a live tunnel to function normally — undermining the offline premise).
+**Status: Designed / partially scaffolded, not yet production implemented.**
 
-- Every sync-relevant event (report finalized, booking status update) writes a row to a local `sync_outbox` table in the same transaction as the change.
-- The sync agent periodically checks internet reachability and pushes queued rows over HTTPS when available; failures retry with backoff.
-- One-directional for report/status data (lab → website). Booking requests from the website land in a staff **review queue** — they don't write directly into operational tables; the lab always has final say.
-- Same mechanism, reused, for future multi-branch reconciliation (see System Architecture above).
+The planned Offline / Enterprise synchronization model uses a durable outbox/queue approach.
+
+`SyncOutbox` exists as schema groundwork.
+
+The complete production system still requires:
+
+* transactionally writing sync events;
+* worker/agent;
+* retry/backoff;
+* idempotency;
+* authentication;
+* connectivity recovery;
+* conflict handling;
+* monitoring;
+* reconciliation;
+* payload versioning.
+
+### Planned Direction
+
+```mermaid
+flowchart LR
+    LOCAL[(Local DB)] --> OUTBOX[Sync Outbox]
+    OUTBOX --> WORKER[Sync Worker]
+    WORKER -->|HTTPS| CLOUD[Hosted LabFlow Services]
+```
+
+For local-to-cloud report synchronization:
+
+1. local transaction completes;
+2. corresponding sync record is created;
+3. laboratory workflow succeeds independently of internet;
+4. background worker attempts delivery;
+5. failures remain queued;
+6. retries occur with backoff;
+7. confirmed delivery marks the job complete.
+
+Website-originated bookings must not directly mutate unrestricted operational tables in an Offline / Enterprise deployment.
+
+The preferred architecture is:
+
+```text
+Hosted Booking Request
+        ↓
+Cloud Queue
+        ↓
+Sync
+        ↓
+Local Review / Import
+        ↓
+Operational Booking
+```
+
+Detailed design lives in `07_Website_Separation_and_Offline_Online_Hybrid.md`.
 
 ## Security
 
+Security is a product-wide requirement across every tier.
+
 ### Authentication & Authorization
 
-- Password hashing via **bcrypt/argon2** — never plaintext or reversible encryption.
-- Role-based access control (RBAC): Reception, Sample Collector, Lab Tech, Admin — each scoped to only the actions it needs (full detail in `03_Core_Domain_Design.md § State Machines` and the Authorization Matrix below).
-- Server-side sessions with idle timeout; forced re-login on sensitive actions (e.g., voiding an invoice).
+### Implemented
 
-### Website / Patient-Facing Security
+* bcrypt password hashing;
+* session-based authentication;
+* login/session controls;
+* `SessionGuard`;
+* centralized Permission enum;
+* role-to-permission mapping;
+* `PermissionGuard`;
+* fail-closed behavior for roles without an active permission bundle;
+* ADMIN superuser model;
+* current LAB_OPERATOR bundle.
 
-- Report lookup requires tracking ID **plus** a secondary verification field (phone/CNIC-last-4/DOB) — a tracking ID alone is a guessable identifier and not sufficient authentication for health data.
-- Rate-limiting on lookup and booking endpoints to prevent enumeration/brute-force.
-- All website traffic over HTTPS.
+The active authorization model is:
 
-### Data-at-Rest & In-Transit
+```text
+Authenticated User
+       ↓
+Role
+       ↓
+Permission Bundle
+       ↓
+Required Route Permission
+       ↓
+Allow / Deny
+```
 
-- Database encryption at rest recommended given the sensitivity of health data, even without a strict statutory mandate in Pakistan today.
-- **Decided:** assume the lab's LAN is shared, not isolated (unconfirmed either way, so the safer assumption is used) — internal HTTPS with a locally-issued cert is implemented for LAN traffic wherever practical, at minimum supported even if not strictly enforced everywhere on day one.
-- Sync traffic to the website always over HTTPS.
+Detailed RBAC architecture lives in `12_RBAC_and_Operator_Dashboard.md`.
 
-### Audit & Accountability
+### Product Entitlements
 
-- Append-only audit log: every create/edit/delete on patients, results, invoices, and payments records who, what, when, and (for edits) before/after values.
-- Result amendments preserve the original version rather than overwriting — both a clinical-safety and legal-defensibility requirement (see `03_Core_Domain_Design.md § State Machines: Result`).
+A second layer is required for the SaaS product:
 
-### Backup, Disaster Recovery, Ransomware Protection
+```text
+Tenant
+  ↓
+Subscription / License
+  ↓
+Tier
+  ↓
+Feature Entitlement
+  ↓
+User Permission
+```
 
-- Automated nightly local backup plus a periodic offsite/rotated external copy — a backup that lives only on the same machine doesn't protect against theft, fire, or ransomware encrypting the whole disk.
-- Restore procedure tested at delivery, not assumed to work.
-- The server should not be a general-purpose internet-browsing machine; restrict its outbound internet use to the sync agent's HTTPS calls only.
-- **Decided:** the client owns and is responsible for backup custody (running the drive rotation); the software automates the backup process itself so this is a physical/logistical responsibility, not a technical one. Vendor trains the client's staff on the procedure at delivery. The optional annual maintenance agreement can include periodic backup verification as a line item.
+This entitlement layer is **not yet fully implemented**.
+
+A user should ultimately need both:
+
+1. tenant entitlement to the feature;
+2. permission to perform the action.
+
+### Currently Active Roles
+
+The currently implemented permission bundles are:
+
+* **ADMIN**
+  Superuser.
+
+* **LAB_OPERATOR**
+  Operational permissions including patients, bookings, invoice creation, payment recording, sample workflow, result entry/finalization, report viewing/printing, referring-doctor lookup, catalog viewing, operator dashboard, and cash-shift management.
+
+The Prisma Role enum contains additional reserved roles such as:
+
+* RECEPTION;
+* SAMPLE_COLLECTOR;
+* LAB_TECH;
+* CASHIER;
+* PATHOLOGIST;
+* ACCOUNTANT;
+* DOCTOR_PORTAL;
+* CORPORATE_MANAGER;
+* WEBSITE_CONTENT_MANAGER.
+
+They should not be described as active until permission bundles and corresponding workflows are intentionally implemented.
+
+### Sensitive Actions
+
+High-risk administrative actions should progressively receive stronger protections such as:
+
+* explicit permissions;
+* audit records;
+* possible re-authentication;
+* approval workflows where appropriate.
+
+Examples:
+
+* refunds;
+* invoice voiding;
+* result amendments;
+* role changes;
+* system configuration;
+* license/tenant administration.
+
+## Website / Patient-Facing Security
+
+Public functionality requires a stricter trust boundary than internal staff APIs.
+
+Report lookup currently uses a tracking identifier and secondary verification concept.
+
+Production architecture must require:
+
+* non-guessable or sufficiently strong identifiers;
+* strict secondary verification;
+* normalized comparison;
+* rate limiting;
+* tenant/branch isolation;
+* HTTPS;
+* minimal returned data;
+* no direct operational database exposure from public infrastructure in the Offline / Enterprise hybrid model.
+
+### Current Gap
+
+Public lookup rate limiting is not yet fully implemented.
+
+Secondary verification rules also require further hardening before production use.
+
+These are implementation gaps, not changes to the security architecture.
+
+## Data at Rest & In Transit
+
+### Cloud
+
+Production cloud deployments must use:
+
+* HTTPS;
+* secure database connections;
+* provider-appropriate encryption at rest;
+* secret management;
+* controlled network access;
+* backup encryption where appropriate.
+
+### Offline / Enterprise
+
+Current development architecture uses LAN HTTP.
+
+Production architecture should support secure LAN communication, with internal HTTPS or equivalent transport protection where appropriate.
+
+**Status:** internal HTTPS automation is planned, not currently implemented.
+
+Local database-at-rest protection may rely partly on operating-system/disk controls and deployment policy until application/platform-level encryption requirements are finalized.
+
+## Audit & Accountability
+
+**Architecture requirement:** clinically and financially significant changes must be attributable and historically recoverable.
+
+The Prisma schema contains `AuditLog`.
+
+However, application-wide audit recording is currently **partial/scaffolded**, not complete.
+
+Target audit coverage includes:
+
+* patient creation/update;
+* invoice creation/change;
+* payments;
+* refunds;
+* invoice voids;
+* result entry;
+* result finalization;
+* result reopen/amendment;
+* report generation/reprint;
+* user changes;
+* role/permission changes;
+* system settings;
+* doctor commission changes;
+* licensing/entitlement changes;
+* corporate billing actions.
+
+Result amendment history must remain part of the clinical record independently of generic audit logs.
+
+## Backup, Disaster Recovery & Ransomware Protection
+
+Backup is a product requirement for every production tier.
+
+### Cloud
+
+Vendor-managed backup strategy should eventually include:
+
+* automated database backups;
+* retention policy;
+* restore testing;
+* infrastructure recovery procedures;
+* monitoring of backup success;
+* appropriate offsite/redundant storage.
+
+### Offline / Enterprise
+
+Target architecture includes:
+
+* automated local backup;
+* secondary/off-machine backup;
+* configurable retention;
+* restore tooling;
+* restore verification;
+* operator/admin visibility into backup status.
+
+**Current status:** automated product backup/restore management is not yet implemented.
+
+A schema capable of being backed up is not the same as a working backup product.
+
+Full packaging/backup implementation belongs to Doc 08.
 
 ## Authorization Matrix
 
-The full RBAC role list (Admin, Reception, Cashier, Sample Collector, Lab Technician, Pathologist/Supervisor, Accountant, Doctor portal, Corporate Manager, Website Content Manager) is designed into the system for future use. **Confirmed for this v1 build:** only two roles are actually used — **Admin** (the owner, on the office PC that also runs the server) and a single combined **Lab Operator** role on the lab PC that covers registration, result entry, and printing (Reception + Sample Collector + Lab Tech collapsed into one, since it's one person doing all of it). The matrix below shows the full designed permission set; for this build, the "Reception", "Sample Collector", and "Lab Tech" columns are all held by the same Lab Operator login.
+The old fixed-role matrix has been superseded by granular permissions.
 
-| Action | Reception | Sample Collector | Lab Tech | Admin | System |
-|---|:---:|:---:|:---:|:---:|:---:|
-| Register patient | ✅ | | | ✅ | |
-| Create/confirm booking | ✅ | | | ✅ | |
-| Cancel booking | ✅ | | | ✅ | |
-| Issue invoice | ✅ | | | ✅ | |
-| Void invoice | | | | ✅ | |
-| Record payment | ✅ | | | ✅ | |
-| Refund payment | | | | ✅ | |
-| Collect sample | | ✅ | ✅ | | |
-| Accept/reject sample | | | ✅ | | |
-| Enter result | | | ✅ | | |
-| Release result | | | ✅ | | |
-| Amend result | | | ✅ | ✅ | |
-| Print report | ✅ | | ✅ | ✅ | |
-| Report state transitions | | | | | ✅ |
-| Pay doctor commission | | | | ✅ | |
-| Approve commission clawback | | | | ✅ | |
-| Manage users/roles | | | | ✅ | |
-| Configure system/feature flags | | | | ✅ | |
-| Manage website content (CMS) | | | | ✅ | |
-| Notification/Sync Job lifecycle | | | | | ✅ |
+Current product authorization should be understood as capabilities rather than hardcoded job titles.
+
+| Capability                                                      | LAB_OPERATOR | ADMIN |
+| --------------------------------------------------------------- | :----------: | :---: |
+| View patients                                                   |       ✅      |   ✅   |
+| Register patients                                               |       ✅      |   ✅   |
+| Update patients                                                 |       ✅      |   ✅   |
+| View/create/manage bookings                                     |       ✅      |   ✅   |
+| View billing                                                    |       ✅      |   ✅   |
+| Create invoices                                                 |       ✅      |   ✅   |
+| Record payments                                                 |       ✅      |   ✅   |
+| View/manage samples                                             |       ✅      |   ✅   |
+| Enter results                                                   |       ✅      |   ✅   |
+| Finalize/reopen/amend results through current result permission |       ✅      |   ✅   |
+| View reports                                                    |       ✅      |   ✅   |
+| Print reports                                                   |       ✅      |   ✅   |
+| View referring-doctor information required operationally        |       ✅      |   ✅   |
+| Manage doctors/commission configuration                         |              |   ✅   |
+| View test/package catalog                                       |       ✅      |   ✅   |
+| Modify catalog/reference ranges/packages                        |              |   ✅   |
+| Operator dashboard                                              |       ✅      |   ✅   |
+| Management analytics                                            |              |   ✅   |
+| Manage settings                                                 |              |   ✅   |
+| Manage users                                                    |              |   ✅   |
+| Manage cash shift                                               |       ✅      |   ✅   |
+
+Future roles should be introduced by mapping subsets of these and future permissions rather than changing every controller.
 
 ## Integration Strategy & Plugin Architecture
 
-Every external dependency sits behind an internal interface so it can be replaced without touching business logic:
+The product principle remains:
 
-- **`SmsGatewayInterface`** — send message, check delivery status. See SMS Architecture below.
-- **`PaymentMethodInterface`** — **decided:** Cash, Bank Transfer, EasyPaisa, and JazzCash are enabled at launch; Credit Card, Stripe, and PayPal are supported by the interface but disabled, addable later with no rewrite.
-- **`PrintManagerInterface`** — routes to Invoice Printer, Report Printer, Label Printer, Receipt Printer sub-handlers; a module (e.g., Billing) requests "print an invoice" and never talks to a physical printer driver directly.
-- **`StorageInterface`** — local filesystem today, swappable for other storage later without changing callers.
-- **`AuthProviderInterface`** — local username/password today; extensible if SSO is ever needed for a larger SaaS client.
+> External infrastructure should be replaceable through stable internal boundaries where doing so materially reduces coupling.
 
-This is the "plugin architecture" principle from the Product Philosophy applied concretely: build the interface, ship one implementation, add more later without a rewrite.
+This is **architectural direction**, not a claim that every interface already exists.
+
+### Implemented
+
+**SMS gateway abstraction**
+
+The current SMS integration is routed through the application's gateway/service boundary.
+
+SendPK is the current provider implementation.
+
+### Planned / Future Abstractions
+
+* **Payment provider/payment-method abstraction**
+* **Print Manager / physical-printer abstraction**
+* **Storage abstraction**
+* **Authentication-provider abstraction**
+* **additional notification channel abstractions**
+* **analyzer/device integrations**
+
+Avoid creating abstractions merely because an interface could theoretically exist.
+
+Introduce them where LabFlow genuinely needs multiple implementations, deployment-specific behavior, or vendor replacement.
 
 ## SMS Architecture
 
-**Approach:** abstracted gateway behind `SmsGatewayInterface`, backed by a local, PTA-approved SMS aggregator with direct operator connectivity (Jazz, Zong, Telenor, Ufone) rather than a global provider — lower per-SMS cost, PTA-compliant sender-ID registration, and pre-paid billing (no long-term contract), consistent with the "no recurring commitment" spirit of the project.
+### Current Implementation
 
-**Decided:** no existing provider relationship — the system supports any provider that implements `SmsGatewayInterface`. Bake-off candidates: eOcean, Jazz Business, Zong Business (and others as they surface). Final provider selected at deployment time based on the bake-off results, not decided on paper now.
+* internal SMS gateway/service boundary;
+* SendPK provider;
+* notification records;
+* delivery/failure status persistence;
+* selected booking/report SMS behavior.
 
-**Trigger points:** booking confirmation (with Booking ID), payment reminders, report-ready (message differs by payment status), critical-value alerts (to the referring doctor, marked urgent), sample rejection/recollection notices.
+### Product Direction
 
-**Design notes:** every outgoing SMS is logged (recipient, content, status, timestamp); SMS sending flows through the same outbox/sync mechanism as website sync, so a brief internet gap queues rather than silently drops a message; patient consent for SMS captured at registration.
+The notification architecture should support provider replacement without changing laboratory business logic.
+
+Future providers or channels may include:
+
+* other Pakistani SMS aggregators/operators;
+* email;
+* WhatsApp;
+* push notifications.
+
+### Planned Trigger Points
+
+Potential product triggers include:
+
+* booking created/confirmed;
+* booking reminders;
+* payment reminders;
+* report-ready;
+* amended report;
+* critical-value notification;
+* sample rejection/recollection;
+* system/operational alerts.
+
+Not every trigger is currently implemented.
+
+### Current Gap
+
+SMS/network delivery currently occurs too directly in some request flows for the final Offline / Enterprise reliability model.
+
+The target pattern is:
+
+```text
+Business transaction completes
+        ↓
+Notification queued locally
+        ↓
+Background dispatcher
+        ↓
+Provider
+        ↓
+Retry / delivery status
+```
+
+The laboratory transaction must not depend on successful internet delivery.
 
 ## Website Architecture
 
-The website is a separate, internet-facing deployment with its own smaller database holding only what's meant to be public (report metadata + PDFs, booking requests, CMS content) — it never has direct access to the lab's operational database, receiving data one-way via the sync outbox and sending booking requests the other way into a staff review queue.
+A separate `apps/website` Next.js application currently exists.
+
+### Current Development Architecture
+
+The website currently communicates with the operational API.
+
+This allows public functionality to be developed but is **not the final Offline / Enterprise production trust boundary**.
+
+### Target Offline / Enterprise Architecture
+
+The hosted website should eventually use a smaller hosted public-data/API layer containing only data intentionally exposed online.
+
+It should not receive unrestricted connectivity to the local laboratory PostgreSQL database.
+
+Detailed design is in Doc 07.
+
+### Cloud Tiers
+
+For Basic/Pro Cloud, the public portal can operate against the managed LabFlow cloud platform while still using strict public API boundaries.
+
+The principle is therefore:
+
+> separate public trust boundary, not necessarily a universally separate physical database for every tier.
 
 ## Printing
 
-**Print Manager** as the single entry point — no module prints directly to hardware.
+### Current Implementation
+
+LabFlow currently produces PDFs through `PrintingService`/reporting services using Puppeteer.
+
+Implemented output includes:
+
+* invoice PDFs;
+* patient report PDFs;
+* doctor statement PDFs;
+* plain-paper mode;
+* letterhead mode;
+* configurable margins;
+* continuous/one-test-per-page layouts;
+* print/reprint tracking.
+
+### Planned Hardware Abstraction
+
+There is currently **no complete `PrintManagerInterface` or physical printer-driver architecture**.
+
+A future Offline / Enterprise printing layer may abstract:
 
 ```mermaid
 flowchart TD
-    PM[Print Manager] --> IP[Invoice Printer]
-    PM --> RP[Report Printer]
-    PM --> LP[Label Printer]
-    PM --> RCP[Receipt Printer]
+    APP[LabFlow Application] --> PM[Print / Device Manager]
+    PM --> REPORT[Report / Document Printing]
+    PM --> LABEL[Label Printer]
+    PM --> RECEIPT[Receipt Printer]
+    PM --> OTHER[Future Devices]
 ```
 
-A future "Report Template Engine" (design-only for now — see `01_Product_Specification.md § Non-Goals`) will let report layout (logo position, signatures, QR codes, bilingual text) be edited without a code change; deferred past v1 but the Print Manager abstraction is built now specifically so that engine can slot in later without touching Billing or Laboratory modules.
+Do not describe this abstraction as implemented until actual device adapters exist.
 
 ## Background Jobs
 
-System-driven, no human role directly manipulates their internal state (see `03_Core_Domain_Design.md § State Machines: Notification, Sync Job`):
+### Current Status
 
-- **Sync agent** — drains the sync outbox to the website.
-- **Notification dispatcher** — drains queued notifications to the SMS gateway, with retry/backoff and an abandonment threshold that should surface on an admin dashboard.
-- **Retention/archival job** — moves Reports and Samples to `Archived`/`Discarded` after their configured retention period.
-- **Booking expiry job** — expires unconfirmed online bookings past their time window.
+Most product background workers described below are not yet implemented.
 
-## Feature Flags
+### Planned Workers
 
-Toggleable, off by default until the relevant phase of the roadmap is reached: Inventory tracking, Machine/analyzer integration, WhatsApp notifications, Doctor Portal, Multi-branch mode, Analytics/AI features. Flags exist in the schema/config from day one even while unused, per Product Philosophy principle 10.
+* **Sync worker**
+  drains synchronization queues;
+
+* **Notification dispatcher**
+  sends queued messages and handles retry/backoff;
+
+* **Booking expiry worker**
+  processes stale/expired reservations;
+
+* **Retention/archive worker**
+  applies configured retention policies;
+
+* **backup scheduler**
+  creates and verifies deployment-appropriate backups;
+
+* **license validation worker**
+  applicable to Offline / Enterprise licensing architecture;
+
+* **future SaaS operational jobs**
+  tenant lifecycle, billing/entitlements, scheduled analytics or maintenance where required.
+
+Background jobs must be:
+
+* tenant-aware;
+* idempotent where possible;
+* observable;
+* retry-safe;
+* auditable for important state changes.
+
+## Feature Flags & Product Entitlements
+
+`FeatureFlag` exists as schema groundwork.
+
+The product now requires a broader entitlement architecture.
+
+### Feature Flag
+
+Answers:
+
+> Is a technical/product capability enabled in this environment or tenant?
+
+### Product Entitlement
+
+Answers:
+
+> Does this subscription/license include this capability?
+
+### RBAC Permission
+
+Answers:
+
+> Can this user perform this action?
+
+These must not collapse into one mechanism.
+
+Conceptually:
+
+```text
+Feature exists in product
+        ↓
+Environment supports it
+        ↓
+Tenant is entitled to it
+        ↓
+User has permission
+        ↓
+Action allowed
+```
+
+Full runtime enforcement is not yet implemented.
 
 ## Deployment Strategy
 
-Single production environment at the client site for v1 — no separate staging needed at this scale, but the vendor should maintain its own dev/test copy to validate update packages before shipping them.
+There is no longer one universal production topology.
+
+### Basic Cloud
+
+Managed SaaS deployment.
+
+### Pro Cloud
+
+Managed SaaS deployment with expanded entitlements/capabilities.
+
+### Offline / Enterprise
+
+Locally packaged deployment with optional hosted services/synchronization.
+
+Development and test environments remain separate engineering concerns.
+
+Production deployments must never rely on Vite development servers, source-level Node tooling, or manual developer commands as the customer operating model.
 
 ## Disaster Recovery
 
-Covered under Security above (backup cadence, tested restore, offsite copy). In the event of full server loss: restore the latest backup onto replacement hardware; the client's LAN-only workstation configuration means no other reconfiguration is needed beyond pointing at the restored server's address.
+Disaster-recovery strategy depends on tier.
+
+### Cloud
+
+Vendor owns recovery process.
+
+Target requirements include:
+
+* automated backups;
+* restore tests;
+* documented RPO/RTO targets;
+* infrastructure recreation;
+* incident procedures.
+
+### Offline / Enterprise
+
+Recovery should allow:
+
+1. replacement/repaired server;
+2. LabFlow installation;
+3. database restore;
+4. configuration restore;
+5. workstation reconnection;
+6. synchronization reconciliation where applicable.
+
+The implementation is not complete until backup creation **and restoration** are operationally tested.
 
 ## Risk Register
 
-| # | Risk | Impact | Mitigation |
-|---|---|---|---|
-| 1 | Single local server is a single point of failure | Operations halt if hardware fails | Nightly + offsite backups, tested restore, spare machine/image ready |
-| 2 | Power outages corrupting the DB mid-transaction | Data loss/corruption | UPS, Postgres transactional integrity, backup cadence |
-| 3 | Tracking-ID-only report lookup guessable | Patient privacy breach | Secondary verification field + rate-limiting |
-| 4 | IP/ownership ambiguity with the client's contract | Vendor blocked from reusing codebase for SaaS | **Decided:** client owns data/deployment for the duration of an active license (recurring — yearly/monthly/usage-based, not perpetual, per `01_Product_Specification.md § Business Context` and `09_LabFlow_Licensing_and_Subscription_Architecture.md`), vendor retains source/IP and reuse rights — remaining action is making sure this is an explicit clause in the actual signed contract, not just a design decision |
-| 5 | Scope creep from dual-purpose build (client deliverable + SaaS foundation) | Delays the first paying customer's delivery | Keep multi-tenant scaffolding minimal/invisible for v1; no SaaS-only features until there's a real second client |
-| 6 | Sync delay perceived as unreliable | Trust in "still works with website" erodes | Set expectations clearly; surface last-synced-at to staff |
-| 7 | Manual result entry error (no analyzer integration) | Wrong results reaching patients | Reference-range highlighting, critical-value flagging |
-| 8 | Existing H2 Cloud data not migrated | Client loses historical records on cutover | Confirm migration need and export format early |
-| 9 | Staff unfamiliar with a new system | Slow adoption, shadow workarounds | Keep core workflows close to existing muscle memory; short training at go-live |
-| 10 | SMS provider reliability/cost drift | Missed notifications, unexpected cost | `SmsGatewayInterface` abstraction allows swapping providers without a rewrite |
+| #  | Risk                                                                | Impact                                              | Mitigation                                                                      |
+| -- | ------------------------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------- |
+| 1  | Cross-tenant data leakage in SaaS                                   | Severe privacy/security failure                     | Tenant-scoped backend design, automated isolation tests, trusted tenant context |
+| 2  | Offline / Enterprise local server failure                           | Local operations unavailable                        | UPS, automated backup, tested restore, deployment recovery tooling              |
+| 3  | Power failure during local operations                               | Interruption/data risk                              | PostgreSQL transactions, UPS, recovery/backup procedures                        |
+| 4  | Public report enumeration                                           | Patient privacy breach                              | Strong secondary verification, rate limiting, HTTPS, minimal public payloads    |
+| 5  | Product tiers diverge into separate codebases                       | Long-term engineering fragmentation                 | Shared core + entitlement architecture                                          |
+| 6  | Schema scaffolding mistaken for implemented product functionality   | Incorrect development assumptions                   | Explicit implementation-status documentation                                    |
+| 7  | Synchronization creates duplicates/conflicts                        | Data inconsistency                                  | Durable outbox, idempotency, versioned payloads, reconciliation rules           |
+| 8  | Internet-dependent integration blocks Offline / Enterprise workflow | Laboratory downtime                                 | Queue external work after local transaction succeeds                            |
+| 9  | Weak audit coverage                                                 | Clinical/financial traceability loss                | Central audit service and mandatory coverage for significant actions            |
+| 10 | Backup exists but restore is untested                               | False sense of recoverability                       | Automated verification + scheduled restore tests                                |
+| 11 | Feature entitlement mixed with RBAC                                 | Security/commercial leakage                         | Separate tenant entitlement and user permission layers                          |
+| 12 | Reserved roles exposed before bundles exist                         | Users can authenticate but cannot operate correctly | Expose only active roles until intentionally implemented                        |
+| 13 | Public and operational API boundaries remain coupled                | Larger attack surface                               | Complete public API/data separation appropriate to deployment tier              |
+| 14 | External-provider outage                                            | Notifications/integrations fail                     | Gateway abstraction + durable queue/retry                                       |
 
 ---
 
-**Dependencies:** `01_Product_Specification.md` (requirements driving these decisions).
-**Related chapters:** `03_Core_Domain_Design.md` (the business rules this infrastructure serves), `04_Application_Modules.md` (the user-facing surface built on top).
-**Future extensions:** Report Template Engine, Inventory module, Analyzer integration, Doctor Portal, Plugin marketplace — all designed for via the interfaces above, none built in v1.
-**Remaining open questions:** none from the original list — see `README.md § Decisions Log`. New infrastructure questions will surface during deployment and are tracked as they arise.
+**Dependencies:** `01_Product_Specification.md` and `10_Product_Tiers_and_SaaS_Scope.md`.
+
+**Related chapters:** `03_Core_Domain_Design.md` defines the business/domain rules this infrastructure serves; `04_Application_Modules.md` defines the user-facing modules; `07_Website_Separation_and_Offline_Online_Hybrid.md` defines Offline / Enterprise public-service synchronization; `08_Windows_Packaging_and_Installer_Roadmap.md` defines local product packaging; `09_LabFlow_Licensing_and_Subscription_Architecture.md` defines Offline / Enterprise license validation; `12_RBAC_and_Operator_Dashboard.md` defines the current permission implementation.
+
+**Current implementation summary:** shared web/API/PostgreSQL core, WebSockets, authentication/RBAC, analytics, PDF generation, public website foundations, tenant/branch schema groundwork, and SendPK SMS integration are implemented or substantially implemented. Sync, SaaS control plane, entitlement enforcement, automated backups, production hybrid website separation, Print Manager/device abstraction, and several background services remain partial or planned.
+
+**Future extensions:** cloud infrastructure automation, tenant control plane, additional integrations, analyzers, device adapters, advanced observability, storage providers, identity providers, plugin/extension architecture.
+
+**Remaining open questions:** hosting/provider choices, entitlement implementation details, production network/security standards, SaaS operational targets, and deployment-specific infrastructure choices should be resolved as their implementation phases begin rather than being inferred from historical single-laboratory assumptions.
