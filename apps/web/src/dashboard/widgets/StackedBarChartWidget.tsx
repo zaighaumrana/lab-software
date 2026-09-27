@@ -9,15 +9,19 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 
-export interface StackedBarSeries {
-  key: string;
+export interface StackedBarSeries<T> {
+  key: Extract<keyof T, string>;
   label: string;
   color: string;
 }
 
-/** Generic stacked bar chart — backs Monthly Revenue Comparison (cash
- * received vs. outstanding per month). */
-export function StackedBarChartWidget({
+/**
+ * Generic stacked bar chart — backs Monthly Revenue Comparison (cash
+ * received vs. outstanding per month).
+ *
+ * Generic over the caller's own row type `T` — see BarChartWidget for why.
+ */
+export function StackedBarChartWidget<T extends object>({
   title,
   data,
   xKey,
@@ -26,9 +30,9 @@ export function StackedBarChartWidget({
   emptyLabel = 'No data in this range.',
 }: {
   title: string;
-  data: Record<string, unknown>[];
-  xKey: string;
-  series: StackedBarSeries[];
+  data: T[];
+  xKey: Extract<keyof T, string>;
+  series: StackedBarSeries<T>[];
   loading?: boolean;
   emptyLabel?: string;
 }) {

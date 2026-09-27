@@ -82,10 +82,31 @@ export const V1_ENABLED_PAYMENT_METHODS = [
   PAYMENT_METHODS.JAZZCASH,
 ] as const;
 
-export * from './sms-segmentation';
-export * from './sms-placeholders';
-export * from './sms-events';
-export * from './phone';
+// Named (not wildcard) re-exports: tsc compiles `export *` to a CommonJS
+// `__exportStar` runtime helper that copies properties dynamically, which
+// Rollup/Vite's static import analysis can't see into — it then rejects
+// any named import from this package as "not exported", even though the
+// value exists at runtime. Explicit named exports compile to individually
+// analyzable `Object.defineProperty` calls instead, which Rollup can
+// resolve statically. Runtime behavior is identical either way.
+export type { SmsMessageType, SmsSegmentResult } from './sms-segmentation';
+export { calculateSmsSegments } from './sms-segmentation';
+
+export type { PlaceholderValidation } from './sms-placeholders';
+export {
+  SMS_VARIABLE_MAP,
+  SMS_VARIABLES,
+  extractPlaceholders,
+  validatePlaceholders,
+  renderLocalTemplate,
+  toSendPkWording,
+  buildSendPkVariables,
+} from './sms-placeholders';
+
+export type { SmsEventKey, SmsEventDefinition } from './sms-events';
+export { SMS_EVENT_KEYS, SMS_EVENT_DEFINITIONS, getSmsEventDefinition } from './sms-events';
+
+export { normalizePakistaniMobile } from './phone';
 
 export const FEATURE_FLAGS = {
   INVENTORY: 'inventory',

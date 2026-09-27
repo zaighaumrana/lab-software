@@ -9,8 +9,8 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 
-export interface LineSeries {
-  key: string;
+export interface LineSeries<T> {
+  key: Extract<keyof T, string>;
   label: string;
   color: string;
 }
@@ -19,8 +19,10 @@ export interface LineSeries {
  * Generic line-chart widget — backs Revenue Trend, Daily Patient Count, and
  * any future time-series metric. Doesn't know what it's plotting: caller
  * supplies the data array, the x-axis key, and one or more series configs.
+ *
+ * Generic over the caller's own row type `T` — see BarChartWidget for why.
  */
-export function LineChartWidget({
+export function LineChartWidget<T extends object>({
   title,
   data,
   xKey,
@@ -29,9 +31,9 @@ export function LineChartWidget({
   emptyLabel = 'No data in this range.',
 }: {
   title: string;
-  data: Record<string, unknown>[];
-  xKey: string;
-  series: LineSeries[];
+  data: T[];
+  xKey: Extract<keyof T, string>;
+  series: LineSeries<T>[];
   loading?: boolean;
   emptyLabel?: string;
 }) {

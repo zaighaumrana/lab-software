@@ -223,13 +223,37 @@ export interface Report {
   printedAt?: string | null;
   printCount?: number;
   createdAt?: string;
-  invoice?: Invoice & {
-    booking?: Booking & { patient?: Patient; doctor?: Doctor | null };
-    lines?: InvoiceLine[];
-    payments?: Payment[];
-    samples?: {
-      id: string;
-      results?: Result[];
-    }[];
-  };
+  invoice?: ReportInvoice;
 }
+
+/**
+ * Sample shape as returned alongside a Report — richer than the base
+ * `Invoice.samples` entry (which the invoice list/detail views use and
+ * don't need `results` for): it always includes each sample's released
+ * results, since that's exactly what the report document/print pages need.
+ */
+export interface ReportSample {
+  id: string;
+  sampleCode: string;
+  status: string;
+  results?: Result[];
+}
+
+/**
+ * `Invoice`, as seen through a `Report`: deeper `booking`/`lines`/`payments`
+ * includes, and `samples` replaced by the richer `ReportSample` shape
+ * above. Built with `Omit<Invoice, 'samples'>` rather than a plain
+ * intersection — intersecting two conflicting `samples` array types
+ * doesn't override the property, it requires values to satisfy both at
+ * once, which silently hid `results` from the merged type. This still uses
+ * `&` (not `interface ... extends`) for the outer merge: `extends` would
+ * reject narrowing `Invoice`'s required `lines`/`payments` to optional here,
+ * whereas intersecting with the same (compatible) optional shape is fine —
+ * the two sides simply don't conflict once `samples` is removed.
+ */
+export type ReportInvoice = Omit<Invoice, 'samples'> & {
+  booking?: Booking & { patient?: Patient; doctor?: Doctor | null };
+  lines?: InvoiceLine[];
+  payments?: Payment[];
+  samples?: ReportSample[];
+};

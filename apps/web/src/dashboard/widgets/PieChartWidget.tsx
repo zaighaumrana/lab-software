@@ -15,8 +15,10 @@ const DEFAULT_COLORS = [
  * Generic pie/donut chart — backs Payment Status and Test Category
  * Distribution. Set `donut` to render as a donut instead of a full pie;
  * both are the same component/data shape, just a different innerRadius.
+ *
+ * Generic over the caller's own row type `T` — see BarChartWidget for why.
  */
-export function PieChartWidget({
+export function PieChartWidget<T extends object>({
   title,
   data,
   nameKey,
@@ -26,9 +28,9 @@ export function PieChartWidget({
   emptyLabel = 'No data in this range.',
 }: {
   title: string;
-  data: Record<string, unknown>[];
-  nameKey: string;
-  valueKey: string;
+  data: T[];
+  nameKey: Extract<keyof T, string>;
+  valueKey: Extract<keyof T, string>;
   donut?: boolean;
   loading?: boolean;
   emptyLabel?: string;

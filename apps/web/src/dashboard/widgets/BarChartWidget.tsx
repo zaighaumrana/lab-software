@@ -12,8 +12,13 @@ import {
  * Generic single-series bar chart — backs Most Performed Tests and Doctor
  * Referral Contribution. Caller supplies the data + which fields are the
  * category (x-axis) and value (bar height).
+ *
+ * Generic over the caller's own row type `T` so real domain interfaces
+ * (TopDoctorRow, TestVolumeRow, etc.) can be passed as-is — no index
+ * signature required, and `xKey`/`valueKey` are checked against T's actual
+ * keys instead of being arbitrary strings.
  */
-export function BarChartWidget({
+export function BarChartWidget<T extends object>({
   title,
   data,
   xKey,
@@ -24,9 +29,9 @@ export function BarChartWidget({
   emptyLabel = 'No data in this range.',
 }: {
   title: string;
-  data: Record<string, unknown>[];
-  xKey: string;
-  valueKey: string;
+  data: T[];
+  xKey: Extract<keyof T, string>;
+  valueKey: Extract<keyof T, string>;
   valueLabel: string;
   color?: string;
   loading?: boolean;
