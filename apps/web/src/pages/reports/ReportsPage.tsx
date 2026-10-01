@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import * as reportsApi from '../../api/reports';
 import type { Report } from '../../types';
 import { StatusBadge } from '../../components/StatusBadge';

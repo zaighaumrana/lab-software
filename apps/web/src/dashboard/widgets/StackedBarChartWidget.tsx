@@ -50,7 +50,7 @@ export function StackedBarChartWidget<T extends object>({
             <XAxis dataKey={xKey} tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} />
             <Tooltip />
-            <Legend wrapperStyle={{ fontSize: 12 }} />
+            <Legend itemSorter={null} wrapperStyle={{ fontSize: 12 }} />
             {series.map((s) => (
               <Bar key={s.key} dataKey={s.key} name={s.label} stackId="a" fill={s.color} />
             ))}

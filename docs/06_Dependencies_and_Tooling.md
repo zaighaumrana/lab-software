@@ -1,188 +1,117 @@
-# Dependencies & Tooling Reference
+# Dependencies and Tooling Reference
 
-**Purpose of this document:** a complete inventory of every third-party package, database tool, and system-level tool this repo relies on - what it's for, why it was chosen, and what it means for building a distributable/packaged bundle later (installer size, native binaries, offline requirements, licensing). Written so packaging work doesn't require re-deriving "wait, why do we even have this?" for each dependency.
+Updated 2026-10-02 (Asia/Karachi). This is the local offline-first LabFlow workspace: API, internal web, database and shared packages. The public website remains in its separate repository. See [the modernization results](Dependency_Modernization_2026-10-02.md) for measured footprint, bundle, security and validation results.
 
-This is a living document - update it in the same PR/commit whenever a dependency is added, removed, or upgraded for a new reason.
+## Runtime and workspace
 
----
+- Node.js **24.15.0 or newer**, with Node 24 LTS recommended. Tested on 24.21.0. Nest 12 is ESM; compiled API/shared code remains CommonJS using NodeNext resolution and modern Node's ESM interoperability. Puppeteer 25 requires asynchronous dynamic import.
+- pnpm **11.23.0**, pinned in root `package.json`. Preserve `pnpm-lock.yaml` and install with `pnpm install --frozen-lockfile`.
+- Workspace paths: `apps/api`, `apps/web`, `packages/database`, `packages/shared`.
+- Root `pnpm typecheck` checks all four packages. The former lint script referenced an absent ESLint installation/configuration and has been removed; this task adds no lint framework.
+- Native/postinstall allowance: `@parcel/watcher`, `@prisma/client`, `@prisma/engines`, `bcrypt`, `esbuild`, `prisma`, `puppeteer`, `unrs-resolver`. Watcher/resolver belong to Jest 30; development only. Vite 8 uses native Rolldown/Oxc binaries; esbuild remains a transitive build dependency elsewhere.
+- A narrow `minimumReleaseAgeExclude` entry allows reviewed stable `vite@8.3.2`; the general supply-chain age policy remains enabled.
 
-## 1. Repo Layout & Package Manager
+## Every direct dependency: usage, version and decision
 
-This is a **pnpm workspace monorepo** (`pnpm-workspace.yaml`):
+Versions below are the **actual resolved versions**, not the older lower bounds originally written in manifests. Repeated workspace declarations are grouped; each declaration's runtime/development scope is shown. Registry stable versions were researched during this task; future upgrades must repeat that research. The manifest/lockfile remain authoritative.
 
-```
-packages:
-  - 'apps/*'      -> apps/api, apps/web
-  - 'packages/*'  -> packages/database, packages/shared
-```
+| Package | Used by | Resolved before | Resolved after | Highest stable researched | Decision and actual usage |
+|---|---|---|---|---|---|
+| `@lms/database` | api | link:../../packages/database | link:../../packages/database | internal | KEEP: API imports Prisma client; internal workspace package, no registry version. |
+| `@lms/shared` | api, web | link:../../packages/shared | link:../../packages/shared | internal | KEEP: shared domain constants, notification definitions and permission contracts. |
+| `@nestjs/cli` | api (dev) | 11.0.24 | 12.0.8 | 12.0.8 | UPGRADE: build/watch CLI; default tsc backend, no optional webpack/SWC/Rspack packages required. |
+| `@nestjs/common` | api | 11.1.28 | 12.1.2 | 12.1.2 | UPGRADE: framework decorators, exceptions and DI; migrate Nest packages together. |
+| `@nestjs/config` | api | 4.0.4 | 12.0.1 | 12.0.1 | UPGRADE: ConfigModule environment loading; existing configuration path retained. |
+| `@nestjs/core` | api | 11.1.28 | 12.1.2 | 12.1.2 | UPGRADE: API bootstrap, DI and Reflector; verified compiled server startup. |
+| `@nestjs/jwt` | api | 11.0.2 | removed | 12.0.2 | REMOVE: no JwtModule/JWT signing or verification usage; custom session authentication. |
+| `@nestjs/mapped-types` | api | 2.1.1 | 12.0.0 | 12.0.0 | UPGRADE: DTO PartialType; compatible Nest 12 validation integration. |
+| `@nestjs/passport` | api | 11.0.5 | removed | 12.0.0 | REMOVE: no PassportModule or registered strategies; custom session authentication. |
+| `@nestjs/platform-express` | api | 11.1.28 | 12.1.2 | 12.1.2 | UPGRADE: HTTP adapter; existing Express Response PDF endpoints make a Fastify migration unnecessary. |
+| `@nestjs/platform-socket.io` | api | 11.1.29 | 12.1.2 | 12.1.2 | UPGRADE: laboratory gateway Socket.IO adapter, with Nest 12 peers. |
+| `@nestjs/schematics` | api (dev) | 11.1.0 | 12.0.6 | 12.0.6 | UPGRADE: scaffolding collection referenced by nest-cli.json and Nest CLI. |
+| `@nestjs/testing` | api (dev) | 11.2.1 | 12.1.2 | 12.1.2 | UPGRADE: DI/controller integration tests; Jest VM module support enables Nest 12 ESM. |
+| `@nestjs/websockets` | api | 11.1.29 | 12.1.2 | 12.1.2 | UPGRADE: gateway decorators and lifecycle contracts; existing session/tenant logic retained. |
+| `@prisma/client` | database | 6.19.3 | 6.19.3 | 7.10.0 | KEEP: exact 6.19.3 client/CLI pair; central PrismaClient subclass, Decimal runtime import and existing generator depend on v6. |
+| `@types/bcrypt` | api (dev), database (dev) | 5.0.2 | 6.0.0 | 6.0.0 | UPGRADE: v6 native hash API declarations; development only. |
+| `@types/express` | api (dev) | 5.0.6 | 5.0.6 | 5.0.6 | KEEP: Express 5 Response declarations for PDF endpoints; current stable version already resolved. |
+| `@types/jest` | api (dev), shared (dev) | 29.5.14 | 30.0.0 | 30.0.0 | UPGRADE: test globals/types matching Jest 30; development only. |
+| `@types/node` | api (dev), web (dev) | 22.20.1 | 24.19.0 | 26.6.3 | UPGRADE/ADD: Node 24 API and Vite config declarations; target the documented Node 24 deployment runtime rather than newer Node type generations. |
+| `@types/passport-local` | api (dev) | 1.0.38 | removed | 1.0.38 | REMOVE: no remaining Passport source/types. |
+| `@types/react` | web (dev) | 19.2.18 | 19.3.0 | 19.3.0 | UPGRADE: stable React 19 declarations; development only. |
+| `@types/react-dom` | web (dev) | 19.2.4 | 19.3.0 | 19.3.0 | UPGRADE: React DOM/createRoot declarations; development only. |
+| `@types/supertest` | api (dev) | 6.0.3 | 7.2.1 | 7.2.1 | UPGRADE: HTTP integration-test declarations; development only. |
+| `@vitejs/plugin-react` | web (dev) | 4.7.0 | 6.1.1 | 6.1.1 | UPGRADE: Vite 8-compatible React transform/HMR, current stable 6.1.1. |
+| `autoprefixer` | web (dev) | 10.5.4 | 10.6.1 | 10.6.1 | UPGRADE: existing Tailwind 3 PostCSS chain still requires browser-prefix processing. |
+| `axios` | web | 1.19.0 | 1.20.0 | 1.20.0 | UPGRADE: shared API client with session/tenant/branch headers, global 401 clearing and blob responses; retain to avoid rewriting established error semantics. |
+| `bcrypt` | api, database (dev) | 5.1.1 | 6.0.0 | 6.0.0 | UPGRADE: API password hashes and database seed tooling; v6 includes Windows prebuilds, removes node-pre-gyp. Legacy hashes and fixture login verified. |
+| `class-transformer` | api | 0.5.1 | 0.5.1 | 0.5.1 | KEEP: ValidationPipe DTO conversion; current stable 0.5.1 remains compatible. |
+| `class-validator` | api | 0.14.4 | 0.15.1 | 0.15.1 | UPGRADE: validation decorators throughout DTOs; no changed IsIBAN options used. |
+| `clsx` | web | 2.1.1 | 2.1.1 | 2.1.1 | KEEP: conditional UI class names; tiny maintained current stable 2.1.1. |
+| `jest` | api (dev), shared (dev) | 29.7.0 | 30.5.2 | 30.5.2 | UPGRADE: existing API/shared unit and controller tests; retain readable mocks/assertions. |
+| `lucide-react` | web | 0.469.0 | 1.49.0 | 1.49.0 | UPGRADE: named SVG icon imports throughout pages/layout; current stable exports compile. |
+| `passport` | api | 0.7.0 | removed | 0.7.0 | REMOVE: no Passport authentication calls; custom session authentication. |
+| `passport-local` | api | 1.0.0 | removed | 1.0.0 | REMOVE: no local Passport strategy; custom session authentication. |
+| `postcss` | web (dev) | 8.5.25 | 8.5.28 | 8.5.28 | UPGRADE: Tailwind 3 plugin pipeline; retain until a separately verified Tailwind 4 migration. |
+| `prisma` | database (dev) | 6.19.3 | 6.19.3 | 7.10.0 | KEEP: exact 6.19.3 CLI; stable v7.10.0 requires driver adapters, generator/import/config and connection-pool changes. Registry latest/CLI notice also advertises v8 RC: deliberately excluded. |
+| `puppeteer` | api | 23.11.1 | 25.12.0 | 25.12.0 | UPGRADE: three HTML/CSS PDF templates; asynchronous ESM import and explicit network-idle wait migrated. |
+| `react` | web | 19.2.8 | 19.3.0 | 19.3.0 | UPGRADE: JSX, hooks and context; stable 19.3.0, no canary. |
+| `react-dom` | web | 19.2.8 | 19.3.0 | 19.3.0 | UPGRADE: createRoot rendering; matched React 19.3.0. |
+| `react-is` | web | — | 19.3.0 | 19.3.0 | ADD: explicit Recharts 3 peer matching React 19.3.0. |
+| `react-router` | web | — | 7.18.4 | 8.4.0 | REPLACE: officially supported direct v7 declarative routing API; imports migrated from react-router-dom. |
+| `react-router-dom` | web | 7.18.2 | removed | 7.18.4 | REPLACE: compatibility re-export wrapper removed; use react-router directly. |
+| `recharts` | web | 2.15.4 | 3.10.1 | 3.10.1 | UPGRADE: bar, line, donut and stacked-bar widgets; route lazy loading removes chart cost from login. Disable new legend sorting to preserve supplied order. |
+| `reflect-metadata` | api | 0.2.2 | 0.2.2 | 0.2.2 | KEEP: Nest decorator metadata runtime requirement; current stable 0.2.2. |
+| `rxjs` | api | 7.8.2 | 7.8.2 | 7.8.2 | KEEP: Nest request/interceptor peer dependency; current stable 7.8.2 already resolved in baseline. |
+| `socket.io` | api | 4.8.3 | 4.8.4 | 4.8.4 | UPGRADE: laboratory push transport, tenant rooms and session handshake; server/client updated together. |
+| `socket.io-client` | web | 4.8.3 | 4.8.4 | 4.8.4 | UPGRADE: laboratory session-authenticated live updates; matched server version. |
+| `supertest` | api (dev) | 7.2.2 | 7.3.0 | 7.3.0 | UPGRADE: existing catalog HTTP integration tests; maintained compatible version. |
+| `tailwindcss` | web (dev) | 3.4.19 | 3.4.19 | 4.3.3 | KEEP: current stable 3.4.19 within v3. Defer v4.3.3 because existing @apply/utilities and older LAN browsers need visual regression coverage. |
+| `ts-jest` | api (dev), shared (dev) | 29.4.12 | 29.4.14 | 29.4.14 | UPGRADE: TypeScript decorators/metadata in tests; current release supports Jest 30 and TS <7. Transform config updated; isolated test compilation removes hybrid-module warning. |
+| `tsx` | database (dev) | 4.23.1 | 4.23.15 | 4.23.15 | UPGRADE: TypeScript database seed runner, development/installation tool only; seed not executed. |
+| `typescript` | api (dev), database (dev), shared (dev), web (dev) | 5.9.3 | 6.0.3 | 7.0.2 | UPGRADE: all workspace builds/type checks; stable 6.0.3 is compatible with Nest CLI and ts-jest, unlike available stable 7.0.2. |
+| `vite` | web (dev) | 6.4.3 | 8.3.2 | 8.3.2 | UPGRADE: Vite 8 Rolldown/Oxc production build/dev server; ESM-native config alias repaired. |
 
-| Tool | Version pin | Why |
-|---|---|---|
-| **pnpm** | `11.23.0` (pinned via `packageManager` field in root `package.json`) | Workspace/monorepo package manager. Chosen over npm/yarn for disk-efficient shared dependency storage (single content-addressable store, hard-linked into each `node_modules`) - matters on a small self-hosted server where disk space is a real constraint, not just a dev-machine nicety. |
-| **Node.js** | `>=20` (root `package.json` `engines`) | Runtime for the API (NestJS) and build tooling for the internal React/Vite frontend. |
+## Direct declaration counts
 
-**Packaging note:** `pnpm-workspace.yaml` also declares an `allowBuilds` allowlist (`@prisma/client`, `@prisma/engines`, `bcrypt`, `esbuild`, `prisma`, `puppeteer`). These are packages with **native/postinstall build steps** - pnpm blocks arbitrary postinstall scripts by default for supply-chain safety, so this list is the explicit opt-in. Any new dependency that needs a native compile or downloads a binary (Chromium, image libs, etc.) will silently fail to build unless added here first - check this list first if a fresh `pnpm install` produces a package that "doesn't work."
+Counts include internal workspace links; repeated declarations are counted in their respective packages.
 
----
+| Workspace | Runtime | Development |
+|---|---:|---:|
+| `@lms/api` | 16 | 12 |
+| `@lms/web` | 10 | 9 |
+| `@lms/database` | 1 | 5 |
+| `@lms/shared` | 0 | 4 |
 
-## 2. `apps/api` - NestJS Backend
+Before: 60 declarations (30 runtime, 30 development). After: 57 (27 runtime, 30 development). No TypeScript compiler, bundler, test runner, typings, Nest CLI, Prisma CLI or seed runner was moved into runtime dependencies. The production audit still includes Prisma CLI through the client's optional peer dependency; do not mistake a devDependency declaration for guaranteed exclusion from the resolved production graph.
 
-The local server: REST API, business logic, PDF/print generation, WebSocket push, auth. Runs on the client's own machine (offline-first design - see `02_Technical_Architecture.md`).
+## Architectural decisions
 
-### Runtime dependencies
+**Express retained.** Controllers use Express `Response` for PDFs, normal Nest guards/validation/CORS and a Socket.IO adapter. No measured LAN bottleneck justifies rewriting transport-specific behavior for Fastify. Keep the upgraded maintained Nest Express adapter; Fastify benchmark throughput alone does not establish an application benefit. [Nest guidance](https://docs.nestjs.com/techniques/performance).
 
-| Package | Version | Purpose | Why this one |
-|---|---|---|---|
-| `@nestjs/common`, `@nestjs/core` | ^11.0.0 | NestJS framework core - DI container, decorators, module system, exception filters. | The whole API is built on Nest's module/DI architecture; this is the foundation everything else plugs into. |
-| `@nestjs/config` | ^4.0.0 | Loads `.env` files into a typed config service (`ConfigModule.forRoot`). | Centralizes environment variable access instead of raw `process.env` scattered through the codebase. |
-| `@nestjs/platform-express` | ^11.0.0 | Express adapter - Nest needs an underlying HTTP server implementation, and Express is the default/most battle-tested choice. | Handles the actual HTTP request/response plumbing under Nest's abstractions. |
-| `@nestjs/websockets`, `@nestjs/platform-socket.io` | ^11.0.0 | WebSocket gateway support (`@WebSocketGateway`) backed by socket.io. | Powers the live Laboratory-screen updates (`laboratory.gateway.ts`) - pushes result changes to connected staff instead of polling. |
-| `socket.io` | ^4.8.1 | The actual WebSocket/long-polling transport library the gateway sits on top of. | Handles reconnection, room-based broadcast (used to scope events per tenant), and transport fallback. |
-| `@lms/database` | workspace:* | Internal package - Prisma client + schema (see section 5). | Every module that touches the DB imports the generated Prisma client from here rather than each app generating its own. |
-| `bcrypt` | ^5.1.1 | Password hashing for user login (`auth.service.ts`) and any other stored credentials. | Industry-standard slow hash for password storage - never store or compare plaintext passwords. |
-| `class-validator`, `class-transformer` | ^0.14.1 / ^0.5.1 | Decorator-based DTO validation (`@IsString()`, `@IsEmail()`, etc.) and plain-object <-> class transformation. | Paired with Nest's `ValidationPipe` (see `main.ts`) to reject malformed requests before they reach business logic - this is the app's primary input-validation layer. |
-| `puppeteer` | ^23.9.0 | Headless Chromium - renders HTML templates (invoice, report, doctor statement) to PDF (`printing.service.ts`, `printing.controller.ts`). | Chosen over a pure-JS PDF library because reports need real CSS layout (tables, print stylesheets) - rendering the same HTML/CSS the browser preview uses guarantees the PDF matches what staff already see on screen. |
-| `reflect-metadata` | ^0.2.2 | Enables TypeScript decorator metadata reflection at runtime. | Required by both NestJS's DI system and `class-validator`/`class-transformer` - without it, decorators can't read parameter/property types. |
-| `rxjs` | ^7.8.1 | Reactive extensions - NestJS's internal request pipeline (interceptors, some lifecycle hooks) is built on RxJS Observables. | Peer dependency of NestJS itself, not used directly in application code today. |
+**bcrypt 6 retained.** Native Windows x64/arm64 prebuilds use node-gyp-build instead of the deprecated node-pre-gyp download stack. Existing `$2a$`/`$2b$` hashes are compatible and tested. bcryptjs avoids native addons but its documented hashing speed is about 30% slower; introducing another algorithm would require backward-compatible verification and is outside this modernization. Build/package for the deployment OS/architecture; unsupported platforms may still need compilation. [bcrypt](https://github.com/kelektiv/node.bcrypt.js), [bcryptjs](https://github.com/dcodeIO/bcrypt.js).
 
-### Present but currently unused (candidates for removal before packaging)
+**Full Puppeteer 25 retained.** It provides a matched managed Chrome and preserves the three current HTML/CSS templates. `.puppeteerrc.cjs` skips only the separate chrome-headless-shell download: this service launches `headless: true`, which uses regular Chrome. `puppeteer-core` would transfer versioning, discovery and offline provisioning responsibility to our installer. Playwright can add browser/driver weight; replacing browser layout with a simpler PDF library would require template redesign. A deliberate `PUPPETEER_EXECUTABLE_PATH` override remains supported; no developer machine path is embedded in source. [Configuration](https://pptr.dev/guides/configuration), [v25 changelog](https://pptr.dev/CHANGELOG).
 
-| Package | Status |
-|---|---|
-| `@nestjs/jwt` | No `JwtModule`/JWT usage found anywhere in `apps/api/src`. Auth is a custom in-memory session-token scheme (`auth.service.ts`), not JWT. |
-| `@nestjs/passport`, `passport`, `passport-local`, `@types/passport-local` | No `PassportModule` or passport strategy registered anywhere. Same reason - auth doesn't use Passport. |
+The managed browser was absent before this task. Downloading the new managed Chrome did not complete successfully here; installation validation used temporary `PUPPETEER_SKIP_DOWNLOAD=true`, and PDF/browser smoke tests used an explicitly configured installed Chrome 154.0.8037.58. The task-created partial ZIP was removed. A normal online build must provision the matched Chrome, then bundle it and set `PUPPETEER_CACHE_DIR` appropriately for offline deployment, or deliberately provision/configure a supported executable. Never ship a production installation with no usable browser and no executable configuration. No browser-cache savings are claimed.
 
-**Packaging note:** these five packages add dead weight to the bundled `node_modules` for no runtime benefit. Worth pruning from `apps/api/package.json` before building the distributable - smaller install, fewer things to audit for CVEs, faster `pnpm install` on the client's server during setup/reinstall.
+**Recharts 3 retained.** All four widget types still use React/SVG and their current typed props. Chart.js is a maintained tree-shakeable canvas alternative, but would require rewriting widget rendering, interaction, legends and accessibility; no equivalent-production benchmark established a net benefit. Recharts' old react-smooth/recharts-scale tree is gone; newer internals add other code. Lazy routes resolve the observed startup cost without chart redesign. Total application JS grew slightly; initial JS is substantially smaller. Legend input order is explicitly retained. [Migration guide](https://github.com/recharts/recharts/wiki/3.0-migration-guide), [Chart.js integration](https://www.chartjs.org/docs/latest/getting-started/integration).
 
-### Dev dependencies
+**Axios retained.** Auth/tenant/branch injection, global 401 redirects, persisted-session clearing, normalized errors and PDF/blob responses already use its interface. Native fetch would need its own equivalent wrapper and migration of callers; Axios was a smaller contributor than charts/framework/application code. No replacement-size saving is claimed. Its upgraded behavior was tested with browser request fixtures.
 
-| Package | Purpose |
-|---|---|
-| `@nestjs/cli`, `@nestjs/schematics` | Nest's build/scaffolding CLI (`nest build`, `nest start --watch`). |
-| `@types/bcrypt`, `@types/express`, `@types/node`, `@types/passport-local` | TypeScript type definitions - dev-time only, not shipped in the production build. |
-| `typescript` | Compiler for the whole API. |
+**Socket.IO retained.** The laboratory screen uses reconnection, session authentication, tenant rooms and push events. Native WebSocket would need reconnection/room/protocol logic. Updated server/client remain on the compatible 4.8 series; invalid-session rejection was verified against the running gateway.
 
-### Packaging implications specific to this app
+**Prisma 6 retained and pinned.** Existing `prisma-client-js`, the CommonJS database facade, PrismaService inheritance and Decimal runtime imports were inspected. Stable v7 needs a driver adapter and changes generator/imports, environment/config handling and PostgreSQL pool/TLS assumptions. A safe migration needs transaction/billing/Decimal/integration coverage beyond this task. CLI v8 RC suggestions are not a stable-version mandate. Schema and migrations are untouched. The supported v6 `prisma.config.ts` replaces deprecated `package.json#prisma`, keeps migration path/seed command and explicitly loads `.env` using Node's built-in loader; externally supplied variables take precedence. Generation passed; seed/migrate/reset/push were not run. One high deepmerge-ts advisory remains through Prisma CLI/config, including an optional production peer path. [Upgrade guide](https://www.prisma.io/docs/guides/upgrade-prisma-orm/v7).
 
-- **Puppeteer bundles Chromium** (~170-280 MB depending on platform) unless configured otherwise. This is by far the largest single dependency in the repo and the biggest driver of install size/time. Before packaging:
-  - Decide whether to ship the bundled Chromium (simplest, works offline out of the box, largest install) or point Puppeteer at a system-installed Chrome/Chromium via `PUPPETEER_EXECUTABLE_PATH` (smaller package, but the target machine needs Chrome pre-installed - a real constraint for an offline-first, vendor-installed deployment).
-  - If bundling, the download happens at `pnpm install` time and needs internet access on the build machine (not the client's machine, since offline-first only applies to runtime, not build time) - plan the build pipeline accordingly.
-- **`bcrypt`** is a native (C++) module - it compiles against the target platform's Node ABI at install time. This is why it's in the `allowBuilds` list. If the packaged bundle is built on one OS/architecture and deployed to another (e.g. built in CI on Linux x64, deployed to a different CPU architecture), `bcrypt` needs a matching prebuilt binary or a rebuild on the target machine - this is a common source of "works on my machine" install failures for native modules.
+**Tailwind 3 retained.** v4 changes browser requirements, CSS setup and defaults for utilities/rings/borders/shadows. Existing reusable `@apply` classes and print styling need visual regression coverage before that migration. Keep current v3.4.19 and its PostCSS/Autoprefixer pipeline. This is an explicit deferral, not a claim that v3 is the latest major. [Upgrade guide](https://tailwindcss.com/docs/upgrade-guide).
 
----
+**Jest/ts-jest retained.** Existing mocks, Supertest integration and Nest decorator metadata work with the upgraded stack. Vitest would introduce a new runner/configuration and a metadata-compatible transform; SWC adds another native transform/configuration. No measured test performance problem warrants those migrations for this small suite. ts-jest supports TypeScript below 7, so TS 6.0.3 is intentionally selected. Nest 12 ESM tests use `node --experimental-vm-modules`; Node still emits its honest experimental VM Modules warning. The packages themselves are stable releases. [Jest ESM](https://jestjs.io/docs/ecmascript-modules), [Nest migration](https://docs.nestjs.com/migration-guide), [ts-jest](https://github.com/kulshekhar/ts-jest).
 
-## 3. `apps/web` - Staff-Facing React App
+## Windows/offline production boundary
 
-The internal application used by reception, lab technicians, and admins on LAN workstations.
+The source checkout, development installation, shared pnpm cache, production runtime and downloaded browser assets are different size measurements. Do not ship the development `node_modules` tree or copy a Linux native installation onto Windows.
 
-### Runtime dependencies
+Build on matching Windows architecture: install from the lockfile, provision Chrome, generate Prisma client, build shared/API/web, run checks, then assemble a **separate staging directory** with API dist, database facade/generated client and Windows query engine, shared CJS dist, required production dependency closure, static web dist, Node runtime, browser and PostgreSQL prerequisite/configuration. Browser clients receive static web assets; React/Vite development dependencies do not need a server runtime installation.
 
-| Package | Version | Purpose | Why this one |
-|---|---|---|---|
-| `react`, `react-dom` | ^19.0.0 | UI framework. | Standard choice; v19 for the latest concurrent-rendering/compiler-friendly features. |
-| `react-router-dom` | ^7.1.0 | Client-side routing between pages (Laboratory, Reports, Invoices, etc.). | Standard SPA router for React; drives the whole page structure without full reloads. |
-| `axios` | ^1.7.0 | HTTP client for all REST calls to the API (`api/client.ts`). | Chosen over the native `fetch` for its interceptor support - the app uses request interceptors to attach the session token/tenant headers automatically and a response interceptor to handle 401s globally (see `api/client.ts`). |
-| `socket.io-client` | ^4.8.1 | Client half of the live-update WebSocket connection (`lib/labSocket.ts`). | Must match the server's `socket.io` transport/protocol version. |
-| `clsx` | ^2.1.1 | Tiny utility for conditionally joining CSS class name strings. | Used in components with multiple conditional Tailwind classes (e.g. `StatusBadge`) to keep the JSX readable instead of manual template-string concatenation. |
-| `lucide-react` | ^0.469.0 | Icon component library. | Provides the UI icons (search, etc.) as tree-shakeable React components instead of an icon font or raw SVG files. |
-| `recharts` | ^2.15.0 | Charting library - bar/line/pie/stacked-bar widgets on the analytics dashboard. | Declarative, React-native charting API (as opposed to wrapping a canvas/D3 library directly) - fits the component-driven dashboard widget structure. |
+`pnpm install --prod --frozen-lockfile` can reduce a staging installation but cannot replace the preceding generation/build steps. Do not prune the working development installation as a packaging test. With pnpm 11, evaluate a filtered `pnpm deploy --legacy` staging workflow and workspace-package inclusion before adopting it: the default deploy mode may require injected workspace packages. Preserve all internal links as actual packaged files and smoke-test that independent directory offline. This task does not implement or measure a final installer/production directory. Never run seed or destructive schema commands merely to validate dependency changes. Shared pnpm store pruning affects other projects and was not performed.
 
-### Dev dependencies
-
-| Package | Purpose |
-|---|---|
-| `vite` | Dev server + production bundler for the SPA. |
-| `@vitejs/plugin-react` | Vite's React plugin (JSX transform, Fast Refresh). |
-| `typescript` | Type checking (`tsc -b` runs before `vite build`). |
-| `tailwindcss`, `postcss`, `autoprefixer` | Utility-first CSS framework and its build pipeline (Tailwind generates CSS via PostCSS; Autoprefixer adds vendor prefixes). |
-| `@types/react`, `@types/react-dom` | Type definitions for React. |
-
-### Packaging implications specific to this app
-
-- `vite build` produces static assets (`dist/`) - no Node runtime needed to *serve* this app in production, just a static file server (or the API itself can serve it). This is the lightest piece of the bundle.
-- No native/binary dependencies here - this app packages cleanly on any platform without cross-compilation concerns.
-
----
-
-## 4. Public Website - Separate Repository
-
-The public website is no longer part of this pnpm workspace.
-
-It was extracted on 2026-10-01 and is maintained separately at:
-
-`zaighaumrana/labwebsitedemo`
-
-Next.js, the website-specific Tailwind toolchain, and website-only transitive dependencies such as `sharp` are therefore no longer dependencies of the local LabFlow repository.
-
-The local LabFlow workspace now consists of:
-
-- `apps/api`
-- `apps/web`
-- `packages/database`
-- `packages/shared`
-
-See `07_Website_Separation_and_Offline_Online_Hybrid.md` for the architectural boundary between the local application and future online services.
-
----
-## 5. `packages/database` - Prisma Schema & Client
-
-Shared internal package: the single source of truth for the database schema, migrations, and generated client. Imported by `apps/api` as `@lms/database`.
-
-### Database engine
-
-| Tool | Purpose | Why |
-|---|---|---|
-| **PostgreSQL** | The actual database engine (`datasource db { provider = "postgresql" }` in `schema.prisma`). | Chosen over SQLite/MySQL for a self-hosted, offline-first single-server deployment because it gives full transactional integrity, proper decimal/numeric types (critical for money - see all the `Decimal` usage in billing), and JSON column support, while still being trivial to run on a single small server (no separate DB server needed at this scale). |
-
-### Dependencies
-
-| Package | Purpose | Why |
-|---|---|---|
-| `@prisma/client` (runtime dep) | The type-safe query client generated from `schema.prisma`. Every DB read/write in `apps/api` goes through this. | Prisma over a raw query builder or plain SQL for compile-time type safety on every query - schema changes that break a query show up as TypeScript errors, not runtime surprises. |
-| `prisma` (dev dep) | The CLI - `generate` (build the client), `migrate dev`/`migrate deploy` (schema migrations), `studio` (visual DB browser), `db push`. | Standard Prisma tooling; `migrate deploy` specifically is the non-interactive, production-safe migration command (as opposed to `migrate dev`, which is dev-only and can prompt/reset). |
-| `tsx` (dev dep) | Runs the TypeScript seed script (`prisma/seed.ts`) directly without a separate compile step. | Lets the seed script (which creates default users, message templates, etc. - see `seed.ts`) stay in TypeScript and run via `pnpm db:seed` without maintaining a compiled JS copy. |
-| `bcrypt`, `@types/bcrypt` (dev deps here too) | Used by `seed.ts` to hash the seeded default user passwords. | Same reasoning as the `apps/api` copy - never seed plaintext passwords, even for dev/demo data. |
-
-### Packaging implications specific to this package
-
-- **Prisma's query engine is itself a native binary**, downloaded/generated per-platform by `prisma generate` (hence `@prisma/client` and `@prisma/engines` both being in the `allowBuilds` allowlist). If the packaged installer is built on a different OS/architecture than the target deployment machine, `prisma generate` needs to run (or be re-run) on the target, or the correct engine binary needs to be bundled for that platform.
-- The client's server needs a running PostgreSQL instance - this is a system-level prerequisite outside the pnpm dependency tree entirely. The packaged installer/setup process needs to either bundle a PostgreSQL install step or document it as a pre-requisite the vendor sets up during on-site installation (see `02_Technical_Architecture.md section Deployment Model` for the target hardware spec this assumes).
-- `DATABASE_URL` is read from environment (`.env`) - the packaging/installer process needs to generate or prompt for this on first setup rather than shipping a hardcoded connection string.
-
----
-
-## 6. `packages/shared` - Shared Types/Constants
-
-| Package | Purpose |
-|---|---|
-| `typescript` (dev dep only) | This package currently has no runtime dependencies - it's pure TypeScript types/constants/validators shared between apps, compiled via `tsc` to `dist/` and consumed as `@lms/shared` (per its `main`/`types` fields). |
-
-Nothing packaging-relevant here beyond standard TS compilation - it produces plain JS + `.d.ts` files, no native code, no runtime deps to worry about.
-
----
-
-## 7. Quick-Reference: Everything With a Native/Binary Component
-
-Pulling these together in one place since they're the packages that actually complicate cross-platform packaging (as opposed to pure-JS packages, which "just work" wherever Node runs):
-
-| Package | Where | Native component | Packaging concern |
-|---|---|---|---|
-| `bcrypt` | `apps/api`, `packages/database` (seed) | C++ addon, compiled per Node ABI/platform | Needs matching prebuilt binary or a rebuild step on the target machine/architecture. |
-| `puppeteer` | `apps/api` | Bundles a full Chromium binary per platform | Largest dependency by far; decide bundle-vs-system-Chrome before building the installer. |
-| `@prisma/client` / `prisma` engines | `packages/database` | Native query engine binary, per platform | Must be generated for (or bundled for) the deployment target's OS/architecture. |
-| `esbuild` | Transitive (Vite's bundler dependency) | Native Go-based bundler binary, per platform | Dev/build-time only - doesn't ship in the final `dist/` output, so it's a build-machine concern, not a deployment-machine one. |
-
-**General packaging takeaway:** anything in this table needs either (a) the packaging/build step to run on a machine matching the deployment target's OS + CPU architecture, or (b) a documented cross-compilation/prebuilt-binary strategy per platform you intend to ship for. Everything else in the dependency tree is pure JS/TS and will run unmodified wherever Node.js runs.
-
----
-
-## 8. Summary Table - All Direct Dependencies at a Glance
-
-| App/Package | Direct runtime deps | Direct dev deps |
-|---|---|---|
-| `apps/api` | 20 (incl. 4 unused - see section 2) | 13 |
-| `apps/web` | 9 | 8 |
-| `packages/database` | 1 | 5 |
-| `packages/shared` | 0 | 4 |
-
-*(Counts as of this document's last update - re-check `package.json` files directly if this doc is stale relative to recent dependency changes.)*
+PostgreSQL is a system dependency outside npm; the API smoke test used a running local PostgreSQL 18 instance. Do not bundle credentials from development `.env` files.

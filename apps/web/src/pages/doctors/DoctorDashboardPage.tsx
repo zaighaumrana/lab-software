@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router';
 import * as doctorsApi from '../../api/doctors';
 import type { DoctorDashboard, DoctorDashboardParams } from '../../api/doctors';
 import { Loading } from '../../components/Loading';

@@ -11,19 +11,17 @@
     "migrate:deploy": "prisma migrate deploy",
     "studio": "prisma studio",
     "push": "prisma db push",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@prisma/client": "^6.19.3"
+    "@prisma/client": "6.19.3"
   },
   "devDependencies": {
-    "prisma": "^6.19.3",
-    "tsx": "^4.19.0",
-    "typescript": "^5.8.0",
-    "@types/bcrypt": "^5.0.2",
-    "bcrypt": "^5.1.1"
-  },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "prisma": "6.19.3",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3",
+    "@types/bcrypt": "^6.0.0",
+    "bcrypt": "^6.0.0"
   }
 }

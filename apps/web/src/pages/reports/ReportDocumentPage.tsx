@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router';
 import * as reportsApi from '../../api/reports';
 import * as billingApi from '../../api/billing';
 import type { Report, Patient } from '../../types';

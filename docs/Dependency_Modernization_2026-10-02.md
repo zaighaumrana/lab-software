@@ -1,72 +1,12 @@
-# Repository Change Log
+# Dependency Modernization Results — 2026-10-02
 
-This file records changes to the local LabFlow repository. Add a dated entry for each future change, naming the affected files, explaining the change, and recording validation results and any remaining limitations. Preserve earlier entries. Dates use Asia/Karachi time.
+Recorded 2026-10-02 03:25 +05:00, Asia/Karachi. Branch `development`, HEAD `e90bb10`. No commit, push, staging, branch change or database business-data writes.
 
-## 2026-10-02 - Website separation cleanup
+## Executive result
 
-Branch: `development`.
+Safe modernization completed with documented Prisma/Tailwind major-version deferrals. Root developer node_modules decreased from **818.37 MiB to 494.64 MiB** (323.72 MiB logical reduction, 39.6%). Actual login JS fell from **945,073 to 337,450 bytes**; bootstrap/static-import JS is 335,893 bytes. Security findings fell from **57 to 1**; one high Prisma CLI/config advisory remains. All builds, four type checks and 43 tests pass. A production installer and matched managed Chrome provisioning are not implemented by this task.
 
-Purpose: clean accidental artifacts from separation commit `f4fa1ff` while preserving operational LabFlow functionality. The accepted website separation date remains 2026-10-01.
-
-### Files changed or deleted
-
-- `tall`: confirmed the accidental terminal/diff-output file is absent and preserved its already-staged deletion.
-- `README.md`: corrected the local-only repository description, stack, structure, requirements, ports, and scope; linked the independent website repository and Doc 07.
-- `docs/README.md`: corrected the handbook's separation status and current implementation summaries; distinguished future online services and bridge work.
-- `docs/01_Product_Specification.md`: removed claims that website functionality remains in this workspace and clarified the independent website boundary.
-- `docs/02_Technical_Architecture.md`: repaired corrupted UTF-8 punctuation, diagrams, and capability markers; removed the direct website-to-local-API diagram and contradictory architecture claims; documented implemented separation and future integration requirements.
-- `docs/03_Core_Domain_Design.md`: clarified that website-originated bookings require a future online service and bridge while retaining local booking models and staff workflows.
-- `docs/04_Application_Modules.md`: identified website pages and direct backend integration as legacy history; documented independent website ownership and future online booking/report contracts.
-- `docs/06_Dependencies_and_Tooling.md`: repaired corrupted UTF-8 text; corrected the four-package workspace, pnpm version, dependency counts, and native dependency inventory; clarified that Next.js and sharp are no longer local dependencies.
-- `docs/07_Website_Separation_and_Offline_Online_Hybrid.md`: completed the truncated architecture diagram and document; recorded accepted/implemented separation, both repositories, frozen legacy history, active development branch, local source of truth, prohibited direct access, future sync directions and reliability requirements, and the local stabilization priority.
-- `docs/12_RBAC_and_Operator_Dashboard.md`: removed the deleted public controller from the permission-guard exceptions and clarified authenticated internal booking/reporting endpoints.
-- `apps/api/src/modules/bookings/bookings.controller.ts`: updated internal-endpoint comments and repaired corrupted punctuation; no runtime changes.
-- `apps/api/src/modules/reporting/reporting.controller.ts`: removed obsolete website/public-route comments and repaired corrupted punctuation; no runtime changes.
-- `apps/api/src/common/guards/permission.guard.ts`: removed the deleted public-controller reference and clarified internal endpoint authorization; comments only.
-- `apps/api/src/common/report-eligibility.util.ts`: described internal preview and local PDF delivery instead of the removed website transport; comments only.
-- `apps/api/src/app.module.ts`: removed the extra blank line at EOF; no runtime changes.
-- `packages/database/README.md`: clarified that the retained synchronization outbox is a foundation for future integration rather than a completed website bridge.
-- `pnpm-workspace.yaml`: removed the obsolete website-only sharp build allowance.
-
-### Validation completed
-
-- `pnpm install`: passed; lockfile unchanged.
-- `pnpm -r build`: passed for API, internal web, and shared. The database package has no build script; its dependencies remained intact.
-- `pnpm --filter @lms/api test`: 3 suites and 18 tests passed.
-- `pnpm --filter @lms/shared test`: 3 suites and 19 tests passed.
-- `git diff --check`, staged diff check, and combined HEAD diff check: passed.
-- Requested tracked-file grep for `apps/website`, `dev:website`, `@lms/website`, `PublicModule`, `modules/public`, `/api/public`, and `public.controller`: no matches.
-- `Test-Path apps/website` and `Test-Path apps/api/src/modules/public`: both returned False.
-- Inspected all surviving files added or modified by separation commit `f4fa1ff` for encoding corruption; no remaining corruption indicators found.
-- TypeScript compilation comparison with comments removed confirmed identical JavaScript output for all five edited TypeScript files.
-- Database schema/migrations, internal web source, shared package source/manifests, root package manifest, and lockfile remained unchanged.
-
-### Deliberately unchanged
-
-- Existing Vite bundle-size warning.
-- Unrelated unused JWT/Passport dependencies and other unrelated documentation maintenance.
-- Operational booking/report models and services, tracking IDs, local report generation, synchronization outbox, payment eligibility, patients, samples, results, and invoices.
-- The sync/bridge agent remains future work; no new features were implemented.
-
-### Git state at completion
-
-- `development` retained its existing HEAD; `main` and tag `legacy-combined-2026-10-01` were unchanged.
-- The existing `tall` deletion remained staged; the 16 modified cleanup files remained unstaged.
-- No commit, push, history rewrite, reset, merge, or branch creation was performed.
-- Suggested cleanup commit message: `chore: clean website separation artifacts` (not executed).
-
-## 2026-10-02 - Start persistent change documentation
-
-- `upgratdaion`: created this root-level change log using the exact requested filename and recorded the cleanup above.
-- `AGENTS.md`: added repository instructions requiring future changes to be documented in this log.
-- Validation: reviewed both new documentation files and checked the final diff for whitespace errors. Builds/tests above were not rerun for these documentation-only additions.
-- Git state: both new files are untracked/unstaged; existing cleanup staging is preserved. No commit or push performed.
-
-
-## 2026-10-02 03:25 +05:00 — Dependency and tooling modernization (Asia/Karachi)
-
-Purpose: modernize the local offline-first workspace, remove dead dependencies, reduce development/install weight and initial frontend loading, preserve business behavior. Detailed evidence and every direct package decision: docs/Dependency_Modernization_2026-10-02.md and docs/06_Dependencies_and_Tooling.md.
-
+## Packages upgraded
 
 Before/after are actual resolved versions. Full direct usage/retained/removed inventory is in [Doc 06](06_Dependencies_and_Tooling.md).
 
@@ -288,5 +228,8 @@ Temporary fixture HTML was removed, task-owned server/browser processes stopped.
 
 Resolve the Prisma CLI/config high advisory through a separately tested stable v7 migration or validated production exclusion. Provision the matched Chrome and test the actual Windows offline staging/installer. Tailwind 4 requires browser/style regression coverage; TS 7 requires ts-jest/toolchain support. glob 10 deprecation and Node VM Modules warning depend on upstream tooling. Total all-route JS/gzip grew, despite improved startup loading. Full business writes and default chart animations were deliberately not certified by these smoke tests.
 
+## Git state
 
-Git state: development/e90bb10 retained; main and legacy tag untouched. All modernization changes unstaged/untracked for manual review. No commit, push, reset, rebase, merge or branch creation. Previous log entries preserved. Final whitespace/status checks performed after this append.
+development at e90bb10, modifications/untracked files left for manual inspection. No changes staged; main/tag/history untouched; no commit/push/merge/reset/rebase/branch creation. git diff --check passed after whitespace cleanup; schema/migrations diff is empty. Full final status/stat will be checked after this report/log write. Suggested eventual commit: `refactor: modernize dependencies and reduce startup footprint` (not executed).
+
+Machine-readable measurements: [dependency-modernization-2026-10-02.json](dependency-modernization-2026-10-02.json). Raw temporary command output and fixtures remain under the task's TEMP evidence directory, not runtime dependencies.

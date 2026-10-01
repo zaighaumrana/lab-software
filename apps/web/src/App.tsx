@@ -1,31 +1,33 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { AppLayout } from './layouts/AppLayout';
-import { LoginPage } from './pages/auth/LoginPage';
-import { DashboardPage } from './pages/dashboard/DashboardPage';
-import { OperatorDashboardPage } from './pages/dashboard/OperatorDashboardPage';
-import { InsightsPage } from './pages/insights/InsightsPage';
-import { PatientsPage } from './pages/patients/PatientsPage';
-import { VisitPage } from './pages/visit/VisitPage';
-import { LaboratoryPage } from './pages/laboratory/LaboratoryPage';
-import { CatalogPage } from './pages/catalog/CatalogPage';
-import { DoctorsPage } from './pages/doctors/DoctorsPage';
-import { DoctorDashboardPage } from './pages/doctors/DoctorDashboardPage';
-import { DoctorStatementPrintPage } from './pages/doctors/DoctorStatementPrintPage';
-import { InvoicesPage } from './pages/billing/InvoicesPage';
-import { InvoiceDetailPage } from './pages/billing/InvoiceDetailPage';
-import { InvoicePrintPage } from './pages/billing/InvoicePrintPage';
-import { ReportsPage } from './pages/reports/ReportsPage';
-import { ReportPrintPage } from './pages/reports/ReportPrintPage';
-import { ReportDocumentPage } from './pages/reports/ReportDocumentPage';
-import { SettingsPage } from './pages/settings/SettingsPage';
-import { ProfilePage } from './pages/settings/ProfilePage';
-import { CashShiftPage } from './pages/cash-shift/CashShiftPage';
 import { Loading } from './components/Loading';
 import { RequirePermission } from './components/RequirePermission';
 import { Permission, isAdminRole } from './lib/permissions';
-import type { ReactNode } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
+
+// Operational pages load on demand; session and permission guards remain unchanged.
+const LoginPage = lazy(() => import('./pages/auth/LoginPage').then((module) => ({ default: module.LoginPage })));
+const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage').then((module) => ({ default: module.DashboardPage })));
+const OperatorDashboardPage = lazy(() => import('./pages/dashboard/OperatorDashboardPage').then((module) => ({ default: module.OperatorDashboardPage })));
+const InsightsPage = lazy(() => import('./pages/insights/InsightsPage').then((module) => ({ default: module.InsightsPage })));
+const PatientsPage = lazy(() => import('./pages/patients/PatientsPage').then((module) => ({ default: module.PatientsPage })));
+const VisitPage = lazy(() => import('./pages/visit/VisitPage').then((module) => ({ default: module.VisitPage })));
+const LaboratoryPage = lazy(() => import('./pages/laboratory/LaboratoryPage').then((module) => ({ default: module.LaboratoryPage })));
+const CatalogPage = lazy(() => import('./pages/catalog/CatalogPage').then((module) => ({ default: module.CatalogPage })));
+const DoctorsPage = lazy(() => import('./pages/doctors/DoctorsPage').then((module) => ({ default: module.DoctorsPage })));
+const DoctorDashboardPage = lazy(() => import('./pages/doctors/DoctorDashboardPage').then((module) => ({ default: module.DoctorDashboardPage })));
+const DoctorStatementPrintPage = lazy(() => import('./pages/doctors/DoctorStatementPrintPage').then((module) => ({ default: module.DoctorStatementPrintPage })));
+const InvoicesPage = lazy(() => import('./pages/billing/InvoicesPage').then((module) => ({ default: module.InvoicesPage })));
+const InvoiceDetailPage = lazy(() => import('./pages/billing/InvoiceDetailPage').then((module) => ({ default: module.InvoiceDetailPage })));
+const InvoicePrintPage = lazy(() => import('./pages/billing/InvoicePrintPage').then((module) => ({ default: module.InvoicePrintPage })));
+const ReportsPage = lazy(() => import('./pages/reports/ReportsPage').then((module) => ({ default: module.ReportsPage })));
+const ReportPrintPage = lazy(() => import('./pages/reports/ReportPrintPage').then((module) => ({ default: module.ReportPrintPage })));
+const ReportDocumentPage = lazy(() => import('./pages/reports/ReportDocumentPage').then((module) => ({ default: module.ReportDocumentPage })));
+const SettingsPage = lazy(() => import('./pages/settings/SettingsPage').then((module) => ({ default: module.SettingsPage })));
+const ProfilePage = lazy(() => import('./pages/settings/ProfilePage').then((module) => ({ default: module.ProfilePage })));
+const CashShiftPage = lazy(() => import('./pages/cash-shift/CashShiftPage').then((module) => ({ default: module.CashShiftPage })));
 
 function Protected({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -158,7 +160,9 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <SettingsProvider>
-          <AppRoutes />
+          <Suspense fallback={<Loading label="Loading page..." />}>
+            <AppRoutes />
+          </Suspense>
         </SettingsProvider>
       </AuthProvider>
     </BrowserRouter>

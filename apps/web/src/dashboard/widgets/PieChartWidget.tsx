@@ -58,7 +58,7 @@ export function PieChartWidget<T extends object>({
               ))}
             </Pie>
             <Tooltip />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <Legend itemSorter={null} wrapperStyle={{ fontSize: 11 }} />
           </PieChart>
         </ResponsiveContainer>
       )}

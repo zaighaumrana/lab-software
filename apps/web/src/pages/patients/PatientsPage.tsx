@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import * as patientsApi from '../../api/patients';
 import type { Patient } from '../../types';
 import { Loading } from '../../components/Loading';

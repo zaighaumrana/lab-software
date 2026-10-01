@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import * as patientsApi from '../../api/patients';
 import * as catalogApi from '../../api/catalog';
 import * as doctorsApi from '../../api/doctors';

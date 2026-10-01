@@ -1,0 +1,968 @@
+{
+  "dateAsiaKarachi": "2026-10-02 03:25 +05:00",
+  "node": "24.21.0",
+  "pnpm": "11.23.0",
+  "beforeFootprint": {
+    "rootNodeModules": {
+      "logicalBytes": 858120790,
+      "uniqueFileBytes": 826618283,
+      "storedUniqueFileBytes": 826618283,
+      "files": 43887
+    },
+    "pnpmVirtualStore": {
+      "logicalBytes": 857824882,
+      "uniqueFileBytes": 826322375,
+      "storedUniqueFileBytes": 826322375,
+      "files": 43883
+    },
+    "apiNodeModules": {
+      "logicalBytes": 62320,
+      "uniqueFileBytes": 62320,
+      "storedUniqueFileBytes": 62320,
+      "files": 30
+    },
+    "webNodeModules": {
+      "logicalBytes": 12412479,
+      "uniqueFileBytes": 12412479,
+      "storedUniqueFileBytes": 12412479,
+      "files": 62
+    },
+    "databaseNodeModules": {
+      "logicalBytes": 21206438,
+      "uniqueFileBytes": 21206438,
+      "storedUniqueFileBytes": 21206438,
+      "files": 15
+    },
+    "sharedNodeModules": {
+      "logicalBytes": 30528,
+      "uniqueFileBytes": 30528,
+      "storedUniqueFileBytes": 30528,
+      "files": 15
+    },
+    "puppeteerCache": {
+      "logicalBytes": 0,
+      "uniqueFileBytes": 0,
+      "storedUniqueFileBytes": 0,
+      "files": 0
+    },
+    "pnpmSharedStore": {
+      "logicalBytes": 748037213,
+      "uniqueFileBytes": 748037213,
+      "storedUniqueFileBytes": 748037213,
+      "files": 37453
+    },
+    "git": {
+      "logicalBytes": 9663249,
+      "uniqueFileBytes": 9663249,
+      "storedUniqueFileBytes": 9663249,
+      "files": 200
+    },
+    "webDist": {
+      "logicalBytes": 974322,
+      "uniqueFileBytes": 974322,
+      "storedUniqueFileBytes": 974322,
+      "files": 3
+    },
+    "apiDist": {
+      "logicalBytes": 1130774,
+      "uniqueFileBytes": 1130774,
+      "storedUniqueFileBytes": 1130774,
+      "files": 268
+    },
+    "sharedDist": {
+      "logicalBytes": 51379,
+      "uniqueFileBytes": 51379,
+      "storedUniqueFileBytes": 51379,
+      "files": 27
+    },
+    "trackedSource": {
+      "logicalBytes": 1376493,
+      "uniqueFileBytes": 1376493,
+      "storedUniqueFileBytes": 1376493,
+      "files": 211
+    },
+    "prismaBinariesSubset": {
+      "logicalBytes": 134013848,
+      "uniqueFileBytes": 134013848,
+      "storedUniqueFileBytes": 134013848,
+      "files": 18
+    },
+    "browserPackagesSubset": {
+      "logicalBytes": 9047632,
+      "uniqueFileBytes": 8318980,
+      "storedUniqueFileBytes": 8318980,
+      "files": 1759
+    },
+    "coverage": {
+      "logicalBytes": 0,
+      "uniqueFileBytes": 0,
+      "storedUniqueFileBytes": 0,
+      "files": 0
+    },
+    "viteCaches": {
+      "logicalBytes": 12352367,
+      "uniqueFileBytes": 12352367,
+      "storedUniqueFileBytes": 12352367,
+      "files": 32
+    }
+  },
+  "afterFootprint": {
+    "rootNodeModules": {
+      "logicalBytes": 518671067,
+      "uniqueFileBytes": 504849363,
+      "storedUniqueFileBytes": 504849363,
+      "files": 35310
+    },
+    "pnpmVirtualStore": {
+      "logicalBytes": 518417778,
+      "uniqueFileBytes": 504596074,
+      "storedUniqueFileBytes": 504596074,
+      "files": 35307
+    },
+    "apiNodeModules": {
+      "logicalBytes": 36228,
+      "uniqueFileBytes": 36228,
+      "storedUniqueFileBytes": 36228,
+      "files": 18
+    },
+    "webNodeModules": {
+      "logicalBytes": 13471308,
+      "uniqueFileBytes": 13471308,
+      "storedUniqueFileBytes": 13471308,
+      "files": 43
+    },
+    "databaseNodeModules": {
+      "logicalBytes": 21207135,
+      "uniqueFileBytes": 21207135,
+      "storedUniqueFileBytes": 21207135,
+      "files": 16
+    },
+    "sharedNodeModules": {
+      "logicalBytes": 24118,
+      "uniqueFileBytes": 24118,
+      "storedUniqueFileBytes": 24118,
+      "files": 12
+    },
+    "puppeteerCache": {
+      "logicalBytes": 0,
+      "uniqueFileBytes": 0,
+      "storedUniqueFileBytes": 0,
+      "files": 0
+    },
+    "pnpmSharedStore": {
+      "logicalBytes": 955010486,
+      "uniqueFileBytes": 955010486,
+      "storedUniqueFileBytes": 955010486,
+      "files": 53369
+    },
+    "git": {
+      "logicalBytes": 9663249,
+      "uniqueFileBytes": 9663249,
+      "storedUniqueFileBytes": 9663249,
+      "files": 200
+    },
+    "webDist": {
+      "logicalBytes": 991948,
+      "uniqueFileBytes": 991948,
+      "storedUniqueFileBytes": 991948,
+      "files": 40
+    },
+    "apiDist": {
+      "logicalBytes": 888434,
+      "uniqueFileBytes": 888434,
+      "storedUniqueFileBytes": 888434,
+      "files": 267
+    },
+    "sharedDist": {
+      "logicalBytes": 51379,
+      "uniqueFileBytes": 51379,
+      "storedUniqueFileBytes": 51379,
+      "files": 27
+    },
+    "trackedSource": {
+      "logicalBytes": 1342079,
+      "uniqueFileBytes": 1342079,
+      "storedUniqueFileBytes": 1342079,
+      "files": 211
+    },
+    "prismaBinariesSubset": {
+      "logicalBytes": 112830872,
+      "uniqueFileBytes": 112830872,
+      "storedUniqueFileBytes": 112830872,
+      "files": 17
+    },
+    "browserPackagesSubset": {
+      "logicalBytes": 6485775,
+      "uniqueFileBytes": 6482762,
+      "storedUniqueFileBytes": 6482762,
+      "files": 1062
+    },
+    "coverage": {
+      "logicalBytes": 0,
+      "uniqueFileBytes": 0,
+      "storedUniqueFileBytes": 0,
+      "files": 0
+    },
+    "viteCaches": {
+      "logicalBytes": 13435182,
+      "uniqueFileBytes": 13435182,
+      "storedUniqueFileBytes": 13435182,
+      "files": 25
+    }
+  },
+  "beforeBundle": {
+    "groupsBeforeMinification": {
+      "recharts": 579617,
+      "react-dom": 561283,
+      "application": 352754,
+      "lodash": 193819,
+      "axios": 151378,
+      "react-router": 86271,
+      "engine.io-client": 52692,
+      "decimal.js-light": 49577,
+      "socket.io-client": 39927,
+      "react-smooth": 38616,
+      "d3-scale": 28712,
+      "d3-shape": 24430,
+      "fast-equals": 23257,
+      "react": 20311,
+      "d3-time-format": 19138,
+      "recharts-scale": 16702,
+      "lucide-react": 15455,
+      "socket.io-parser": 14619,
+      "engine.io-parser": 11872,
+      "d3-format": 11841,
+      "scheduler": 11420,
+      "d3-color": 11297,
+      "d3-time": 10613,
+      "eventemitter3": 10065,
+      "d3-array": 7617,
+      "d3-interpolate": 5004,
+      "d3-path": 4347,
+      "@socket.io/component-emitter": 3303,
+      "react-is": 3234,
+      "prop-types": 2921,
+      "internmap": 1111,
+      "clsx": 362,
+      "tiny-invariant": 112,
+      "victory-vendor": 0
+    },
+    "chunks": [
+      {
+        "file": "assets/index-Cs_ph8i1.js",
+        "entry": true,
+        "dynamic": false,
+        "bytes": 945073,
+        "gzipBytes": 264383,
+        "imports": [],
+        "dynamicImports": []
+      }
+    ],
+    "totalJsBytes": 945073,
+    "totalGzipBytes": 264383,
+    "initialJsBytes": 945073,
+    "initialGzipBytes": 264383,
+    "largestJsBytes": 945073
+  },
+  "afterBundle": {
+    "groupsBeforeMinification": {
+      "recharts": 646161,
+      "react-dom": 536987,
+      "application": 364872,
+      "axios": 110734,
+      "react-router": 94920,
+      "es-toolkit": 36529,
+      "engine.io-client": 30606,
+      "d3-scale": 28523,
+      "@reduxjs/toolkit": 26711,
+      "decimal.js-light": 25487,
+      "d3-shape": 25413,
+      "lucide-react": 23696,
+      "immer": 20463,
+      "socket.io-client": 19202,
+      "d3-time-format": 17851,
+      "react": 17398,
+      "d3-time": 11681,
+      "d3-format": 11037,
+      "d3-color": 10434,
+      "socket.io-parser": 9931,
+      "scheduler": 9336,
+      "engine.io-parser": 8702,
+      "d3-array": 8435,
+      "d3-interpolate": 7036,
+      "redux": 6702,
+      "reselect": 5856,
+      "use-sync-external-store": 5721,
+      "eventemitter3": 5610,
+      "react-redux": 5471,
+      "d3-path": 3270,
+      "react-is": 2063,
+      "@socket.io/component-emitter": 2063,
+      "internmap": 1212,
+      "victory-vendor": 1110,
+      "clsx": 567,
+      "redux-thunk": 463,
+      "tiny-invariant": 250
+    },
+    "chunks": [
+      {
+        "file": "assets/index-BQ8iGqym.js",
+        "entry": true,
+        "dynamic": false,
+        "bytes": 276290,
+        "gzipBytes": 86743,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js"
+        ],
+        "dynamicImports": [
+          "assets/LoginPage-CBrAjQ4H.js",
+          "assets/DashboardPage-BDY95obx.js",
+          "assets/OperatorDashboardPage-Cz0sYUVn.js",
+          "assets/InsightsPage-CCWDVjrX.js",
+          "assets/PatientsPage-Cx_7hgXS.js",
+          "assets/VisitPage-BibRhueJ.js",
+          "assets/LaboratoryPage-CvRS-kla.js",
+          "assets/CatalogPage-BsUxMJv6.js",
+          "assets/DoctorsPage-fKGqNYGw.js",
+          "assets/DoctorDashboardPage-DQtp6yi5.js",
+          "assets/DoctorStatementPrintPage-BIGxZe0V.js",
+          "assets/InvoicesPage-CeAiKIAA.js",
+          "assets/InvoiceDetailPage-BsOGJLQ_.js",
+          "assets/InvoicePrintPage-DtmvL3wg.js",
+          "assets/ReportsPage-DZnw1SYG.js",
+          "assets/ReportPrintPage-V91jh4Kb.js",
+          "assets/ReportDocumentPage-CEGMtKey.js",
+          "assets/SettingsPage-DSu-77zz.js",
+          "assets/ProfilePage-BOigHI82.js",
+          "assets/CashShiftPage-BsnzSIHK.js"
+        ]
+      },
+      {
+        "file": "assets/BarChartWidget-CIHD5Dff.js",
+        "entry": false,
+        "dynamic": false,
+        "bytes": 391225,
+        "gzipBytes": 110536,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js",
+          "assets/index-BQ8iGqym.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/CashShiftPage-BsnzSIHK.js",
+        "entry": false,
+        "dynamic": true,
+        "bytes": 6421,
+        "gzipBytes": 1923,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js",
+          "assets/index-BQ8iGqym.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/CatalogPage-BsUxMJv6.js",
+        "entry": false,
+        "dynamic": true,
+        "bytes": 16593,
+        "gzipBytes": 3973,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js",
+          "assets/plus-CaP2bYdS.js",
+          "assets/index-BQ8iGqym.js",
+          "assets/catalog-BbC_11zt.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/DashboardPage-BDY95obx.js",
+        "entry": false,
+        "dynamic": true,
+        "bytes": 9366,
+        "gzipBytes": 3164,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js",
+          "assets/KpiCard-DvbjE7ML.js",
+          "assets/triangle-alert-OidJ4jqK.js",
+          "assets/BarChartWidget-CIHD5Dff.js",
+          "assets/index-BQ8iGqym.js",
+          "assets/DateRangeFilter-W-pEcmiV.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/DateRangeFilter-W-pEcmiV.js",
+        "entry": false,
+        "dynamic": false,
+        "bytes": 1585,
+        "gzipBytes": 673,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/DoctorDashboardPage-DQtp6yi5.js",
+        "entry": false,
+        "dynamic": true,
+        "bytes": 6816,
+        "gzipBytes": 2250,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js",
+          "assets/index-BQ8iGqym.js",
+          "assets/doctors-C5PqiRdA.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/DoctorStatementPrintPage-BIGxZe0V.js",
+        "entry": false,
+        "dynamic": true,
+        "bytes": 4751,
+        "gzipBytes": 1703,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js",
+          "assets/index-BQ8iGqym.js",
+          "assets/print-document-Bs2uznlL.js",
+          "assets/doctors-C5PqiRdA.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/DoctorsPage-fKGqNYGw.js",
+        "entry": false,
+        "dynamic": true,
+        "bytes": 6628,
+        "gzipBytes": 2069,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js",
+          "assets/plus-CaP2bYdS.js",
+          "assets/index-BQ8iGqym.js",
+          "assets/doctors-C5PqiRdA.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/InsightsPage-CCWDVjrX.js",
+        "entry": false,
+        "dynamic": true,
+        "bytes": 25741,
+        "gzipBytes": 7696,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js",
+          "assets/KpiCard-DvbjE7ML.js",
+          "assets/BarChartWidget-CIHD5Dff.js",
+          "assets/index-BQ8iGqym.js",
+          "assets/DateRangeFilter-W-pEcmiV.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/InvoiceDetailPage-BsOGJLQ_.js",
+        "entry": false,
+        "dynamic": true,
+        "bytes": 7799,
+        "gzipBytes": 2201,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js",
+          "assets/index-BQ8iGqym.js",
+          "assets/billing-CJk0XU6_.js",
+          "assets/StatusBadge-7PDgCaj8.js",
+          "assets/PrintHeader-DMsOOrEN.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/InvoicePrintPage-DtmvL3wg.js",
+        "entry": false,
+        "dynamic": true,
+        "bytes": 5950,
+        "gzipBytes": 1946,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js",
+          "assets/index-BQ8iGqym.js",
+          "assets/billing-CJk0XU6_.js",
+          "assets/print-document-Bs2uznlL.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/InvoicesPage-CeAiKIAA.js",
+        "entry": false,
+        "dynamic": true,
+        "bytes": 6795,
+        "gzipBytes": 2271,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js",
+          "assets/search-DkHyzVDV.js",
+          "assets/index-BQ8iGqym.js",
+          "assets/billing-CJk0XU6_.js",
+          "assets/StatusBadge-7PDgCaj8.js",
+          "assets/DateRangeFilter-W-pEcmiV.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/KpiCard-DvbjE7ML.js",
+        "entry": false,
+        "dynamic": false,
+        "bytes": 1710,
+        "gzipBytes": 808,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js",
+          "assets/index-BQ8iGqym.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/LaboratoryPage-CvRS-kla.js",
+        "entry": false,
+        "dynamic": true,
+        "bytes": 56546,
+        "gzipBytes": 17049,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js",
+          "assets/index-BQ8iGqym.js",
+          "assets/StatusBadge-7PDgCaj8.js",
+          "assets/catalog-BbC_11zt.js",
+          "assets/laboratory-s2jcv8dG.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/LoginPage-CBrAjQ4H.js",
+        "entry": false,
+        "dynamic": true,
+        "bytes": 1557,
+        "gzipBytes": 731,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js",
+          "assets/index-BQ8iGqym.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/OperatorDashboardPage-Cz0sYUVn.js",
+        "entry": false,
+        "dynamic": true,
+        "bytes": 5090,
+        "gzipBytes": 1823,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js",
+          "assets/KpiCard-DvbjE7ML.js",
+          "assets/triangle-alert-OidJ4jqK.js",
+          "assets/index-BQ8iGqym.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/PatientsPage-Cx_7hgXS.js",
+        "entry": false,
+        "dynamic": true,
+        "bytes": 3150,
+        "gzipBytes": 1153,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js",
+          "assets/search-DkHyzVDV.js",
+          "assets/index-BQ8iGqym.js",
+          "assets/patients-B97cvrYa.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/PrintHeader-DMsOOrEN.js",
+        "entry": false,
+        "dynamic": false,
+        "bytes": 1203,
+        "gzipBytes": 577,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js",
+          "assets/index-BQ8iGqym.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/ProfilePage-BOigHI82.js",
+        "entry": false,
+        "dynamic": true,
+        "bytes": 3147,
+        "gzipBytes": 1125,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js",
+          "assets/index-BQ8iGqym.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/ReportDocumentPage-CEGMtKey.js",
+        "entry": false,
+        "dynamic": true,
+        "bytes": 9753,
+        "gzipBytes": 2978,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js",
+          "assets/index-BQ8iGqym.js",
+          "assets/billing-CJk0XU6_.js",
+          "assets/print-document-Bs2uznlL.js",
+          "assets/reports-Db90On09.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/ReportPrintPage-V91jh4Kb.js",
+        "entry": false,
+        "dynamic": true,
+        "bytes": 7596,
+        "gzipBytes": 2473,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js",
+          "assets/index-BQ8iGqym.js",
+          "assets/billing-CJk0XU6_.js",
+          "assets/StatusBadge-7PDgCaj8.js",
+          "assets/PrintHeader-DMsOOrEN.js",
+          "assets/reports-Db90On09.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/ReportsPage-DZnw1SYG.js",
+        "entry": false,
+        "dynamic": true,
+        "bytes": 5168,
+        "gzipBytes": 1910,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js",
+          "assets/search-DkHyzVDV.js",
+          "assets/index-BQ8iGqym.js",
+          "assets/StatusBadge-7PDgCaj8.js",
+          "assets/reports-Db90On09.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/SettingsPage-DSu-77zz.js",
+        "entry": false,
+        "dynamic": true,
+        "bytes": 20735,
+        "gzipBytes": 5952,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js",
+          "assets/index-BQ8iGqym.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/StatusBadge-7PDgCaj8.js",
+        "entry": false,
+        "dynamic": false,
+        "bytes": 1429,
+        "gzipBytes": 512,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js",
+          "assets/index-BQ8iGqym.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/VisitPage-BibRhueJ.js",
+        "entry": false,
+        "dynamic": true,
+        "bytes": 16352,
+        "gzipBytes": 4293,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js",
+          "assets/index-BQ8iGqym.js",
+          "assets/billing-CJk0XU6_.js",
+          "assets/StatusBadge-7PDgCaj8.js",
+          "assets/catalog-BbC_11zt.js",
+          "assets/doctors-C5PqiRdA.js",
+          "assets/laboratory-s2jcv8dG.js",
+          "assets/patients-B97cvrYa.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/billing-CJk0XU6_.js",
+        "entry": false,
+        "dynamic": false,
+        "bytes": 441,
+        "gzipBytes": 229,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/catalog-BbC_11zt.js",
+        "entry": false,
+        "dynamic": false,
+        "bytes": 643,
+        "gzipBytes": 252,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/doctors-C5PqiRdA.js",
+        "entry": false,
+        "dynamic": false,
+        "bytes": 421,
+        "gzipBytes": 229,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/jsx-runtime-soFhbq0s.js",
+        "entry": false,
+        "dynamic": false,
+        "bytes": 59603,
+        "gzipBytes": 21867,
+        "imports": [],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/laboratory-s2jcv8dG.js",
+        "entry": false,
+        "dynamic": false,
+        "bytes": 1037,
+        "gzipBytes": 310,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/patients-B97cvrYa.js",
+        "entry": false,
+        "dynamic": false,
+        "bytes": 298,
+        "gzipBytes": 174,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/plus-CaP2bYdS.js",
+        "entry": false,
+        "dynamic": false,
+        "bytes": 182,
+        "gzipBytes": 168,
+        "imports": [
+          "assets/index-BQ8iGqym.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/print-document-Bs2uznlL.js",
+        "entry": false,
+        "dynamic": false,
+        "bytes": 808,
+        "gzipBytes": 491,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js",
+          "assets/index-BQ8iGqym.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/reports-Db90On09.js",
+        "entry": false,
+        "dynamic": false,
+        "bytes": 273,
+        "gzipBytes": 197,
+        "imports": [
+          "assets/jsx-runtime-soFhbq0s.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/search-DkHyzVDV.js",
+        "entry": false,
+        "dynamic": false,
+        "bytes": 203,
+        "gzipBytes": 184,
+        "imports": [
+          "assets/index-BQ8iGqym.js"
+        ],
+        "dynamicImports": []
+      },
+      {
+        "file": "assets/triangle-alert-OidJ4jqK.js",
+        "entry": false,
+        "dynamic": false,
+        "bytes": 1026,
+        "gzipBytes": 522,
+        "imports": [
+          "assets/index-BQ8iGqym.js"
+        ],
+        "dynamicImports": []
+      }
+    ],
+    "totalJsBytes": 964331,
+    "totalGzipBytes": 293155,
+    "initialJsBytes": 335893,
+    "initialGzipBytes": 108610,
+    "largestJsBytes": 391225,
+    "measurement": "Final emitted files; gzip Node default level 6; initial = entry and recursively static imports, excludes dynamic login route."
+  },
+  "loginJsBytes": 337450,
+  "loginGzipBytes": 109341,
+  "beforeAudit": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 1,
+      "moderate": 18,
+      "high": 37,
+      "critical": 1
+    },
+    "dependencies": 380,
+    "devDependencies": 523,
+    "optionalDependencies": 81,
+    "totalDependencies": 904
+  },
+  "afterAudit": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 1,
+      "critical": 0
+    },
+    "dependencies": 252,
+    "devDependencies": 513,
+    "optionalDependencies": 95,
+    "totalDependencies": 765
+  },
+  "afterProductionAudit": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 1,
+      "critical": 0
+    },
+    "dependencies": 213,
+    "devDependencies": 0,
+    "optionalDependencies": 39,
+    "totalDependencies": 252
+  },
+  "remainingAdvisories": [
+    {
+      "findings": [
+        {
+          "version": "7.1.5",
+          "paths": [
+            "packages__database>@prisma/client>prisma>@prisma/config>deepmerge-ts",
+            "packages__database>prisma>@prisma/config>deepmerge-ts"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1145093,
+      "title": "DeepmergeTS has stack exhaustion when merging recursive object graphs",
+      "module_name": "deepmerge-ts",
+      "vulnerable_versions": "<8.0.0",
+      "patched_versions": ">=8.0.0",
+      "severity": "high",
+      "cwe": "CWE-674",
+      "github_advisory_id": "GHSA-ggr8-5vv4-36mx",
+      "url": "https://github.com/advisories/GHSA-ggr8-5vv4-36mx"
+    }
+  ],
+  "runtimeSmoke": {
+    "http": [
+      {
+        "endpoint": "/auth/me",
+        "status": 401
+      },
+      {
+        "endpoint": "/patients/search?q=upgrade-fixture",
+        "status": 401
+      },
+      {
+        "endpoint": "/bookings/code/upgrade-fixture",
+        "status": 401
+      },
+      {
+        "endpoint": "/billing/invoices",
+        "status": 401
+      },
+      {
+        "endpoint": "/laboratory/samples/pending",
+        "status": 401
+      },
+      {
+        "endpoint": "/reports",
+        "status": 401
+      },
+      {
+        "endpoint": "/settings/users",
+        "status": 401
+      },
+      {
+        "endpoint": "/settings",
+        "status": 200
+      }
+    ],
+    "pdf": [
+      {
+        "template": "invoice",
+        "bytes": 46508
+      },
+      {
+        "template": "report",
+        "bytes": 46020
+      },
+      {
+        "template": "doctor-statement",
+        "bytes": 47173
+      }
+    ],
+    "socket": "invalid session disconnected by running gateway",
+    "web": {
+      "vite": "8.3.2 started",
+      "login": "rendered and fixture login stored session",
+      "routing": "patients and profile loaded",
+      "axios": "Bearer/tenant headers and 401 session clearing verified",
+      "styles": {
+        "background": "rgb(37, 99, 235)",
+        "borderRadius": "6px"
+      },
+      "charts": "bar, line, donut, stacked bar SVGs rendered",
+      "errors": []
+    },
+    "database": "SELECT 1 passed (read only)",
+    "browser": "Chrome/154.0.8037.58"
+  },
+  "productionSmoke": {
+    "productionLogin": "loaded",
+    "protectedRouting": "redirected to login",
+    "chartChunkOnLogin": "not requested",
+    "requestedAssets": [
+      "/assets/index-BQ8iGqym.js",
+      "/assets/jsx-runtime-soFhbq0s.js",
+      "/assets/LoginPage-CBrAjQ4H.js"
+    ],
+    "errors": []
+  },
+  "chartSmoke": {
+    "warnings": [],
+    "shapes": 8,
+    "visibleGeometry": true,
+    "visualPreference": "prefers-reduced-motion: reduce"
+  },
+  "notes": [
+    "Footprints are logical and hardlink-deduplicated stored file bytes, not NTFS allocation or measured volume free-space savings.",
+    "Shared-store bytes overlap hardlinked project contents; do not add totals.",
+    "Tracked-source snapshot precedes this final report/log addition and excludes new untracked source files.",
+    "Browser cache was absent before and after; interrupted task-created ZIP removed.",
+    "No production installer footprint was measured."
+  ]
+}

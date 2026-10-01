@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router';
 import * as doctorsApi from '../../api/doctors';
 import type { DoctorDashboard } from '../../api/doctors';
 import { useSettings } from '../../contexts/SettingsContext';

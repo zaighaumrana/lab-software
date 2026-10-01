@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router';
 import * as billingApi from '../../api/billing';
 import type { Invoice } from '../../types';
 import { StatusBadge } from '../../components/StatusBadge';

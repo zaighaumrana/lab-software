@@ -12,13 +12,14 @@ Write-Host "`n[1/7] Checking Node.js..." -ForegroundColor Yellow
 try {
     $nodeVersion = node -v
     Write-Host "  Node.js found: $nodeVersion" -ForegroundColor Green
-    $major = [int]($nodeVersion -replace 'v(\d+).*', '$1')
-    if ($major -lt 20) {
-        Write-Host "  WARNING: Node.js 20+ is recommended. You have $nodeVersion" -ForegroundColor Yellow
+    $parsedNodeVersion = [version]($nodeVersion -replace '^v', '')
+    if ($parsedNodeVersion -lt [version]'24.15.0') {
+        Write-Host "  ERROR: Node.js 24.15+ is required. You have $nodeVersion" -ForegroundColor Red
+        exit 1
     }
 } catch {
     Write-Host "  ERROR: Node.js is not installed or not in PATH." -ForegroundColor Red
-    Write-Host "  Download from https://nodejs.org (use version 20 or higher)" -ForegroundColor Red
+    Write-Host "  Download from https://nodejs.org (use Node.js 24 LTS, version 24.15 or higher)" -ForegroundColor Red
     exit 1
 }
 

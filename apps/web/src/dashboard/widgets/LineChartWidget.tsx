@@ -51,7 +51,7 @@ export function LineChartWidget<T extends object>({
             <XAxis dataKey={xKey} tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} />
             <Tooltip />
-            {series.length > 1 && <Legend wrapperStyle={{ fontSize: 12 }} />}
+            {series.length > 1 && <Legend itemSorter={null} wrapperStyle={{ fontSize: 12 }} />}
             {series.map((s) => (
               <Line
                 key={s.key}

@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import type { TopDoctorRow } from '../../api/analytics';
 
 function money(n: number) {

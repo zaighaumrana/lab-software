@@ -11,7 +11,7 @@
     "db:migrate": "pnpm --filter @lms/database migrate",
     "db:seed": "pnpm --filter @lms/database seed",
     "db:studio": "pnpm --filter @lms/database studio",
-    "lint": "pnpm -r lint"
+    "typecheck": "pnpm -r typecheck"
   },
   "keywords": [
     "lms",
@@ -21,7 +21,7 @@
   "author": "Vendor",
   "license": "UNLICENSED",
   "engines": {
-    "node": ">=20"
+    "node": ">=24.15.0"
   },
   "packageManager": "pnpm@11.23.0"
 }

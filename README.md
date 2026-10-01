@@ -37,7 +37,7 @@ Install these before running `setup.ps1` or `pnpm install`:
 
 | Software | Version | Why | Download |
 |----------|---------|-----|----------|
-| Node.js | 20 LTS or newer | Runs the API and internal web app build tooling | https://nodejs.org |
+| Node.js | 24.15 or newer (24 LTS recommended) | Runs the API and internal web app build tooling | https://nodejs.org |
 | pnpm | 9+ (installed via `npm install -g pnpm` if missing) | Monorepo package manager | installed by `setup.ps1` automatically |
 | PostgreSQL | 16 | Database | https://www.postgresql.org/download/windows/ |
 | Git | any recent version | Version control | https://git-scm.com |

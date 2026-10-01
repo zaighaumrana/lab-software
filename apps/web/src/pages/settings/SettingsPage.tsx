@@ -4,7 +4,7 @@ import { useSettings } from '../../contexts/SettingsContext';
 import * as settingsApi from '../../api/settings';
 import type { StaffUser } from '../../api/settings';
 import { Loading } from '../../components/Loading';
-import { Navigate } from 'react-router-dom';
+import { Navigate } from 'react-router';
 import { SmsSettingsTab } from './SmsSettingsTab';
 
 type Tab = 'users' | 'branding' | 'print' | 'report-layout' | 'sms';

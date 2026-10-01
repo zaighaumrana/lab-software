@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router';
 import * as billingApi from '../../api/billing';
 import type { Invoice } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';

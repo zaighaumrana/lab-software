@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { hasPermission, Permission } from '../lib/permissions';
 import clsx from 'clsx';

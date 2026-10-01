@@ -1,5 +1,5 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
-import puppeteer, { Browser } from 'puppeteer';
+import type { Browser } from 'puppeteer';
 
 /**
  * Centralized printing engine: every printable document in the app should
@@ -20,10 +20,13 @@ export class PrintingService implements OnModuleDestroy {
 
   private async getBrowser(): Promise<Browser> {
     if (!this.browserPromise) {
-      this.browserPromise = puppeteer.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      });
+      // Puppeteer 25 is ESM with asynchronous configuration initialization.
+      this.browserPromise = import('puppeteer').then(({ default: puppeteer }) =>
+        puppeteer.launch({
+          headless: true,
+          args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        }),
+      );
     }
     return this.browserPromise;
   }
@@ -35,7 +38,9 @@ export class PrintingService implements OnModuleDestroy {
     const browser = await this.getBrowser();
     const page = await browser.newPage();
     try {
-      await page.setContent(html, { waitUntil: 'networkidle0' });
+      await page.setContent(html, { waitUntil: 'load' });
+      // Puppeteer 25 moved network-idle waiting out of setContent.
+      await page.waitForNetworkIdle({ concurrency: 0, idleTime: 500 });
       const sideMm = options.marginSideMm ?? 12;
       const pdf = await page.pdf({
         format: 'A4',
