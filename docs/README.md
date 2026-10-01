@@ -4,6 +4,8 @@
 
 **Status:** Active product development and documentation modernization. This is the authoritative documentation set for the LabFlow product platform.
 
+**Implemented separation (2026-10-01):** this repository contains local LabFlow software only. The public website is independent in `zaighaumrana/labwebsitedemo` and must never directly access the local API, PostgreSQL, laboratory LAN, filesystem, or locally stored reports. Doc 07 records this boundary and the future online service/bridge architecture; stabilization of the local application is the current priority.
+
 > **Documentation precedence:** `01_Product_Specification.md` defines the current LabFlow product direction. Documents `02_Technical_Architecture.md`, `03_Core_Domain_Design.md`, and `04_Application_Modules.md` have now been modernized to follow the same product precedent. Remaining downstream documents are being reviewed individually. Where an older, not-yet-modernized document conflicts with Docs 01–04, the modernized documents take precedence.
 
 ## Project Overview
@@ -133,7 +135,7 @@ The documentation is therefore being reviewed **one document at a time** against
 | `04_Application_Modules.md`                             | **Updated — current product-module and user-surface definition**                                    |
 | `05_Analytics_Architecture.md`                          | Significantly outdated — analytics has since been substantially implemented                         |
 | `06_Dependencies_and_Tooling.md`                        | Generally useful — dependency/version refresh pending                                               |
-| `07_Website_Separation_and_Offline_Online_Hybrid.md`    | Current planning document for Offline / Enterprise hybrid architecture                              |
+| `07_Website_Separation_and_Offline_Online_Hybrid.md`    | Accepted and implemented repository separation; online service and sync/bridge remain future work    |
 | `08_Windows_Packaging_and_Installer_Roadmap.md`         | Current planning document for Offline / Enterprise packaging                                        |
 | `09_LabFlow_Licensing_and_Subscription_Architecture.md` | Current design document for Offline / Enterprise licensing                                          |
 | `10_Product_Tiers_and_SaaS_Scope.md`                    | **Current strategic product-tier document**                                                         |
@@ -333,9 +335,7 @@ The current codebase substantially implements:
 * analytics subsystem;
 * Operator Dashboard;
 * Cash Shift;
-* separate Next.js public website;
-* public booking foundations;
-* public report lookup foundations;
+* implemented separation of the independent public website;
 * SMS gateway abstraction;
 * SendPK implementation;
 * Notification persistence.
@@ -451,9 +451,7 @@ The current internal/public product surface includes or substantially includes:
 * Analytics / Insights;
 * Settings;
 * Cash Shift;
-* public website;
-* public booking foundations;
-* public report lookup.
+* independent website repository separation (see Doc 07).
 
 Partial or planned product surfaces include:
 
@@ -588,9 +586,7 @@ The current codebase already contains substantial working foundations including:
 * cash-shift reconciliation;
 * permission-based RBAC;
 * tenant/branch-aware schema foundations;
-* public website;
-* public booking foundations;
-* public report lookup;
+* implemented separation of the independent public website;
 * SMS gateway abstraction;
 * SendPK integration;
 * Notification persistence.
@@ -614,7 +610,7 @@ Major product/platform work includes:
 * complete doctor payout accounting;
 * barcode/label/scanner workflows;
 * public CMS/website administration;
-* hosted website/public API separation for Offline / Enterprise;
+* hosted online service and sync/bridge integration for Offline / Enterprise;
 * local/cloud synchronization;
 * Windows production packaging;
 * automated backup and restore;
@@ -640,7 +636,7 @@ The next documentation priorities are:
    Refresh versions, dependency counts, testing dependencies, and current shared-package usage.
 
 3. **`07_Website_Separation_and_Offline_Online_Hybrid.md`**
-   Retain its planning architecture while aligning terminology with the modernized Docs 01–04.
+   Preserve the implemented repository separation and keep future online service/bridge work clearly distinguished from current local functionality.
 
 4. **`08_Windows_Packaging_and_Installer_Roadmap.md`**
    Align deployment assumptions with the current Offline / Enterprise architecture.

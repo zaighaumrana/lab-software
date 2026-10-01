@@ -40,4 +40,3 @@ import { CashShiftsModule } from './modules/cash-shifts/cash-shifts.module';
   ],
 })
 export class AppModule {}
-

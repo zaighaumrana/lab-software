@@ -20,7 +20,7 @@ The internal staff application is browser-based and should expose capabilities a
 
 A user's interface should therefore be derived from capability, not hardcoded assumptions about one historical laboratory's staffing structure.
 
-The current codebase contains substantial operational modules including Patient Management, Visit/Billing, Laboratory, Reporting, Catalog, Doctors, Settings, Analytics, Operator Dashboard, Cash Shift, and a separate public website.
+The current codebase contains substantial operational modules including Patient Management, Visit/Billing, Laboratory, Reporting, Catalog, Doctors, Settings, Analytics, Operator Dashboard, and Cash Shift. The independent public website was extracted to `zaighaumrana/labwebsitedemo` on 2026-10-01 and is outside this workspace.
 
 Some modules described in the LabFlow product architecture, including Corporate Accounts, full Home Collection, notification administration, SaaS tenant administration, tier entitlement management, synchronization administration, and backup administration, remain partial or planned.
 
@@ -560,11 +560,11 @@ Future communication channels should reuse Notification architecture rather than
 
 ## Public Portal (Website)
 
-A separate Next.js public application exists.
+The public website is maintained independently in `zaighaumrana/labwebsitedemo`. It must never directly access the local API, PostgreSQL, laboratory LAN, filesystem, or locally stored report files. See Doc 07 for the implemented separation and future online service/bridge architecture.
 
-### Current Public Pages
+### Legacy Public Pages
 
-Implemented pages include:
+The historical combined implementation preserved on `main` and tag `legacy-combined-2026-10-01` included:
 
 * Home;
 * About;
@@ -593,11 +593,11 @@ Any remaining placeholder/development branding such as `LabCare` should be repla
 
 ## Online Test Booking
 
-### Current Foundation
+### Local Foundation and Legacy Integration
 
-The public application allows booking requests and Test selection.
+Local LabFlow retains booking models, services, and staff review/confirmation workflows.
 
-The backend creates a booking in the operational system.
+In the legacy combined implementation, the website submitted booking requests and Test selections to the operational backend. That website transport has been removed; future online requests must use the online service and sync/bridge agent.
 
 ### Current Limitation
 
@@ -623,23 +623,23 @@ Local LabFlow
 Staff Review / Confirmation
 ```
 
-The public website should not receive direct unrestricted access to a local operational database.
+The public website must never directly access the local API or operational database. The online service and sync/bridge agent shown above are future work.
 
 ## Report Lookup
 
-### Current Backend Direction
+### Future Online Service Direction
 
-The public API distinguishes report states such as:
+The future online service should distinguish report states such as:
 
 * not ready;
 * ready for collection/payment;
 * available.
 
-A server-generated PDF endpoint exists.
+Local LabFlow retains report generation and authenticated PDF delivery. No website report endpoint remains in the local API.
 
-### Current Frontend Gap
+### Future Website Integration
 
-The public report page still contains older response assumptions and needs to be aligned completely with the current public-report API contract.
+The independent website must use an online service contract based on approved synchronized data; it must never fetch report data or files directly from the local installation.
 
 Production UX should use the backend's authoritative eligibility state rather than reconstructing the medical report independently in the browser.
 

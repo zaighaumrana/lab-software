@@ -22,7 +22,7 @@ All three tiers belong to the same LabFlow product family and are intended to sh
 
 The primary differences between tiers are deployment model, operational capabilities, infrastructure ownership, feature entitlements, and service level rather than separate codebases.
 
-The current codebase already contains a substantial shared laboratory-management core including patient management, billing, laboratory processing, result management, reporting, analytics, RBAC, doctor/referral functionality, cash reconciliation, public website functionality, and tenant/branch-aware data structures.
+The current codebase already contains a substantial shared laboratory-management core including patient management, billing, laboratory processing, result management, reporting, analytics, RBAC, doctor/referral functionality, cash reconciliation, and tenant/branch-aware data structures. The independent public website was extracted to `zaighaumrana/labwebsitedemo` on 2026-10-01; it is outside the local LabFlow workspace.
 
 Several broader platform capabilities are designed or scaffolded but are not yet complete, including full SaaS tenant provisioning, product-tier entitlement enforcement, cloud/offline synchronization, Windows production packaging, automated backup infrastructure, licensing enforcement, corporate workflows, complete package-test processing, and advanced public website administration.
 
@@ -211,11 +211,7 @@ The implemented or substantially implemented product core includes:
 * Cash-shift reconciliation
 * Centralized permission-based RBAC
 * Tenant-aware and branch-aware schema foundations
-* Public website application
-* Public services/rate information
-* Online booking foundations
-* Public report lookup
-* Payment-gated public report availability
+* Implemented separation of the independent public website (see Doc 07)
 * SMS gateway abstraction
 * Current SendPK SMS integration
 * Notification persistence and delivery-state tracking
@@ -309,7 +305,7 @@ Historical data migration is treated as a deployment/import capability rather th
 | Product entitlement           | Tier/tenant capability enforcement is separate from RBAC and remains an active platform requirement                    |
 | Payment methods               | Cash, Bank Transfer, EasyPaisa, JazzCash represented; payment-provider abstraction remains future platform work        |
 | Analytics                     | Significant analytics subsystem implemented; tier-specific entitlement boundaries remain to be defined                 |
-| Public website                | Separate application exists; hosted SaaS separation and production synchronization architecture remain in progress     |
+| Public website                | Repository separation implemented; independent website in `zaighaumrana/labwebsitedemo`; online service/bridge planned   |
 | SMS                           | Gateway abstraction exists; SendPK currently implemented                                                               |
 | Offline operation             | Mandatory capability of Offline / Enterprise                                                                           |
 | Cloud synchronization         | Designed for Offline / Enterprise hybrid operation; production implementation pending                                  |
@@ -407,7 +403,7 @@ The public platform may support:
 * tenant branding;
 * future CMS capabilities.
 
-Public website functionality must operate through a secure public API boundary and must never expose unrestricted access to the laboratory's operational database.
+Public website functionality must operate through an online service boundary and must never directly access local PostgreSQL, the local NestJS API, the laboratory LAN, the local filesystem, or locally stored report files. Integration through a sync/bridge agent is future work (Doc 07).
 
 ### Notifications
 

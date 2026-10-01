@@ -34,10 +34,10 @@ import type { AuthUser } from '../decorators/current-user.decorator';
  * handler body ever runs, no matter what that body would have decided.
  * @RequireAnyPermission exists specifically so "either of these
  * permissions is enough" can be declared instead of worked around with
- * logic the guard can't see. Controllers that are intentionally
- * permission-free (auth.controller.ts's login/me/logout,
- * public.controller.ts's unauthenticated routes) simply don't have this
- * guard applied to them at all — that's a controller-level decision, not
+ * logic the guard can't see. Internal LabFlow endpoints protected by
+ * this guard require a valid session and declared permissions.
+ * Auth endpoints (auth.controller.ts's login/me/logout) intentionally
+ * omit this guard — that's a controller-level decision, not
  * something this guard should infer route-by-route.
  */
 @Injectable()

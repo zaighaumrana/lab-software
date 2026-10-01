@@ -55,11 +55,9 @@ Each layer is a separate concept on purpose:
 
 `PermissionGuard` denies any route with no `@RequirePermissions` metadata at all, rather than defaulting to "any authenticated user." This is a direct response to how the original vulnerability happened: several controllers ran for a while with effectively no authorization because nothing forced every route to be explicitly considered (see `docs/11_Core_Handoff_and_Non_Divergence_Guide.md`). An unannotated route now fails loudly in testing instead of silently working for everyone.
 
-Two controllers are intentionally exempt from `PermissionGuard` entirely (not "annotated to allow everyone" — actually not guarded by it):
-- `auth.controller.ts` — login is unauthenticated by nature; `me`/`logout` just need a valid session, no permission concept applies.
-- `public.controller.ts` — the intentionally public booking/report-lookup surface for the website; no session concept applies at all.
+`auth.controller.ts` is intentionally exempt from `PermissionGuard`: login is unauthenticated by nature; `me`/`logout` just need a valid session, no permission concept applies. Internal LabFlow booking and reporting endpoints require a valid session and their declared permissions.
 
-`settings.controller.ts`'s `GET /settings` is a third, narrower exception — see that file's own comment: it must work pre-login (branding on the login screen itself), so it keeps its original header-based tenant resolution and has no guard, but it also only ever returns non-sensitive display config.
+`settings.controller.ts`'s `GET /settings` is a narrower exception — see that file's own comment: it must work pre-login (branding on the login screen itself), so it keeps its original header-based tenant resolution and has no guard, but it also only ever returns non-sensitive display config.
 
 ---
 

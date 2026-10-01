@@ -671,7 +671,7 @@ A future "book again" UX may preload previous selections but must produce a new 
 
 ### Online Booking
 
-Current public website can create a booking request.
+The public website is independent in `zaighaumrana/labwebsitedemo`. Website-originated booking requests may reach local LabFlow through a future online service and sync/bridge agent; this integration is not implemented now. Local booking models and staff workflows remain intact.
 
 Target journey:
 
@@ -687,7 +687,7 @@ Patient arrives/checks in
 Normal billing/laboratory journey
 ```
 
-For Offline / Enterprise, future hosted booking synchronization must enter through a controlled queue/review boundary rather than unrestricted public writes to the local operational database.
+For Offline / Enterprise, future hosted booking synchronization must enter through a controlled queue/review boundary. The website must never directly access the local API or operational database (Doc 07).
 
 ### Home Collection
 

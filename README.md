@@ -1,6 +1,8 @@
 # Laboratory Management System (LMS)
 
-Offline-first Laboratory Management System + public website.
+Offline-first local Laboratory Management System (LabFlow).
+
+The independent public website is maintained in [zaighaumrana/labwebsitedemo](https://github.com/zaighaumrana/labwebsitedemo), outside this pnpm workspace. It must never directly access the local API, PostgreSQL, laboratory LAN, filesystem, or locally stored reports. See [Doc 07](docs/07_Website_Separation_and_Offline_Online_Hybrid.md) for the implemented separation and future bridge architecture.
 
 **Status:** Implementation in progress  
 **Authoritative design docs:** See `/docs` (copied from the Architecture Handbook)
@@ -12,7 +14,6 @@ Offline-first Laboratory Management System + public website.
 | Backend | NestJS + TypeScript + Prisma |
 | Database | PostgreSQL 16 |
 | Internal UI | React + Vite + TypeScript + Tailwind + shadcn/ui |
-| Public Website | Next.js + TypeScript + Tailwind |
 | PDF | Puppeteer |
 | Monorepo | pnpm workspaces |
 
@@ -22,12 +23,10 @@ Offline-first Laboratory Management System + public website.
 lms/
 ├── apps/
 │   ├── api/          # NestJS backend (local server)
-│   ├── web/          # Internal LMS (staff workstations)
-│   └── website/      # Public-facing site
+│   └── web/          # Internal LMS (staff workstations)
 ├── packages/
 │   ├── database/     # Prisma schema + client
-│   ├── shared/       # Shared types, constants, validators
-│   └── ui/           # Shared UI primitives (future)
+│   └── shared/       # Shared types, constants, validators
 ├── docs/             # Architecture handbook
 └── scripts/          # Deployment & maintenance scripts
 ```
@@ -38,7 +37,7 @@ Install these before running `setup.ps1` or `pnpm install`:
 
 | Software | Version | Why | Download |
 |----------|---------|-----|----------|
-| Node.js | 20 LTS or newer | Runs the API, web app, and website | https://nodejs.org |
+| Node.js | 20 LTS or newer | Runs the API and internal web app build tooling | https://nodejs.org |
 | pnpm | 9+ (installed via `npm install -g pnpm` if missing) | Monorepo package manager | installed by `setup.ps1` automatically |
 | PostgreSQL | 16 | Database | https://www.postgresql.org/download/windows/ |
 | Git | any recent version | Version control | https://git-scm.com |
@@ -202,7 +201,7 @@ Get-Service -Name postgresql*
 Start-Service -Name postgresql-x64-16
 ```
 
-**What's using a port (e.g. API on 3000, web on 5173, website on 3001, Postgres on 5432)?**
+**What's using a port (e.g. API on 3000, web on 5173, Postgres on 5432)?**
 ```powershell
 Get-NetTCPConnection -LocalPort 3000 | Select-Object -Property OwningProcess
 Get-Process -Id <OwningProcess>
@@ -243,6 +242,5 @@ Get-Content packages\database\.env
 - Report generation + printing
 - SMS on registration and report-ready
 - Simple dashboard + doctor commission tracking
-- Public website (info pages + report lookup + online booking → review queue)
 
 See the Architecture Handbook for full details.

@@ -17,5 +17,5 @@ pnpm db:studio     # Open Prisma Studio
 - `branchId` is present where branch isolation is required.
 - Results are versioned via `amendedFromResultId` — never overwritten.
 - Audit log is append-only.
-- Sync outbox implements the offline → website push pattern.
+- Sync outbox is a foundation for future local-to-online synchronization; the online service and sync/bridge agent are not implemented yet (see Doc 07).
 - State machine statuses are enforced in the application layer (NestJS domain services), not only by the database.

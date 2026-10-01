@@ -1,4 +1,4 @@
-# 02 Ã¢â‚¬â€œ Technical Architecture
+# 02 - Technical Architecture
 
 **Purpose:** defines how LabFlow is built, deployed, secured, integrated, and operated across Basic Cloud, Pro Cloud, and Offline / Enterprise.
 
@@ -30,7 +30,7 @@ The same product core is intended to support:
 2. **Pro Cloud** through vendor-managed hosted infrastructure with expanded product entitlements;
 3. **Offline / Enterprise** through locally deployed infrastructure with optional online/hybrid synchronization.
 
-The current codebase already implements the core application architecture, local PostgreSQL operation, REST APIs, WebSockets, authentication, centralized RBAC, PDF generation, analytics, public website foundations, and an abstracted SMS gateway with SendPK as the current implementation.
+The current codebase already implements the core application architecture, local PostgreSQL operation, REST APIs, WebSockets, authentication, centralized RBAC, PDF generation, analytics, and an abstracted SMS gateway with SendPK as the current implementation. The public website was extracted to `zaighaumrana/labwebsitedemo` on 2026-10-01 and is independent of this local software repository.
 
 Several broader platform components are intentionally part of the target architecture but are not yet complete, including the SaaS control plane, production synchronization agent, separate hosted public-data store for Offline / Enterprise, automated backups, internal HTTPS automation, printer-driver abstraction, tier entitlement enforcement, and several background workers.
 
@@ -73,8 +73,6 @@ flowchart TD
     API --> PDF[Puppeteer PDF Generation]
     API --> SMS[SmsGateway]
     SMS --> SENDPK[SendPK]
-
-    PUBLIC[Next.js Public Website] --> API
 ```
 
 This represents the **current development architecture**, not the final production topology for every tier.
@@ -90,7 +88,6 @@ Current implementation includes:
 * centralized permission-based RBAC;
 * Puppeteer-based PDF generation;
 * SendPK through an SMS gateway abstraction;
-* public Next.js website;
 * tenant and branch schema foundations.
 
 ### Product Deployment Models
@@ -190,6 +187,9 @@ The local environment remains authoritative for core laboratory operations and m
 * **SMS abstraction**
   `SmsGateway` architecture exists with SendPK as the current provider implementation.
 
+* **Public website separation**
+  Accepted and implemented on 2026-10-01. The independent website must never directly access local PostgreSQL, the local NestJS API, the laboratory LAN, the local filesystem, or locally stored report files. See Doc 07.
+
 ### Partial / Scaffolded
 
 * **Tenant/branch architecture**
@@ -203,9 +203,6 @@ The local environment remains authoritative for core laboratory operations and m
 
 * **`AuditLog`**
   Schema exists, but application-wide append-only audit recording is not yet consistently implemented.
-
-* **Public website separation**
-  A separate Next.js application exists, but it currently communicates with the operational API rather than a fully separated hosted public-data architecture for Offline / Enterprise.
 
 ### Designed / Planned
 
@@ -236,15 +233,15 @@ Conceptually:
 
 ```text
 LabFlow Cloud
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ Tenant A
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ Branch 1
-Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ Branch 2
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ Tenant B
-Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ Branch 1
-Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ Tenant C
-    Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ Branch 1
-    Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ Branch 2
-    Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ Branch 3
++-- Tenant A
+|   +-- Branch 1
+|   +-- Branch 2
++-- Tenant B
+|   +-- Branch 1
++-- Tenant C
+    +-- Branch 1
+    +-- Branch 2
+    +-- Branch 3
 ```
 
 ### Tenant Rules
@@ -439,19 +436,19 @@ For local-to-cloud report synchronization:
 6. retries occur with backoff;
 7. confirmed delivery marks the job complete.
 
-Website-originated bookings must not directly mutate unrestricted operational tables in an Offline / Enterprise deployment.
+Website-originated bookings must reach local review through a future online service and synchronization bridge, never through direct access to the local API or database.
 
 The preferred architecture is:
 
 ```text
 Hosted Booking Request
-        Ã¢â€ â€œ
+        v
 Cloud Queue
-        Ã¢â€ â€œ
+        v
 Sync
-        Ã¢â€ â€œ
+        v
 Local Review / Import
-        Ã¢â€ â€œ
+        v
 Operational Booking
 ```
 
@@ -480,13 +477,13 @@ The active authorization model is:
 
 ```text
 Authenticated User
-       Ã¢â€ â€œ
+       v
 Role
-       Ã¢â€ â€œ
+       v
 Permission Bundle
-       Ã¢â€ â€œ
+       v
 Required Route Permission
-       Ã¢â€ â€œ
+       v
 Allow / Deny
 ```
 
@@ -498,13 +495,13 @@ A second layer is required for the SaaS product:
 
 ```text
 Tenant
-  Ã¢â€ â€œ
+  v
 Subscription / License
-  Ã¢â€ â€œ
+  v
 Tier
-  Ã¢â€ â€œ
+  v
 Feature Entitlement
-  Ã¢â€ â€œ
+  v
 User Permission
 ```
 
@@ -559,9 +556,9 @@ Examples:
 
 ## Website / Patient-Facing Security
 
-Public functionality requires a stricter trust boundary than internal staff APIs.
+Future public functionality in the separate website repository requires a stricter trust boundary than internal staff APIs. The local API no longer hosts website booking or report-lookup routes.
 
-Report lookup currently uses a tracking identifier and secondary verification concept.
+Future online report lookup should use a tracking identifier and secondary verification.
 
 Production architecture must require:
 
@@ -572,15 +569,15 @@ Production architecture must require:
 * tenant/branch isolation;
 * HTTPS;
 * minimal returned data;
-* no direct operational database exposure from public infrastructure in the Offline / Enterprise hybrid model.
+* no direct access to the local API, operational database, laboratory LAN, filesystem, or locally stored reports.
 
-### Current Gap
+### Future Online Service Requirements
 
-Public lookup rate limiting is not yet fully implemented.
+Public lookup rate limiting must be implemented in the future online service.
 
-Secondary verification rules also require further hardening before production use.
+Secondary verification rules must be validated before production use.
 
-These are implementation gaps, not changes to the security architecture.
+These requirements belong to future online integration work; no bridge is being implemented during local application stabilization.
 
 ## Data at Rest & In Transit
 
@@ -673,27 +670,27 @@ Current product authorization should be understood as capabilities rather than h
 
 | Capability                                                      | LAB_OPERATOR | ADMIN |
 | --------------------------------------------------------------- | :----------: | :---: |
-| View patients                                                   |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
-| Register patients                                               |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
-| Update patients                                                 |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
-| View/create/manage bookings                                     |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
-| View billing                                                    |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
-| Create invoices                                                 |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
-| Record payments                                                 |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
-| View/manage samples                                             |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
-| Enter results                                                   |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
-| Finalize/reopen/amend results through current result permission |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
-| View reports                                                    |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
-| Print reports                                                   |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
-| View referring-doctor information required operationally        |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
-| Manage doctors/commission configuration                         |              |   Ã¢Å“â€¦   |
-| View test/package catalog                                       |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
-| Modify catalog/reference ranges/packages                        |              |   Ã¢Å“â€¦   |
-| Operator dashboard                                              |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
-| Management analytics                                            |              |   Ã¢Å“â€¦   |
-| Manage settings                                                 |              |   Ã¢Å“â€¦   |
-| Manage users                                                    |              |   Ã¢Å“â€¦   |
-| Manage cash shift                                               |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
+| View patients                                                   |       Yes      |   Yes   |
+| Register patients                                               |       Yes      |   Yes   |
+| Update patients                                                 |       Yes      |   Yes   |
+| View/create/manage bookings                                     |       Yes      |   Yes   |
+| View billing                                                    |       Yes      |   Yes   |
+| Create invoices                                                 |       Yes      |   Yes   |
+| Record payments                                                 |       Yes      |   Yes   |
+| View/manage samples                                             |       Yes      |   Yes   |
+| Enter results                                                   |       Yes      |   Yes   |
+| Finalize/reopen/amend results through current result permission |       Yes      |   Yes   |
+| View reports                                                    |       Yes      |   Yes   |
+| Print reports                                                   |       Yes      |   Yes   |
+| View referring-doctor information required operationally        |       Yes      |   Yes   |
+| Manage doctors/commission configuration                         |              |   Yes   |
+| View test/package catalog                                       |       Yes      |   Yes   |
+| Modify catalog/reference ranges/packages                        |              |   Yes   |
+| Operator dashboard                                              |       Yes      |   Yes   |
+| Management analytics                                            |              |   Yes   |
+| Manage settings                                                 |              |   Yes   |
+| Manage users                                                    |              |   Yes   |
+| Manage cash shift                                               |       Yes      |   Yes   |
 
 Future roles should be introduced by mapping subsets of these and future permissions rather than changing every controller.
 
@@ -770,13 +767,13 @@ The target pattern is:
 
 ```text
 Business transaction completes
-        Ã¢â€ â€œ
+        v
 Notification queued locally
-        Ã¢â€ â€œ
+        v
 Background dispatcher
-        Ã¢â€ â€œ
+        v
 Provider
-        Ã¢â€ â€œ
+        v
 Retry / delivery status
 ```
 
@@ -786,7 +783,7 @@ The laboratory transaction must not depend on successful internet delivery.
 
 The public website has been separated from the local LabFlow repository and deployment.
 
-The website is maintained in its own repository and must not connect directly to the local laboratory API, PostgreSQL database, LAN, or filesystem.
+The website is maintained in `zaighaumrana/labwebsitedemo` and must never connect directly to the local laboratory API, PostgreSQL database, LAN, filesystem, or locally stored report files.
 
 For Offline / Enterprise deployments, internet-facing functionality will use a hosted integration layer containing only data intentionally synchronized from the laboratory installation.
 
@@ -905,13 +902,13 @@ Conceptually:
 
 ```text
 Feature exists in product
-        Ã¢â€ â€œ
+        v
 Environment supports it
-        Ã¢â€ â€œ
+        v
 Tenant is entitled to it
-        Ã¢â€ â€œ
+        v
 User has permission
-        Ã¢â€ â€œ
+        v
 Action allowed
 ```
 
@@ -982,7 +979,7 @@ The implementation is not complete until backup creation **and restoration** are
 | 10 | Backup exists but restore is untested                               | False sense of recoverability                       | Automated verification + scheduled restore tests                                |
 | 11 | Feature entitlement mixed with RBAC                                 | Security/commercial leakage                         | Separate tenant entitlement and user permission layers                          |
 | 12 | Reserved roles exposed before bundles exist                         | Users can authenticate but cannot operate correctly | Expose only active roles until intentionally implemented                        |
-| 13 | Public and operational API boundaries remain coupled                | Larger attack surface                               | Complete public API/data separation appropriate to deployment tier              |
+| 13 | Future website integration recreates local API/database coupling    | Larger attack surface                               | Preserve independent website boundary; use online service and future bridge     |
 | 14 | External-provider outage                                            | Notifications/integrations fail                     | Gateway abstraction + durable queue/retry                                       |
 
 ---
@@ -991,7 +988,7 @@ The implementation is not complete until backup creation **and restoration** are
 
 **Related chapters:** `03_Core_Domain_Design.md` defines the business/domain rules this infrastructure serves; `04_Application_Modules.md` defines the user-facing modules; `07_Website_Separation_and_Offline_Online_Hybrid.md` defines Offline / Enterprise public-service synchronization; `08_Windows_Packaging_and_Installer_Roadmap.md` defines local product packaging; `09_LabFlow_Licensing_and_Subscription_Architecture.md` defines Offline / Enterprise license validation; `12_RBAC_and_Operator_Dashboard.md` defines the current permission implementation.
 
-**Current implementation summary:** shared web/API/PostgreSQL core, WebSockets, authentication/RBAC, analytics, PDF generation, public website foundations, tenant/branch schema groundwork, and SendPK SMS integration are implemented or substantially implemented. Sync, SaaS control plane, entitlement enforcement, automated backups, production hybrid website separation, Print Manager/device abstraction, and several background services remain partial or planned.
+**Current implementation summary:** shared web/API/PostgreSQL core, WebSockets, authentication/RBAC, analytics, PDF generation, tenant/branch schema groundwork, and SendPK SMS integration are implemented or substantially implemented. Website repository separation is accepted and implemented. Sync/bridge, hosted online services, SaaS control plane, entitlement enforcement, automated backups, Print Manager/device abstraction, and several background services remain partial or planned. Stabilizing the local LabFlow application is the current priority.
 
 **Future extensions:** cloud infrastructure automation, tenant control plane, additional integrations, analyzers, device adapters, advanced observability, storage providers, identity providers, plugin/extension architecture.
 

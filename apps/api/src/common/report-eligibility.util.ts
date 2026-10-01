@@ -25,7 +25,7 @@ export function isInvoiceFullyPaid(invoice: InvoiceLike): boolean {
 }
 
 /** Finalized + fully paid = the report may be shown to the patient
- * (front-desk preview, public website, PDF). */
+ * (internal front-desk preview and local PDF delivery). */
 export function canDeliverReport(report: ReportLike, invoice: InvoiceLike): boolean {
   return isReportFinalized(report) && isInvoiceFullyPaid(invoice);
 }

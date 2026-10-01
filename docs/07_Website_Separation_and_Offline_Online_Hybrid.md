@@ -4,7 +4,7 @@
 
 Accepted and implemented.
 
-Decision date: 2026-10-01.
+Separation date: 2026-10-01. The repository separation is implemented; the synchronization bridge described below is future work.
 
 ## Repository Separation
 
@@ -62,7 +62,7 @@ The original combined software and website implementation is preserved in:
 
 This snapshot is historical and must not be used for new product development.
 
-Active LabFlow development begins from the software-only separated codebase.
+Active LabFlow development occurs on `development`, the software-only separated codebase. `main` remains the frozen legacy snapshot.
 
 ## Target Online Architecture
 
@@ -75,8 +75,18 @@ Public Website
 Online Shared Database / Service
       ^
       |
-      |
 Sync / Bridge Agent
       |
       v
 Local LabFlow Database / API
+```
+
+The local database remains the source of truth for operational laboratory work. Future local-to-online synchronization may publish approved report, tracking, readiness, and result metadata. Future online-to-local synchronization may retrieve booking requests and related website-originated records for local review and processing.
+
+The sync / bridge agent is future work and is **not being implemented now**. It must eventually support retries, idempotency, intermittent connectivity, auditability, conflict handling, and recovery. The existing synchronization outbox is retained as an architectural foundation, not a completed bridge.
+
+## Current Priority and Boundary
+
+The current priority is stabilizing the local LabFlow application while preserving its operational functionality and offline operation.
+
+No future feature may recreate a direct website-to-local-API or website-to-local-database dependency. Online functionality must use the shared online service and future bridge while respecting the access restrictions above.

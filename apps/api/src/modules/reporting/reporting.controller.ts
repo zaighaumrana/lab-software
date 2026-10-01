@@ -12,13 +12,11 @@ function resolveBranchId(user: AuthUser): string {
 }
 
 /**
- * Staff-facing report listing/preview Ã¢â‚¬â€ only called from apps/web
- * (verified: not referenced from apps/website, which has its own
- * separate, intentionally-public `/public/reports/*` routes in
- * public.controller.ts). Requires a valid session, and every route
+ * Internal LabFlow report listing/preview for the staff application.
+ * Requires a valid session, and every route
  * declares the exact permission it needs (PermissionGuard denies by
  * default if a route has no @RequirePermissions). LAB_OPERATOR has full
- * REPORT_VIEW Ã¢â‚¬â€ finding/checking a report's status to complete the
+ * REPORT_VIEW - finding/checking a report's status to complete the
  * delivery workflow is core operational work.
  */
 @Controller('reports')
@@ -30,7 +28,7 @@ export class ReportingController {
    * GET /reports?q=&status=&unprinted=true
    * Must be declared before :id routes. `unprinted=true` is what backs
    * the operator's default "today's active queue" view (see
-   * ReportsPage.tsx) Ã¢â‚¬â€ deliberately ignored server-side whenever `q` is
+   * ReportsPage.tsx) - deliberately ignored server-side whenever `q` is
    * also present, so a search always searches everything, print status
    * included, for the "need to reprint an old one" case.
    */
@@ -65,7 +63,7 @@ export class ReportingController {
    *
    * Front-desk report preview. Per the delivery rule, actual result values
    * are only included once the report is finalized AND the invoice is
-   * fully paid Ã¢â‚¬â€ this is the server enforcing that, not just the frontend
+   * fully paid - this is the server enforcing that, not just the frontend
    * choosing not to render a button. When not deliverable, the caller
    * still gets patient/status context (so front desk can say "ready,
    * payment pending") but never the values themselves.
@@ -81,7 +79,7 @@ export class ReportingController {
       return { ...report, finalized, deliverable };
     }
 
-    // Strip actual result values Ã¢â‚¬â€ only status/payment context goes out.
+    // Strip actual result values - only status/payment context goes out.
     return {
       ...report,
       finalized,
