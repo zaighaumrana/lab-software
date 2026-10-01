@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "outDir": "./dist/esm",
+    // Type declarations are identical between builds — the CJS build's
+    // .d.ts (referenced by package.json's "types"/exports."types") covers
+    // both, so this build only needs to emit runtime JS.
+    "declaration": false
+  }
+}
