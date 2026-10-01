@@ -162,7 +162,6 @@ pnpm db:seed
 # 6. Start each app (run each in its own terminal — they run at the same time)
 pnpm dev:api       # NestJS API      → http://localhost:3000
 pnpm dev:web       # Internal LMS UI → http://localhost:5173
-pnpm dev:website   # Public website  → http://localhost:3001
 ```
 
 ## Running Tests

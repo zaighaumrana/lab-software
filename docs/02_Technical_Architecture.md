@@ -1,4 +1,4 @@
-# 02 – Technical Architecture
+# 02 Ã¢â‚¬â€œ Technical Architecture
 
 **Purpose:** defines how LabFlow is built, deployed, secured, integrated, and operated across Basic Cloud, Pro Cloud, and Offline / Enterprise.
 
@@ -236,15 +236,15 @@ Conceptually:
 
 ```text
 LabFlow Cloud
-├── Tenant A
-│   ├── Branch 1
-│   └── Branch 2
-├── Tenant B
-│   └── Branch 1
-└── Tenant C
-    ├── Branch 1
-    ├── Branch 2
-    └── Branch 3
+Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ Tenant A
+Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ Branch 1
+Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ Branch 2
+Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ Tenant B
+Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ Branch 1
+Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ Tenant C
+    Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ Branch 1
+    Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ Branch 2
+    Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ Branch 3
 ```
 
 ### Tenant Rules
@@ -445,13 +445,13 @@ The preferred architecture is:
 
 ```text
 Hosted Booking Request
-        ↓
+        Ã¢â€ â€œ
 Cloud Queue
-        ↓
+        Ã¢â€ â€œ
 Sync
-        ↓
+        Ã¢â€ â€œ
 Local Review / Import
-        ↓
+        Ã¢â€ â€œ
 Operational Booking
 ```
 
@@ -480,13 +480,13 @@ The active authorization model is:
 
 ```text
 Authenticated User
-       ↓
+       Ã¢â€ â€œ
 Role
-       ↓
+       Ã¢â€ â€œ
 Permission Bundle
-       ↓
+       Ã¢â€ â€œ
 Required Route Permission
-       ↓
+       Ã¢â€ â€œ
 Allow / Deny
 ```
 
@@ -498,13 +498,13 @@ A second layer is required for the SaaS product:
 
 ```text
 Tenant
-  ↓
+  Ã¢â€ â€œ
 Subscription / License
-  ↓
+  Ã¢â€ â€œ
 Tier
-  ↓
+  Ã¢â€ â€œ
 Feature Entitlement
-  ↓
+  Ã¢â€ â€œ
 User Permission
 ```
 
@@ -673,27 +673,27 @@ Current product authorization should be understood as capabilities rather than h
 
 | Capability                                                      | LAB_OPERATOR | ADMIN |
 | --------------------------------------------------------------- | :----------: | :---: |
-| View patients                                                   |       ✅      |   ✅   |
-| Register patients                                               |       ✅      |   ✅   |
-| Update patients                                                 |       ✅      |   ✅   |
-| View/create/manage bookings                                     |       ✅      |   ✅   |
-| View billing                                                    |       ✅      |   ✅   |
-| Create invoices                                                 |       ✅      |   ✅   |
-| Record payments                                                 |       ✅      |   ✅   |
-| View/manage samples                                             |       ✅      |   ✅   |
-| Enter results                                                   |       ✅      |   ✅   |
-| Finalize/reopen/amend results through current result permission |       ✅      |   ✅   |
-| View reports                                                    |       ✅      |   ✅   |
-| Print reports                                                   |       ✅      |   ✅   |
-| View referring-doctor information required operationally        |       ✅      |   ✅   |
-| Manage doctors/commission configuration                         |              |   ✅   |
-| View test/package catalog                                       |       ✅      |   ✅   |
-| Modify catalog/reference ranges/packages                        |              |   ✅   |
-| Operator dashboard                                              |       ✅      |   ✅   |
-| Management analytics                                            |              |   ✅   |
-| Manage settings                                                 |              |   ✅   |
-| Manage users                                                    |              |   ✅   |
-| Manage cash shift                                               |       ✅      |   ✅   |
+| View patients                                                   |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
+| Register patients                                               |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
+| Update patients                                                 |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
+| View/create/manage bookings                                     |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
+| View billing                                                    |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
+| Create invoices                                                 |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
+| Record payments                                                 |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
+| View/manage samples                                             |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
+| Enter results                                                   |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
+| Finalize/reopen/amend results through current result permission |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
+| View reports                                                    |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
+| Print reports                                                   |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
+| View referring-doctor information required operationally        |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
+| Manage doctors/commission configuration                         |              |   Ã¢Å“â€¦   |
+| View test/package catalog                                       |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
+| Modify catalog/reference ranges/packages                        |              |   Ã¢Å“â€¦   |
+| Operator dashboard                                              |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
+| Management analytics                                            |              |   Ã¢Å“â€¦   |
+| Manage settings                                                 |              |   Ã¢Å“â€¦   |
+| Manage users                                                    |              |   Ã¢Å“â€¦   |
+| Manage cash shift                                               |       Ã¢Å“â€¦      |   Ã¢Å“â€¦   |
 
 Future roles should be introduced by mapping subsets of these and future permissions rather than changing every controller.
 
@@ -770,13 +770,13 @@ The target pattern is:
 
 ```text
 Business transaction completes
-        ↓
+        Ã¢â€ â€œ
 Notification queued locally
-        ↓
+        Ã¢â€ â€œ
 Background dispatcher
-        ↓
+        Ã¢â€ â€œ
 Provider
-        ↓
+        Ã¢â€ â€œ
 Retry / delivery status
 ```
 
@@ -784,21 +784,17 @@ The laboratory transaction must not depend on successful internet delivery.
 
 ## Website Architecture
 
-A separate `apps/website` Next.js application currently exists.
+The public website has been separated from the local LabFlow repository and deployment.
 
-### Current Development Architecture
+The website is maintained in its own repository and must not connect directly to the local laboratory API, PostgreSQL database, LAN, or filesystem.
 
-The website currently communicates with the operational API.
+For Offline / Enterprise deployments, internet-facing functionality will use a hosted integration layer containing only data intentionally synchronized from the laboratory installation.
 
-This allows public functionality to be developed but is **not the final Offline / Enterprise production trust boundary**.
+A future synchronization bridge will exchange approved data between the local LabFlow installation and the online integration layer.
 
-### Target Offline / Enterprise Architecture
+The local laboratory application remains operational when internet connectivity is unavailable.
 
-The hosted website should eventually use a smaller hosted public-data/API layer containing only data intentionally exposed online.
-
-It should not receive unrestricted connectivity to the local laboratory PostgreSQL database.
-
-Detailed design is in Doc 07.
+Detailed separation and synchronization architecture is defined in Doc 07.
 
 ### Cloud Tiers
 
@@ -909,13 +905,13 @@ Conceptually:
 
 ```text
 Feature exists in product
-        ↓
+        Ã¢â€ â€œ
 Environment supports it
-        ↓
+        Ã¢â€ â€œ
 Tenant is entitled to it
-        ↓
+        Ã¢â€ â€œ
 User has permission
-        ↓
+        Ã¢â€ â€œ
 Action allowed
 ```
 

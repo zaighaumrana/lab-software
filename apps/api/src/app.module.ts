@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+﻿import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -9,7 +9,6 @@ import { LaboratoryModule } from './modules/laboratory/laboratory.module';
 import { ReportingModule } from './modules/reporting/reporting.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { DoctorsModule } from './modules/doctors/doctors.module';
-import { PublicModule } from './modules/public/public.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
@@ -32,7 +31,6 @@ import { CashShiftsModule } from './modules/cash-shifts/cash-shifts.module';
     ReportingModule,
     CatalogModule,
     DoctorsModule,
-    PublicModule,
     SettingsModule,
     NotificationsModule,
     AnalyticsModule,
@@ -42,3 +40,4 @@ import { CashShiftsModule } from './modules/cash-shifts/cash-shifts.module';
   ],
 })
 export class AppModule {}
+

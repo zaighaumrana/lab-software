@@ -12,8 +12,6 @@ dist/
 build/
 **/dist/
 **/build/
-apps/website/.next/
-apps/website/out/
 .turbo/
 
 # ============================================================

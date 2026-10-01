@@ -23,7 +23,7 @@ function resolveBranchId(user: AuthUser): string {
 }
 
 /**
- * Staff-facing booking management — only called from apps/web (verified:
+ * Staff-facing booking management Ã¢â‚¬â€ only called from apps/web (verified:
  * not referenced from apps/website). Requires a valid session, and every
  * route declares the exact permission it needs (PermissionGuard denies
  * by default if a route has no @RequirePermissions). LAB_OPERATOR has
@@ -67,7 +67,7 @@ export class BookingsController {
 
   /**
    * PATCH /bookings/:id/confirm
-   * Accept an online booking (PENDING_REVIEW → CONFIRMED)
+   * Accept an online booking (PENDING_REVIEW Ã¢â€ â€™ CONFIRMED)
    */
   @Patch(':id/confirm')
   @RequirePermissions(Permission.BOOKING_MANAGE)
@@ -77,7 +77,7 @@ export class BookingsController {
 
   /**
    * PATCH /bookings/:id/check-in
-   * Patient arrives (CONFIRMED → CHECKED_IN)
+   * Patient arrives (CONFIRMED Ã¢â€ â€™ CHECKED_IN)
    */
   @Patch(':id/check-in')
   @RequirePermissions(Permission.BOOKING_MANAGE)
