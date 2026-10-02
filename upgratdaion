@@ -390,3 +390,27 @@ Keep observed RSS increase documented (about 51 MiB v6 -> 112-124 MiB v7); no ob
 - upgratdaion
 
 Old log content preserved. No staging, commit, push, branch creation, reset, rebase or changes to main/tag/website.
+
+# 2026-10-02 (Asia/Karachi) — Database Architecture V2 investigation and design completed
+
+## Completed work and affected files
+
+- Added docs/Database_Architecture_Gap_Analysis_2026-10-02.md: evidence-based assessment of all 29 current models/20 enums, 19-domain scorecard, ranked findings, actual clinical/financial workflows, relations/uniques/deletion/types/JSON, offline integration, settings/files/backup/performance and documentation discrepancies.
+- Added docs/Database_V2_Proposal_2026-10-02.md: proposed ownership boundaries and 47 model cards (29 retained/reworked + 18 staged additions), clinical/financial invariants, identifiers/state machines, indexes/constraints/retention, immutable report artifacts, durable integration, staged migration/backfill/recovery and automated/manual acceptance plans.
+- Appended this entry to upgratdaion, preserving previous entries. No credentials, patient/contact values or operational row contents recorded.
+
+## Investigation and findings
+
+Started from clean development at f8f9285. Inspected database schema/migrations/config/client/seed/tests; API services/controllers/DTOs/auth/guards/analytics/printing; staff registration/catalog/laboratory/billing/report workflows and shared SMS/phone utilities; architecture/testing/tooling docs, README and setup.ps1. Repository-wide non-generated source survey: 165 files / 20,029 lines, with detailed domain-critical review. PostgreSQL best-practices skill and official PostgreSQL 18/Prisma 7/WHO references supported design review.
+
+Confirmed incompatible reference ranges remain eligible in scored selection; reopening allows replacement of released values; current report PDF can include superseded results; result context/required-value validation and package/duplicate readiness are incomplete; payment totals use stale pre-transaction reads; patient phone uniqueness blocks families/no-phone registration; cash aggregation ignores branch and lacks payment/shift attribution; business audit/outbox production and durable retry are unfinished. Existing Decimal sale/commission snapshots, normalized result values, amendment predecessor and singleton Prisma pool are retained as useful foundations.
+
+## Read-only validation and safety
+
+Local PostgreSQL 18.4 inspected in REPEATABLE READ READ ONLY transactions with transaction_read_only=on. Observed 29 application tables plus migration metadata, five completed migrations, 95 indexes, 54 FKs, 30 PKs, 232 not-null catalog constraints, zero CHECK constraints/sequences and only plpgsql extension. Operational clinical/financial tables are empty; no actual historical corruption or representative performance claim inferred. Before/after counts/content hashes for all 30 tables match; column/constraint/index/enum/sequence/extension/migration metadata matches. Temporary sanitized evidence stays outside tracked source.
+
+Prisma read-only migrate diff from configured datasource to schema returned "No difference detected", exit 0, discovering prisma7.config.ts. Additional read-only metadata checks found zero noninternal triggers/RLS policies and matching SQL checksums for all five applied migrations (line-ending normalization allowed). CLI/client/adapter remain pinned 7.10.0 with pg 8.23.1; dependencies unchanged. All 29 existing model entries and 47 proposed cards checked. Final documentation whitespace/link/model coverage and Git scope checks performed; schema and migrations diffs empty. No runtime/build/domain tests rerun for documentation-only edits; existing 54 passing checks are historical Prisma hardening evidence, not V2 acceptance. No setup/seed/migration application, schema/API/UI/business changes, operational writes, staging, commit, push, branch/history changes.
+
+## Deliberately unchanged issues and future plans
+
+All clinical/financial/auth/audit/queue findings remain unimplemented pending manual owner/clinical review and separate authorization. No V2 migration created. Historical missing definitions/amendment content cannot be invented; ambiguous backfills must retain legacy evidence and quarantine for review. Bridge/corporate/Employee/generalized RBAC/ERP complexity deferred. Existing Prisma 7 RSS increase (~112–124 MiB vs ~51 MiB), audit advisories and deployment/load/PDF/SMS certification limits remain documented and unresolved. Other handbook discrepancies are identified rather than rewritten outside this phase's scope. Backup/retention/clinical/financial policy decisions and staged implementation are future work, not completed features.
