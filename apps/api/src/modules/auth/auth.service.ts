@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   BadRequestException,
   OnModuleInit,
+  OnModuleDestroy,
 } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
@@ -90,12 +91,13 @@ function clearLoginFailures(key: string) {
 }
 
 @Injectable()
-export class AuthService implements OnModuleInit {
+export class AuthService implements OnModuleInit, OnModuleDestroy {
+  private cleanupTimer?: ReturnType<typeof setInterval>;
   constructor(private readonly prisma: PrismaService) {}
 
   onModuleInit() {
     // Periodic cleanup of expired sessions and stale login-attempt records
-    setInterval(() => {
+    this.cleanupTimer = setInterval(() => {
       const now = Date.now();
       for (const [id, session] of sessions) {
         if (now - session.lastSeenAt.getTime() > SESSION_TTL_MS) {
@@ -111,6 +113,10 @@ export class AuthService implements OnModuleInit {
         }
       }
     }, 60_000);
+  }
+
+  onModuleDestroy() {
+    if (this.cleanupTimer) clearInterval(this.cleanupTimer);
   }
 
   async login(dto: LoginDto) {

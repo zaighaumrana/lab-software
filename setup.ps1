@@ -62,6 +62,7 @@ if (-not (Test-Path $envPath)) {
 }
 
 # 5. Generate Prisma client
+# The pinned package-local Prisma 7 CLI discovers packages/database/prisma7.config.ts.
 Write-Host "`n[5/7] Generating Prisma client..." -ForegroundColor Yellow
 pnpm db:generate
 if ($LASTEXITCODE -ne 0) {
@@ -73,9 +74,9 @@ if ($LASTEXITCODE -ne 0) {
 # 6. Run migrations (creates tables)
 Write-Host "`n[6/7] Running database migrations..." -ForegroundColor Yellow
 Write-Host "  (Requires PostgreSQL running and DATABASE_URL set correctly)" -ForegroundColor Yellow
-pnpm db:migrate
+pnpm --filter @lms/database migrate:deploy
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "  WARNING: migration failed. Fix DATABASE_URL / PostgreSQL and re-run: pnpm db:migrate" -ForegroundColor Yellow
+    Write-Host "  WARNING: migration failed. Fix DATABASE_URL / PostgreSQL and re-run: pnpm --filter @lms/database migrate:deploy" -ForegroundColor Yellow
 } else {
     Write-Host "  Migrations applied." -ForegroundColor Green
 }

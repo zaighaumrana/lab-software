@@ -19,6 +19,7 @@ build/
 # ============================================================
 **/.prisma/
 packages/database/generated/
+packages/database/src/generated/prisma/
 
 # ============================================================
 # Environment / secrets — never commit real credentials

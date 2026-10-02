@@ -1,0 +1,167 @@
+packages/database\index.js:1:module.exports = require('@prisma/client');
+packages/database\index.js:2:module.exports.Decimal = require('@prisma/client/runtime/library').Decimal;
+packages/database\src\index.ts:1:export { PrismaClient, Prisma } from '@prisma/client';
+packages/database\src\index.ts:2:export * from '@prisma/client';
+packages/database\src\index.ts:3:export { Decimal } from '@prisma/client/runtime/library';
+packages/database\prisma\seed.ts:6:import { PrismaClient, Role, ShareType, ParameterValueType } from '@prisma/client';
+packages/database\prisma\seed.ts:9:const prisma = new PrismaClient();
+packages/database\prisma\schema.prisma:12:  url      = env("DATABASE_URL")
+packages/database\prisma\schema.prisma:181:  shareValue      Decimal  @db.Decimal(10, 2) // % or fixed amount
+packages/database\prisma\schema.prisma:216:  discountPercent       Decimal? @db.Decimal(5, 2)
+packages/database\prisma\schema.prisma:275:  basePrice       Decimal  @db.Decimal(12, 2)
+packages/database\prisma\schema.prisma:342:  lowNormal       Decimal? @db.Decimal(12, 4)
+packages/database\prisma\schema.prisma:343:  highNormal      Decimal? @db.Decimal(12, 4)
+packages/database\prisma\schema.prisma:344:  criticalLow     Decimal? @db.Decimal(12, 4)
+packages/database\prisma\schema.prisma:345:  criticalHigh    Decimal? @db.Decimal(12, 4)
+packages/database\prisma\schema.prisma:362:  basePrice   Decimal  @db.Decimal(12, 2)
+packages/database\prisma\schema.prisma:467:  subtotal        Decimal       @db.Decimal(12, 2)
+packages/database\prisma\schema.prisma:468:  discountTotal   Decimal       @db.Decimal(12, 2) @default(0)
+packages/database\prisma\schema.prisma:469:  taxTotal        Decimal       @db.Decimal(12, 2) @default(0)
+packages/database\prisma\schema.prisma:470:  grandTotal      Decimal       @db.Decimal(12, 2)
+packages/database\prisma\schema.prisma:471:  amountPaid      Decimal       @db.Decimal(12, 2) @default(0)
+packages/database\prisma\schema.prisma:472:  amountDue       Decimal       @db.Decimal(12, 2)
+packages/database\prisma\schema.prisma:505:  unitPrice       Decimal  @db.Decimal(12, 2) // Snapshotted final unit price after pipeline
+packages/database\prisma\schema.prisma:506:  basePrice       Decimal  @db.Decimal(12, 2) // Original catalog price
+packages/database\prisma\schema.prisma:507:  discountAmount  Decimal  @db.Decimal(12, 2) @default(0)
+packages/database\prisma\schema.prisma:508:  taxAmount       Decimal  @db.Decimal(12, 2) @default(0)
+packages/database\prisma\schema.prisma:509:  lineTotal       Decimal  @db.Decimal(12, 2)
+packages/database\prisma\schema.prisma:512:  doctorDiscount  Decimal? @db.Decimal(12, 2)
+packages/database\prisma\schema.prisma:513:  corporateDiscount Decimal? @db.Decimal(12, 2)
+packages/database\prisma\schema.prisma:514:  campaignDiscount Decimal? @db.Decimal(12, 2)
+packages/database\prisma\schema.prisma:515:  manualDiscount  Decimal? @db.Decimal(12, 2)
+packages/database\prisma\schema.prisma:549:  amount        Decimal       @db.Decimal(12, 2)
+packages/database\prisma\schema.prisma:596:  expectedCash Decimal?        @db.Decimal(12, 2) // Snapshotted at close time, not live-recomputed after
+packages/database\prisma\schema.prisma:597:  countedCash  Decimal?        @db.Decimal(12, 2) // What the cashier physically counted
+packages/database\prisma\schema.prisma:598:  variance     Decimal?        @db.Decimal(12, 2) // countedCash - expectedCash; negative = short, positive = over
+packages/database\prisma\schema.prisma:645:  outsourcingCost   Decimal? @db.Decimal(10, 2) // What we pay the external lab
+packages/database\prisma\schema.prisma:709:  valueNumeric    Decimal?    @db.Decimal(16, 6)
+packages/database\prisma\schema.prisma:791:  rateOrAmount    Decimal          @db.Decimal(10, 2) // Snapshotted
+packages/database\prisma\schema.prisma:792:  calculatedAmount Decimal         @db.Decimal(12, 2)
+packages/database\prisma\schema.prisma:793:  paidAmount      Decimal?         @db.Decimal(12, 2)
+apps/api/src\modules\catalog\catalog.service.ts:13:import { Decimal, ParameterValueType, Gender } from '@lms/database';
+apps/api/src\modules\catalog\catalog.service.ts:84:        basePrice: new Decimal(dto.basePrice),
+apps/api/src\modules\catalog\catalog.service.ts:106:                      r.lowNormal != null ? new Decimal(r.lowNormal) : null,
+apps/api/src\modules\catalog\catalog.service.ts:108:                      r.highNormal != null ? new Decimal(r.highNormal) : null,
+apps/api/src\modules\catalog\catalog.service.ts:110:                      r.criticalLow != null ? new Decimal(r.criticalLow) : null,
+apps/api/src\modules\catalog\catalog.service.ts:113:                        ? new Decimal(r.criticalHigh)
+apps/api/src\modules\catalog\catalog.service.ts:152:          ? { basePrice: new Decimal(dto.basePrice) }
+apps/api/src\modules\catalog\catalog.service.ts:189:    await this.prisma.$transaction(async (tx) => {
+apps/api/src\modules\catalog\catalog.service.ts:212:                      r.lowNormal != null ? new Decimal(r.lowNormal) : null,
+apps/api/src\modules\catalog\catalog.service.ts:214:                      r.highNormal != null ? new Decimal(r.highNormal) : null,
+apps/api/src\modules\catalog\catalog.service.ts:216:                      r.criticalLow != null ? new Decimal(r.criticalLow) : null,
+apps/api/src\modules\catalog\catalog.service.ts:219:                        ? new Decimal(r.criticalHigh)
+apps/api/src\modules\catalog\catalog.service.ts:294:        basePrice: new Decimal(dto.basePrice),
+apps/api/src\modules\analytics\queries\test-analytics.queries.ts:1:import { PrismaClient, BookingStatus } from '@lms/database';
+apps/api/src\modules\analytics\queries\test-analytics.queries.ts:20:async function testLinesInRange(prisma: PrismaClient, tenantId: string, range: DateRange) {
+apps/api/src\modules\analytics\queries\test-analytics.queries.ts:44:async function testNameMap(prisma: PrismaClient, tenantId: string) {
+apps/api/src\modules\analytics\queries\test-analytics.queries.ts:53:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\test-analytics.queries.ts:87:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\test-analytics.queries.ts:118:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\test-analytics.queries.ts:148:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\test-analytics.queries.ts:159:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\test-analytics.queries.ts:169:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\test-analytics.queries.ts:201:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\test-analytics.queries.ts:241:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\test-analytics.queries.ts:264:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\test-analytics.queries.ts:291:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\outsourcing.queries.ts:1:import { PrismaClient } from '@lms/database';
+apps/api/src\modules\analytics\queries\outsourcing.queries.ts:12:async function outsourcedSamplesInRange(prisma: PrismaClient, tenantId: string, range: DateRange) {
+apps/api/src\modules\analytics\queries\outsourcing.queries.ts:26:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\outsourcing.queries.ts:36:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\outsourcing.queries.ts:57:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\outsourcing.queries.ts:79:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\outsourcing.queries.ts:111:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\outsourcing.queries.ts:143:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\outsourcing.queries.ts:166:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\operational.queries.ts:1:import { PrismaClient, SampleStatus, ResultStatus, ReportStatus } from '@lms/database';
+apps/api/src\modules\analytics\queries\operational.queries.ts:23:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\operational.queries.ts:36:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\operational.queries.ts:47:export async function getTestsInProgress(prisma: PrismaClient, tenantId: string) {
+apps/api/src\modules\analytics\queries\operational.queries.ts:55:export async function getPendingVerification(prisma: PrismaClient, tenantId: string) {
+apps/api/src\modules\analytics\queries\operational.queries.ts:61:export async function getReportsReady(prisma: PrismaClient, tenantId: string) {
+apps/api/src\modules\analytics\queries\operational.queries.ts:70:export async function getCriticalAwaitingReview(prisma: PrismaClient, tenantId: string) {
+apps/api/src\modules\analytics\queries\operational.queries.ts:87:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\operational.queries.ts:129:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\operational.queries.ts:147:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\operational.queries.ts:157:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\financial.queries.ts:1:import { PrismaClient, InvoiceStatus } from '@lms/database';
+apps/api/src\modules\analytics\queries\financial.queries.ts:29:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\financial.queries.ts:47:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\financial.queries.ts:64:export async function getOutstanding(prisma: PrismaClient, tenantId: string) {
+apps/api/src\modules\analytics\queries\financial.queries.ts:73:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\financial.queries.ts:89:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\financial.queries.ts:105:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\financial.queries.ts:126:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\financial.queries.ts:149:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\financial.queries.ts:182:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\financial.queries.ts:207:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\doctor-share.queries.ts:1:import { PrismaClient } from '@lms/database';
+apps/api/src\modules\analytics\queries\doctor-share.queries.ts:15:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\doctor-share.queries.ts:28:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\doctor-share.queries.ts:42:export async function getPendingShare(prisma: PrismaClient, tenantId: string) {
+apps/api/src\modules\analytics\queries\doctor-share.queries.ts:65:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\doctor-share.queries.ts:122:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\doctor-share.queries.ts:144:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\business-insights.queries.ts:1:import { PrismaClient, InvoiceStatus } from '@lms/database';
+apps/api/src\modules\analytics\queries\business-insights.queries.ts:27:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\business-insights.queries.ts:72:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\business-insights.queries.ts:105:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\business-insights.queries.ts:144:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\business-insights.queries.ts:193:  prisma: PrismaClient,
+apps/api/src\modules\analytics\queries\business-insights.queries.ts:233:  prisma: PrismaClient,
+packages/database\package.json:18:    "@prisma/client": "6.19.3"
+apps/api/src\modules\billing\billing.service.ts:19:  Decimal,
+apps/api/src\modules\billing\billing.service.ts:134:      basePrice: Decimal;
+apps/api/src\modules\billing\billing.service.ts:135:      unitPrice: Decimal;
+apps/api/src\modules\billing\billing.service.ts:136:      discountAmount: Decimal;
+apps/api/src\modules\billing\billing.service.ts:137:      taxAmount: Decimal;
+apps/api/src\modules\billing\billing.service.ts:138:      lineTotal: Decimal;
+apps/api/src\modules\billing\billing.service.ts:139:      manualDiscount: Decimal | null;
+apps/api/src\modules\billing\billing.service.ts:143:    let subtotal = new Decimal(0);
+apps/api/src\modules\billing\billing.service.ts:144:    let discountTotal = new Decimal(0);
+apps/api/src\modules\billing\billing.service.ts:151:      let basePrice = new Decimal(0);
+apps/api/src\modules\billing\billing.service.ts:178:        ? new Decimal(line.manualDiscount)
+apps/api/src\modules\billing\billing.service.ts:179:        : new Decimal(0);
+apps/api/src\modules\billing\billing.service.ts:200:        taxAmount: new Decimal(0),
+apps/api/src\modules\billing\billing.service.ts:207:    const taxTotal = new Decimal(0); // Tax not required for v1
+apps/api/src\modules\billing\billing.service.ts:211:    const invoice = await this.prisma.$transaction(async (tx) => {
+apps/api/src\modules\billing\billing.service.ts:224:          amountPaid: new Decimal(0),
+apps/api/src\modules\billing\billing.service.ts:283:        let calculatedAmount = new Decimal(0);
+apps/api/src\modules\billing\billing.service.ts:287:          calculatedAmount = new Decimal(doctor.shareValue);
+apps/api/src\modules\billing\billing.service.ts:289:          calculatedAmount = new Decimal(doctor.shareValue).mul(
+apps/api/src\modules\billing\billing.service.ts:336:    const amount = new Decimal(dto.amount);
+apps/api/src\modules\billing\billing.service.ts:343:    const newAmountPaid = new Decimal(invoice.amountPaid).plus(amount);
+apps/api/src\modules\billing\billing.service.ts:344:    const newAmountDue = new Decimal(invoice.grandTotal).minus(newAmountPaid);
+apps/api/src\modules\billing\billing.service.ts:351:    const result = await this.prisma.$transaction(async (tx) => {
+apps/api/src\modules\billing\billing.service.ts:368:          amountDue: newAmountDue.lessThan(0) ? new Decimal(0) : newAmountDue,
+apps/api/src\modules\patients\patients.service.ts:229:    const data: Prisma.PatientUpdateInput = {};
+apps/api/src\modules\doctors\doctors.service.ts:4:import { ShareType, Decimal, Prisma } from '@lms/database';
+apps/api/src\modules\doctors\doctors.service.ts:72:        shareValue: new Decimal(dto.shareValue ?? 0),
+apps/api/src\modules\doctors\doctors.service.ts:94:          ? { shareValue: new Decimal(dto.shareValue) }
+apps/api/src\modules\doctors\doctors.service.ts:118:    const dateFilter: Prisma.DoctorShareWhereInput['invoice'] = {
+apps/api/src\modules\notifications\notifications.service.ts:22:function isUniqueConstraintError(e: unknown): e is Prisma.PrismaClientKnownRequestError {
+apps/api/src\modules\notifications\notifications.service.ts:24:    e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002'
+apps/api/src\modules\laboratory\laboratory.service.ts:17:  Decimal,
+apps/api/src\modules\laboratory\laboratory.service.ts:107:        outsourcingCost: outsourcingCost != null ? new Decimal(outsourcingCost) : null,
+apps/api/src\modules\laboratory\laboratory.service.ts:410:          const result = this.evaluateAgainstRange(new Decimal(v.valueNumeric), range);
+apps/api/src\modules\laboratory\laboratory.service.ts:419:        valueNumeric: v.valueNumeric !== undefined ? new Decimal(v.valueNumeric) : null,
+apps/api/src\modules\laboratory\laboratory.service.ts:433:    const result = await this.prisma.$transaction(async (tx) => {
+apps/api/src\modules\laboratory\laboratory.service.ts:546:    const outcome = await this.prisma.$transaction(async (tx) => {
+apps/api/src\modules\laboratory\laboratory.service.ts:621:    const reportOutcome = await this.prisma.$transaction(async (tx) => {
+apps/api/src\modules\laboratory\laboratory.service.ts:670:    const updated = await this.prisma.$transaction(async (tx) => {
+apps/api/src\modules\laboratory\laboratory.service.ts:778:          const result = this.evaluateAgainstRange(new Decimal(v.valueNumeric), range);
+apps/api/src\modules\laboratory\laboratory.service.ts:787:        valueNumeric: v.valueNumeric !== undefined ? new Decimal(v.valueNumeric) : null,
+apps/api/src\modules\laboratory\laboratory.service.ts:798:    return this.prisma.$transaction(async (tx) => {
+apps/api/src\modules\laboratory\laboratory.service.ts:862:    tx: Prisma.TransactionClient,
+apps/api/src\modules\laboratory\laboratory.service.ts:949:      lowNormal: Decimal | null;
+apps/api/src\modules\laboratory\laboratory.service.ts:950:      highNormal: Decimal | null;
+apps/api/src\modules\laboratory\laboratory.service.ts:951:      criticalLow: Decimal | null;
+apps/api/src\modules\laboratory\laboratory.service.ts:952:      criticalHigh: Decimal | null;
+apps/api/src\modules\laboratory\laboratory.service.ts:977:    value: Decimal,
+apps/api/src\modules\laboratory\laboratory.service.ts:979:      lowNormal: Decimal | null;
+apps/api/src\modules\laboratory\laboratory.service.ts:980:      highNormal: Decimal | null;
+apps/api/src\modules\laboratory\laboratory.service.ts:981:      criticalLow: Decimal | null;
+apps/api/src\modules\laboratory\laboratory.service.ts:982:      criticalHigh: Decimal | null;
+apps/api/src\common\report-eligibility.util.ts:14:  amountDue: unknown; // Prisma Decimal | number | string
+apps/api/src\common\prisma\prisma.service.ts:2:import { PrismaClient } from '@lms/database';
+apps/api/src\common\prisma\prisma.service.ts:5:export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {

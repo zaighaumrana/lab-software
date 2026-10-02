@@ -85,9 +85,12 @@ If you're setting this up for a different client/environment, just swap the user
 
 ## Prisma Migration Workflow
 
+The pinned Prisma 7.10.0 CLI uses `packages/database/prisma7.config.ts`.
+Workspace commands below discover it automatically; do not download a floating CLI.
+
 **Migration history lives in `packages/database/prisma/migrations/` and is committed to git.** It is not gitignored, and it should never be gitignored — a fresh `git clone` must be able to recreate the schema from that folder alone, without anyone having to reverse-engineer it from `schema.prisma`. If you find that folder missing or out of date after pulling changes, that's a bug in how the change was committed, not something to route around with `migrate reset`.
 
-**Rule of thumb: only the person who changed `schema.prisma` generates the migration, and it gets committed in the same change as the schema edit.** Everyone else just applies migrations that already exist — they never need to generate anything.
+**Rule of thumb: only the person who changed `schema.prisma` generates a new migration, and it gets committed in the same change as the schema edit.** Everyone else applies existing migrations. All developers still run `pnpm db:generate` to regenerate and compile their local Prisma 7 client after schema changes or a fresh checkout.
 
 ### Scenario A — first-time setup, no migration history exists yet
 
@@ -101,7 +104,7 @@ pnpm db:generate
 pnpm --filter @lms/database exec prisma migrate dev --name init
 ```
 
-That command does three things in one step: creates the initial migration file from `schema.prisma`, applies it to your database (creating every table), and regenerates the Prisma Client. Commit the resulting `packages/database/prisma/migrations/` folder — this is the step that was missing before, which is what caused `tenants` and every other table to not exist after a reset.
+That command creates the initial migration file from `schema.prisma` and applies it to your database. Prisma 7 does not automatically regenerate the client: run `pnpm db:generate` after the schema/migration change to generate and compile the database package. Commit the resulting migration files together with the schema change.
 
 ### Scenario B — normal day-to-day workflow (migration history already exists)
 
@@ -109,6 +112,7 @@ This is what you use for everything after that first `--name init` — pulling s
 
 ```powershell
 pnpm db:migrate
+pnpm db:generate
 ```
 
 This wraps `prisma migrate dev` (see `package.json`). Two cases:

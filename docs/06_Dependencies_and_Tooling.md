@@ -1,6 +1,6 @@
 # Dependencies and Tooling Reference
 
-Updated 2026-10-02 (Asia/Karachi). This is the local offline-first LabFlow workspace: API, internal web, database and shared packages. The public website remains in its separate repository. See [the modernization results](Dependency_Modernization_2026-10-02.md) for measured footprint, bundle, security and validation results.
+Updated 2026-10-02 (Asia/Karachi). This is the local offline-first LabFlow workspace: API, internal web, database and shared packages. The public website remains in its separate repository. See [the Prisma 7 migration](Prisma_7_Migration_2026-10-02.md) for the current ORM boundary and [the modernization results](Dependency_Modernization_2026-10-02.md) for measured footprint, bundle, security and validation results.
 
 ## Runtime and workspace
 
@@ -31,11 +31,12 @@ Versions below are the **actual resolved versions**, not the older lower bounds 
 | `@nestjs/schematics` | api (dev) | 11.1.0 | 12.0.6 | 12.0.6 | UPGRADE: scaffolding collection referenced by nest-cli.json and Nest CLI. |
 | `@nestjs/testing` | api (dev) | 11.2.1 | 12.1.2 | 12.1.2 | UPGRADE: DI/controller integration tests; Jest VM module support enables Nest 12 ESM. |
 | `@nestjs/websockets` | api | 11.1.29 | 12.1.2 | 12.1.2 | UPGRADE: gateway decorators and lifecycle contracts; existing session/tenant logic retained. |
-| `@prisma/client` | database | 6.19.3 | 6.19.3 | 7.10.0 | KEEP: exact 6.19.3 client/CLI pair; central PrismaClient subclass, Decimal runtime import and existing generator depend on v6. |
+| `@prisma/client` | database | 6.19.3 | 7.10.0 | 7.10.0 | UPGRADE: exact stable v7; runtime for package-local generated client, public facade hides implementation. |
+| `@prisma/adapter-pg` | database | — | 7.10.0 | 7.10.0 | ADD: supported direct PostgreSQL adapter, created only by src/client.ts. |
 | `@types/bcrypt` | api (dev), database (dev) | 5.0.2 | 6.0.0 | 6.0.0 | UPGRADE: v6 native hash API declarations; development only. |
 | `@types/express` | api (dev) | 5.0.6 | 5.0.6 | 5.0.6 | KEEP: Express 5 Response declarations for PDF endpoints; current stable version already resolved. |
 | `@types/jest` | api (dev), shared (dev) | 29.5.14 | 30.0.0 | 30.0.0 | UPGRADE: test globals/types matching Jest 30; development only. |
-| `@types/node` | api (dev), web (dev) | 22.20.1 | 24.19.0 | 26.6.3 | UPGRADE/ADD: Node 24 API and Vite config declarations; target the documented Node 24 deployment runtime rather than newer Node type generations. |
+| `@types/node` | api (dev), web (dev), database (dev) | 22.20.1 | 24.19.0 | 26.6.3 | UPGRADE/ADD: Node 24 API, Vite config and database tooling declarations; target the documented Node 24 deployment runtime rather than newer Node type generations. |
 | `@types/passport-local` | api (dev) | 1.0.38 | removed | 1.0.38 | REMOVE: no remaining Passport source/types. |
 | `@types/react` | web (dev) | 19.2.18 | 19.3.0 | 19.3.0 | UPGRADE: stable React 19 declarations; development only. |
 | `@types/react-dom` | web (dev) | 19.2.4 | 19.3.0 | 19.3.0 | UPGRADE: React DOM/createRoot declarations; development only. |
@@ -52,7 +53,9 @@ Versions below are the **actual resolved versions**, not the older lower bounds 
 | `passport` | api | 0.7.0 | removed | 0.7.0 | REMOVE: no Passport authentication calls; custom session authentication. |
 | `passport-local` | api | 1.0.0 | removed | 1.0.0 | REMOVE: no local Passport strategy; custom session authentication. |
 | `postcss` | web (dev) | 8.5.25 | 8.5.28 | 8.5.28 | UPGRADE: Tailwind 3 plugin pipeline; retain until a separately verified Tailwind 4 migration. |
-| `prisma` | database (dev) | 6.19.3 | 6.19.3 | 7.10.0 | KEEP: exact 6.19.3 CLI; stable v7.10.0 requires driver adapters, generator/import/config and connection-pool changes. Registry latest/CLI notice also advertises v8 RC: deliberately excluded. |
+| `prisma` | database (dev) | 6.19.3 | 7.10.0 | 7.10.0 | UPGRADE: exact stable v7 CLI; ignore advertised v8 RC. Config owns datasource URL and seed command. |
+| `pg` | database | — | 8.23.1 | 8.23.1 | ADD: direct local PostgreSQL driver; max 10, connection/acquisition timeout 5 seconds. |
+| `@types/pg` | database (dev) | — | 8.23.1 | 8.23.1 | ADD: typed integration harness and driver configuration. |
 | `puppeteer` | api | 23.11.1 | 25.12.0 | 25.12.0 | UPGRADE: three HTML/CSS PDF templates; asynchronous ESM import and explicit network-idle wait migrated. |
 | `react` | web | 19.2.8 | 19.3.0 | 19.3.0 | UPGRADE: JSX, hooks and context; stable 19.3.0, no canary. |
 | `react-dom` | web | 19.2.8 | 19.3.0 | 19.3.0 | UPGRADE: createRoot rendering; matched React 19.3.0. |
@@ -79,10 +82,10 @@ Counts include internal workspace links; repeated declarations are counted in th
 |---|---:|---:|
 | `@lms/api` | 16 | 12 |
 | `@lms/web` | 10 | 9 |
-| `@lms/database` | 1 | 5 |
+| `@lms/database` | 3 | 7 |
 | `@lms/shared` | 0 | 4 |
 
-Before: 60 declarations (30 runtime, 30 development). After: 57 (27 runtime, 30 development). No TypeScript compiler, bundler, test runner, typings, Nest CLI, Prisma CLI or seed runner was moved into runtime dependencies. The production audit still includes Prisma CLI through the client's optional peer dependency; do not mistake a devDependency declaration for guaranteed exclusion from the resolved production graph.
+Before dependency modernization: 60 declarations (30 runtime, 30 development). After modernization: 57 (27 runtime, 30 development). After the dedicated Prisma 7 migration: 61 (29 runtime, 32 development). No TypeScript compiler, bundler, test runner, typings, Nest CLI, Prisma CLI or seed runner was moved into runtime dependencies. The production audit still includes Prisma CLI through the client's optional peer dependency; do not mistake a devDependency declaration for guaranteed exclusion from the resolved production graph.
 
 ## Architectural decisions
 
@@ -100,17 +103,27 @@ The managed browser was absent before this task. Downloading the new managed Chr
 
 **Socket.IO retained.** The laboratory screen uses reconnection, session authentication, tenant rooms and push events. Native WebSocket would need reconnection/room/protocol logic. Updated server/client remain on the compatible 4.8 series; invalid-session rejection was verified against the running gateway.
 
-**Prisma 6 retained and pinned.** Existing `prisma-client-js`, the CommonJS database facade, PrismaService inheritance and Decimal runtime imports were inspected. Stable v7 needs a driver adapter and changes generator/imports, environment/config handling and PostgreSQL pool/TLS assumptions. A safe migration needs transaction/billing/Decimal/integration coverage beyond this task. CLI v8 RC suggestions are not a stable-version mandate. Schema and migrations are untouched. The supported v6 `prisma.config.ts` replaces deprecated `package.json#prisma`, keeps migration path/seed command and explicitly loads `.env` using Node's built-in loader; externally supplied variables take precedence. Generation passed; seed/migrate/reset/push were not run. One high deepmerge-ts advisory remains through Prisma CLI/config, including an optional production peer path. [Upgrade guide](https://www.prisma.io/docs/guides/upgrade-prisma-orm/v7).
+**Prisma 7.10.0 pinned.** The database package generates TypeScript into ignored `src/generated/prisma`, then compiles its CommonJS facade and client to `dist`. Only the root package export is public. `src/client.ts` owns DATABASE_URL validation, schema selection, PrismaPg and one owned pg pool per client. Nest provides one global PrismaService and calls connect/disconnect; shutdown hooks and auth timer cleanup allow graceful exit. Pool max is 10, connection/acquisition timeout 5 seconds, driver idle timeout remains 10 seconds; transaction defaults remain 2s maxWait/5s timeout. CLI/seed share package-local env loading; runtime uses existing Nest ConfigModule, with external variables taking precedence. Generate after schema changes, before starting API/seed or building a fresh checkout. No domain or migration SQL change; operational data fingerprints match. Prisma 8 migration readiness localizes infrastructure, but its different query API may still need business query changes. See [the report](Prisma_7_Migration_2026-10-02.md) for tests, memory increase and three unresolved audit advisories. [Upgrade guide](https://www.prisma.io/docs/guides/upgrade-prisma-orm/v7).
 
 **Tailwind 3 retained.** v4 changes browser requirements, CSS setup and defaults for utilities/rings/borders/shadows. Existing reusable `@apply` classes and print styling need visual regression coverage before that migration. Keep current v3.4.19 and its PostCSS/Autoprefixer pipeline. This is an explicit deferral, not a claim that v3 is the latest major. [Upgrade guide](https://tailwindcss.com/docs/upgrade-guide).
 
 **Jest/ts-jest retained.** Existing mocks, Supertest integration and Nest decorator metadata work with the upgraded stack. Vitest would introduce a new runner/configuration and a metadata-compatible transform; SWC adds another native transform/configuration. No measured test performance problem warrants those migrations for this small suite. ts-jest supports TypeScript below 7, so TS 6.0.3 is intentionally selected. Nest 12 ESM tests use `node --experimental-vm-modules`; Node still emits its honest experimental VM Modules warning. The packages themselves are stable releases. [Jest ESM](https://jestjs.io/docs/ecmascript-modules), [Nest migration](https://docs.nestjs.com/migration-guide), [ts-jest](https://github.com/kulshekhar/ts-jest).
 
+## Prisma 7 final hardening and security exposure (2026-10-02)
+
+The package-local CLI config is now `packages/database/prisma7.config.ts`, following [Prisma 7.10+ filename/discovery guidance](https://www.prisma.io/docs/v7/prisma-orm/quickstart/postgresql). Existing workspace commands automatically discover it; validate/migrate:status scripts and the tooling typecheck explicitly cover this workflow. The regression test validates discovery without --config or a running database. setup.ps1 still invokes the pinned workspace generator and migrate:deploy; it creates no Prisma 8 config.
+
+Both full and production audits report **2 high + 1 moderate**, zero critical. Development/tooling chains are database devDependency → prisma 7.10.0 → @prisma/config 7.10.0 → deepmerge-ts 7.1.5, and database devDependency → prisma 7.10.0 → mysql2 3.15.3. The production closure also contains both packages: database runtime dependency → @prisma/client 7.10.0 → optional peer prisma 7.10.0 → those same config/deepmerge or mysql2 chains. deepmerge-ts has GHSA-ggr8-5vv4-36mx (high); mysql2 has GHSA-3f6p-5ww8-9rcr (high) and GHSA-rgwj-5xj2-c3m3 (moderate). These are CLI-origin findings, **not development-only dependencies under this lockfile**.
+
+The exercised PostgreSQL runtime path uses generated client runtime/PrismaPg/pg and did not load CLI/config/deepmerge/mysql2 in the read-only module-cache probe. Presence in production packages and execution by runtime queries are separate facts. No production staging exclusion is certified, no overrides or forced/unsupported resolutions were applied, and the vulnerabilities remain unresolved. Exact chains/advisory links and audit counts are in [the migration report](Prisma_7_Migration_2026-10-02.md).
+
+All four builds/typechecks and **54 tests** passed, including the added config-discovery regression. Operational fingerprints and migration hashes match; schema bytes did not change in hardening. Keep the measured RSS increase (about 51 MiB v6 → 112–124 MiB v7) documented; one global provider/owned pool and zero fixture connections after close give no evidence of an obvious leak or duplicate instance. Actual offline staging, real SMS/PDF/load tests and existing pg/Jest warnings remain limitations.
+
 ## Windows/offline production boundary
 
 The source checkout, development installation, shared pnpm cache, production runtime and downloaded browser assets are different size measurements. Do not ship the development `node_modules` tree or copy a Linux native installation onto Windows.
 
-Build on matching Windows architecture: install from the lockfile, provision Chrome, generate Prisma client, build shared/API/web, run checks, then assemble a **separate staging directory** with API dist, database facade/generated client and Windows query engine, shared CJS dist, required production dependency closure, static web dist, Node runtime, browser and PostgreSQL prerequisite/configuration. Browser clients receive static web assets; React/Vite development dependencies do not need a server runtime installation.
+Build on matching Windows architecture: install from the lockfile, provision Chrome, generate Prisma client, build shared/API/web, run checks, then assemble a **separate staging directory** with API dist, compiled database facade/generated client and Prisma 7 runtime/query compiler with PostgreSQL adapter/pg, shared CJS dist, required production dependency closure, static web dist, Node runtime, browser and PostgreSQL prerequisite/configuration. Browser clients receive static web assets; React/Vite development dependencies do not need a server runtime installation.
 
 `pnpm install --prod --frozen-lockfile` can reduce a staging installation but cannot replace the preceding generation/build steps. Do not prune the working development installation as a packaging test. With pnpm 11, evaluate a filtered `pnpm deploy --legacy` staging workflow and workspace-package inclusion before adopting it: the default deploy mode may require injected workspace packages. Preserve all internal links as actual packaged files and smoke-test that independent directory offline. This task does not implement or measure a final installer/production directory. Never run seed or destructive schema commands merely to validate dependency changes. Shared pnpm store pruning affects other projects and was not performed.
 

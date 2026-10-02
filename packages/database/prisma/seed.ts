@@ -3,9 +3,11 @@
  * Run: pnpm db:seed
  */
 
-import { PrismaClient, Role, ShareType, ParameterValueType } from '@prisma/client';
+import { PrismaClient, Role, ShareType, ParameterValueType } from '@lms/database';
+import { loadDatabaseEnvironment } from '../src/environment';
 import * as bcrypt from 'bcrypt';
 
+loadDatabaseEnvironment();
 const prisma = new PrismaClient();
 
 async function main() {

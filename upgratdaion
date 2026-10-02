@@ -290,3 +290,103 @@ Resolve the Prisma CLI/config high advisory through a separately tested stable v
 
 
 Git state: development/e90bb10 retained; main and legacy tag untouched. All modernization changes unstaged/untracked for manual review. No commit, push, reset, rebase, merge or branch creation. Previous log entries preserved. Final whitespace/status checks performed after this append.
+
+
+# 2026-10-02 — Prisma 7 infrastructure migration
+
+Recorded 02/10/2026, 04:57:02 Asia/Karachi. Baseline development/1579be8; working tree was clean.
+
+## Completed changes and reasons
+
+- Upgraded exact Prisma CLI/client 6.19.3 to stable 7.10.0; added adapter-pg 7.10.0, pg 8.23.1, required Node/pg typings. Registry CLI latest 8.0.0-rc.19 was excluded; no Prisma 8 lockfile entries. Reviewed official versioned v7 generator/config/PostgreSQL/driver/transaction/Decimal/pool/deployment docs and RC v8 migration guidance.
+- Modern prisma-client generator outputs ignored packages/database/src/generated/prisma, CommonJS, .js imports. Generate compiles the database facade/generated client into dist; package root exports block internal subpaths. Deleted old index.js shim.
+- client.ts centralizes validated direct PostgreSQL URL, schema option, PrismaPg creation and owned pg pool/client. Public PrismaClient subclass preserves Nest service inheritance; factory supports explicit isolated-test URL. Index re-exports public generated model/types/enums/Prisma and Decimal without runtime/library imports. No API business imports needed changing.
+- CLI URL moved from schema to prisma.config.ts. CLI and seed share package-local Node env loader; external values take precedence. Runtime keeps existing Nest ConfigModule ownership. Seed imports facade and compiles before running; seed/config/tests now typechecked. Seed NOT executed against operational database.
+- Pool max 10, finite 5-second connection/acquisition timeout, default pg idle 10 seconds; unchanged Prisma transaction maxWait 2s/timeout 5s and isolation. One global Nest provider. Enabled shutdown hooks and cleared pre-existing auth interval on teardown, allowing natural shutdown.
+- Installer now uses migrate:deploy (including retry guidance); PowerShell syntax checked, installer not run. README corrects Prisma 7's explicit client-generation requirement. No unqualified Prisma download/latest commands introduced.
+- Added meaningful client/Decimal/export tests, provider lifecycle spec, guarded disposable-database runner, real CRUD/precision/commit/rollback/P2002/pool tests and built API offline fixture smoke. CREATE DATABASE/DROP targets only generated local test names; all created fixture databases removed.
+
+## Data and migration safety
+
+Five migration SQL files plus migration_lock.toml SHA-256 unchanged. Domain schema hash c0aaf5ed2b0f4c0e09d364987011cbc2231607b53227f9656e1b12b1d80bb806 unchanged after excluding only generator/datasource blocks; model/field/enum/relation/index semantics unchanged. Read-only sorted row fingerprints/counts match across all 30 operational tables, including _prisma_migrations. Existing DB has five applied migrations and remains up to date. No operational reset, push, reseed, migration application or business write. Migration deployment/write testing confined to newly created disposable databases.
+
+## Validation
+
+Prisma 6 baseline generate/validate/status/read passed. Prisma 7 frozen install, generate/build, validate/status, all four workspace builds and typechecks passed. API: 5 suites/25 tests; shared: 3 suites/19 tests; database unit: 3 tests; integration: 5 tests; built API smoke: 1 test. Total 53 passed, zero failed/skipped. Seed/config compile passed. Operational API startup/settings/query/auth guard/shutdown verified with PostgreSQL-enforced read-only connections. Disposable fixtures verified invoice/pricing/discount/payment/commission, rejected overpayment, sample receive/accept, six-decimal result and LOW reference flag, result/report finalization, authenticated patient/booking/invoice/report/settings reads, Socket.IO and graceful close. Concurrent queries stayed within max 10; zero fixture connections after shutdown; external HTTP blocked during smoke. Diff whitespace/history/schema checks performed.
+
+## Audit, measurements and genuine limitations
+
+Audit before: 1 high. After: 2 high + 1 moderate, zero critical. deepmerge-ts 7.1.5 high advisory persists through Prisma CLI/config; CLI mysql2 3.15.3 adds authentication high and decompression moderate advisories. No unsafe overrides/exclusion claims. Resolved dependency count 765 to 849. Comparable selected Prisma/deepmerge package-owned regular files 184.03 to 201.85 MiB (not all transitives/installer); generated client 25.52 MiB v6 to 3.02 MiB v7 TS; compiled database 3.19 MiB. Stale pnpm contexts retained; no physical installation savings claimed. Three fresh-process probes: warm median SELECTs 0.304–0.908ms v6 versus 0.485–0.614ms v7; RSS about 51 MiB versus 112–124 MiB. Cold reads/connect also higher; flag memory/startup budget, no speedup claim. Measurements/hashes/audits/inventory retained in dedicated docs/evidence. pg emits queued-query deprecation inside Prisma adapter/executor during nested-write fixture; current pg8 passes atomicity checks, review before pg9. Existing Jest VM Modules warning remains. Actual offline installer/staging, real SMS, PDF rendering, all amendment/reopen paths and sustained-load testing not certified here.
+
+## Prisma 8 migration readiness / future work
+
+Generated path, adapter/pool/client, namespace/types/Decimal/errors/TransactionClient exports, CLI config/scripts localized in database package. Expected future seams: package.json, prisma.config.ts, src/client.ts, src/index.ts, schema/contract, tsconfig(s), seed/tests, lockfile and Nest provider lifecycle as needed; environment helper reusable. Prisma 8 current RC query/contract/migration APIs differ materially: business query adaptation may still be required, no compatibility or four-file-only promise. No speculative v8 code or repository classes. Audit remediation and actual deployment-memory/offline packaging review remain future work.
+
+## Affected files
+
+- .gitignore
+- README.md
+- apps/api/src/main.ts
+- apps/api/src/modules/auth/auth.service.ts
+- apps/api/src/common/prisma/prisma.service.spec.ts
+- docs/06_Dependencies_and_Tooling.md
+- docs/Prisma_7_Migration_2026-10-02.md
+- docs/prisma7-migration-2026-10-02.json
+- docs/prisma7-import-inventory-before-2026-10-02.txt
+- packages/database/README.md
+- packages/database/index.js (removed)
+- packages/database/package.json
+- packages/database/prisma.config.ts
+- packages/database/prisma/schema.prisma
+- packages/database/prisma/seed.ts
+- packages/database/src/client.ts
+- packages/database/src/index.ts
+- packages/database/src/environment.ts
+- packages/database/tsconfig.tools.json
+- packages/database/test/client.test.ts
+- packages/database/test/integration.test.ts
+- packages/database/test/run-integration.ts
+- packages/database/test/api-smoke.cjs
+- pnpm-lock.yaml
+- setup.ps1
+- upgratdaion
+
+Git: development/1579be8 retained. Changes unstaged/untracked for review. No commit, push, stage, branch creation, reset, rebase, main/tag/website change. Suggested eventual commit: refactor: migrate database layer to Prisma 7. Old log entries preserved.
+
+
+# 2026-10-02 — Final Prisma 7 hardening pass
+
+Recorded 02/10/2026, 07:16:01 Asia/Karachi. Existing migration changes remain uncommitted on development/1579be8.
+
+## Completed changes
+
+Renamed packages/database/prisma.config.ts to packages/database/prisma7.config.ts following official Prisma 7.10+ PostgreSQL quickstart guidance; contents unchanged, prisma/config import retained for exactly pinned v7. No Prisma 8 config/alias/package created. Automatic discovery verified by generate, validate, operational migrate status and migrate deploy ONLY in a guarded disposable database. Added validate and migrate:status package scripts, updated tooling tsconfig, README/package docs and setup.ps1 guidance. Added regression test invoking pinned CLI validate with a synthetic URL, without --config or a running database. Historical log entries, baseline inventory and prior modernization reports preserve old filename references as history. No features, business-model changes, migration edits, operational writes, dependency upgrades/overrides/unsupported resolutions, runtime redesign or new pool/client implementation.
+
+## Security analysis: installed closure versus executed runtime
+
+Full pnpm audit: 2 high, 1 moderate, zero critical, 849 reported dependencies. pnpm audit --prod: SAME 2 high, 1 moderate, zero critical, 354 dependencies. pnpm why -r deepmerge-ts/mysql2 and production-filtered why confirm: tooling DB devDependency -> prisma@7.10.0 -> @prisma/config@7.10.0 -> deepmerge-ts@7.1.5; tooling DB devDependency -> prisma@7.10.0 -> mysql2@3.15.3. Production API -> DB -> @prisma/client@7.10.0 -> optional peer prisma@7.10.0 -> those same config/deepmerge or mysql2 chains. GHSA-ggr8-5vv4-36mx (deepmerge, high), GHSA-3f6p-5ww8-9rcr (mysql2 auth, high), GHSA-rgwj-5xj2-c3m3 (mysql2 compression, moderate). All three are CLI/tooling-origin advisories PRESENT in resolved production packages, NOT development-only. The exercised built PostgreSQL facade query loaded none of CLI/config/deepmerge/mysql2 in its CJS module-cache probe; this does not prove absence from installed production closure or certify every possible CLI execution. No production staging exclusion certified. Findings unresolved; no unsafe audit workaround applied. Full/prod findings, paths and validation saved under hardening in migration evidence JSON.
+
+## Validation and safety
+
+Stable exact CLI/client/adapter 7.10.0, pg 8.23.1 retained. No Prisma 8 lockfile entry or physical package directory found. Frozen lockfile install passed without resolution changes. All four builds/typechecks passed, including renamed config/seed/test tooling. API 5 suites/25 tests, shared 3 suites/19 tests, DB unit 4 tests, DB integration 5 tests, built API fixture 1 test: 54 passed, zero failed/skipped. Existing 53 tests plus config-discovery regression pass. Installer PowerShell parse passed; installer/seed not executed. Migration SQL plus lock hashes match original baseline; business schema semantics unchanged, exact schema bytes unchanged during hardening. All 30 operational table fingerprints still match original Prisma 6 baseline; reads enforced read-only. Fixture writes/migration deploy isolated, created test database removed and zero connections after close. Final Git whitespace/history/schema/status checks performed after this append.
+
+## Deliberately unchanged limitations / future work
+
+Keep observed RSS increase documented (about 51 MiB v6 -> 112-124 MiB v7); no obvious leak or duplicate singleton/pool identified, so implementation retained. Current pg queued-query deprecation/Jest VM warning and missing production/offline staging, actual SMS/PDF/sustained-load certification remain. Genuine advisory remediation and production package exclusion need separately validated upstream/packaging work; no claim this hardening makes audit clean or Prisma 8 compatible.
+
+## Affected files
+
+- packages/database/prisma.config.ts (renamed)
+- packages/database/prisma7.config.ts
+- packages/database/package.json
+- packages/database/tsconfig.tools.json
+- packages/database/test/client.test.ts
+- packages/database/README.md
+- README.md
+- setup.ps1
+- docs/Prisma_7_Migration_2026-10-02.md
+- docs/06_Dependencies_and_Tooling.md
+- docs/prisma7-migration-2026-10-02.json
+- upgratdaion
+
+Old log content preserved. No staging, commit, push, branch creation, reset, rebase or changes to main/tag/website.

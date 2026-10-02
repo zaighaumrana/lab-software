@@ -1,0 +1,608 @@
+{
+  "date": "2026-10-02",
+  "timezone": "Asia/Karachi",
+  "baselineCommit": "1579be8",
+  "versions": {
+    "before": "6.19.3",
+    "cli": "7.10.0",
+    "client": "7.10.0",
+    "adapter": "7.10.0",
+    "pg": "8.23.1",
+    "node": "24.21.0",
+    "typescript": "6.0.3"
+  },
+  "hashes": {
+    "before": {
+      "schema": "e50140d5c899c9c09e4e9d3595417fc7ddda8d038e247f1b459d9b48652760cd",
+      "domain": "c0aaf5ed2b0f4c0e09d364987011cbc2231607b53227f9656e1b12b1d80bb806",
+      "migrations": {
+        "packages\\database\\prisma\\migrations\\20260807232849_init\\migration.sql": "bc35b59d78b5985a009aac5745d57282f412a41a16d8dbaa4fb19a0140c897f6",
+        "packages\\database\\prisma\\migrations\\20260810021010_added_out_source_test\\migration.sql": "436e7f415e3f2c5cf8f4e4a61a126fb12cc0f157052d8c785eda9e9e4dbffbca",
+        "packages\\database\\prisma\\migrations\\20260822000000_add_report_print_tracking\\migration.sql": "fede831c675a17dbfec4fee7d005330aa0a72aebc6e43b8f5cf6493a65a93e08",
+        "packages\\database\\prisma\\migrations\\20260822010000_add_cash_shifts\\migration.sql": "2038eb552edf8bf4f00a2bc0973eed29e5685ba81b3eb65bce73bb10e51669a3",
+        "packages\\database\\prisma\\migrations\\20260926000000_sms_templates_sendpk_v2\\migration.sql": "f97f211e3d335cef92cf11f56b7d67e9227416eaf8ac09767654483691696f43",
+        "packages\\database\\prisma\\migrations\\migration_lock.toml": "bc487c02c71ad9cae8694647129e3ea7f32b1fe7007d0a6ced064e51022cd3fb"
+      }
+    },
+    "after": {
+      "schema": "bb1ec61fdfc55bbdbdf12969076a7863d274a866098bcbf6154f710df473fa18",
+      "domain": "c0aaf5ed2b0f4c0e09d364987011cbc2231607b53227f9656e1b12b1d80bb806",
+      "migrations": {
+        "packages\\database\\prisma\\migrations\\20260807232849_init\\migration.sql": "bc35b59d78b5985a009aac5745d57282f412a41a16d8dbaa4fb19a0140c897f6",
+        "packages\\database\\prisma\\migrations\\20260810021010_added_out_source_test\\migration.sql": "436e7f415e3f2c5cf8f4e4a61a126fb12cc0f157052d8c785eda9e9e4dbffbca",
+        "packages\\database\\prisma\\migrations\\20260822000000_add_report_print_tracking\\migration.sql": "fede831c675a17dbfec4fee7d005330aa0a72aebc6e43b8f5cf6493a65a93e08",
+        "packages\\database\\prisma\\migrations\\20260822010000_add_cash_shifts\\migration.sql": "2038eb552edf8bf4f00a2bc0973eed29e5685ba81b3eb65bce73bb10e51669a3",
+        "packages\\database\\prisma\\migrations\\20260926000000_sms_templates_sendpk_v2\\migration.sql": "f97f211e3d335cef92cf11f56b7d67e9227416eaf8ac09767654483691696f43",
+        "packages\\database\\prisma\\migrations\\migration_lock.toml": "bc487c02c71ad9cae8694647129e3ea7f32b1fe7007d0a6ced064e51022cd3fb"
+      }
+    }
+  },
+  "operationalDatabase": {
+    "tableCount": 30,
+    "tableFingerprintsUnchanged": true,
+    "migrationRowsUnchanged": true
+  },
+  "footprint": {
+    "beforePrismaNamedPackages": [
+      {
+        "name": "@prisma+client@6.19.3_prism_4ffd11c130385b632f1988f146a90b26",
+        "bytes": 76984375
+      },
+      {
+        "name": "@prisma+config@6.19.3",
+        "bytes": 64828
+      },
+      {
+        "name": "@prisma+debug@6.19.3",
+        "bytes": 29126
+      },
+      {
+        "name": "@prisma+engines-version@7.1_1b3184cfe4a724c817b3150f8d99cd25",
+        "bytes": 12689
+      },
+      {
+        "name": "@prisma+engines@6.19.3",
+        "bytes": 40253020
+      },
+      {
+        "name": "@prisma+fetch-engine@6.19.3",
+        "bytes": 963588
+      },
+      {
+        "name": "@prisma+get-platform@6.19.3",
+        "bytes": 1289960
+      },
+      {
+        "name": "deepmerge-ts@7.1.5",
+        "bytes": 135837
+      },
+      {
+        "name": "prisma@6.19.3_typescript@6.0.3",
+        "bytes": 73231533
+      }
+    ],
+    "afterReachablePrismaNamedPackages": [
+      {
+        "name": "prisma",
+        "version": "7.10.0",
+        "bytes": 42058911
+      },
+      {
+        "name": "@prisma/dev",
+        "version": "0.24.17",
+        "bytes": 19029461
+      },
+      {
+        "name": "@prisma/get-platform",
+        "version": "7.2.0",
+        "bytes": 1283529
+      },
+      {
+        "name": "@prisma/debug",
+        "version": "7.2.0",
+        "bytes": 29104
+      },
+      {
+        "name": "@prisma/query-plan-executor",
+        "version": "7.2.0",
+        "bytes": 5179070
+      },
+      {
+        "name": "@prisma/streams-local",
+        "version": "0.1.11",
+        "bytes": 1436537
+      },
+      {
+        "name": "@prisma/studio-core",
+        "version": "0.33.0",
+        "bytes": 44071113
+      },
+      {
+        "name": "@prisma/config",
+        "version": "7.10.0",
+        "bytes": 43828
+      },
+      {
+        "name": "deepmerge-ts",
+        "version": "7.1.5",
+        "bytes": 135837
+      },
+      {
+        "name": "@prisma/engines",
+        "version": "7.10.0",
+        "bytes": 20870006
+      },
+      {
+        "name": "@prisma/engines-version",
+        "version": "7.10.0-4.0edf323efd1d98336f3f0a68684b56f689b900d3",
+        "bytes": 12690
+      },
+      {
+        "name": "@prisma/debug",
+        "version": "7.10.0",
+        "bytes": 29031
+      },
+      {
+        "name": "@prisma/fetch-engine",
+        "version": "7.10.0",
+        "bytes": 1439198
+      },
+      {
+        "name": "@prisma/get-platform",
+        "version": "7.10.0",
+        "bytes": 1234718
+      },
+      {
+        "name": "@prisma/client",
+        "version": "7.10.0",
+        "bytes": 74479037
+      },
+      {
+        "name": "@prisma/client-runtime-utils",
+        "version": "7.10.0",
+        "bytes": 193885
+      },
+      {
+        "name": "@prisma/adapter-pg",
+        "version": "7.10.0",
+        "bytes": 72301
+      },
+      {
+        "name": "@prisma/driver-adapter-utils",
+        "version": "7.10.0",
+        "bytes": 52947
+      }
+    ],
+    "generatedBeforeBytes": 26756049,
+    "generatedAfterSourceBytes": 3163723,
+    "compiledDatabaseBytes": 3349127,
+    "includesAllTransitives": false,
+    "physicalDirectorySavingsClaimed": false,
+    "measurement": "Package-owned regular files; Prisma-named packages plus deepmerge-ts, not all transitive dependencies. Generation/build measured separately. Symlinks excluded."
+  },
+  "freshProcessReadProbes": {
+    "prisma6": [
+      {
+        "connectMs": 153.0155,
+        "coldReadMs": 33.5196,
+        "medianReadMs": 0.9084000000000287,
+        "rssMiB": 51.01171875
+      },
+      {
+        "connectMs": 66.78419999999998,
+        "coldReadMs": 3.518900000000002,
+        "medianReadMs": 0.3540999999999883,
+        "rssMiB": 51.01953125
+      },
+      {
+        "connectMs": 67.37820000000002,
+        "coldReadMs": 3.764199999999988,
+        "medianReadMs": 0.3036999999999921,
+        "rssMiB": 50.6875
+      }
+    ],
+    "prisma7": [
+      {
+        "connectMs": 156.45019999999997,
+        "coldReadMs": 89.14230000000003,
+        "medianReadMs": 0.6141999999999825,
+        "rssMiB": 124.2109375
+      },
+      {
+        "connectMs": 138.7337,
+        "coldReadMs": 79.16320000000002,
+        "medianReadMs": 0.4854000000000269,
+        "rssMiB": 112.1171875
+      },
+      {
+        "connectMs": 156.36190000000002,
+        "coldReadMs": 94.8911,
+        "medianReadMs": 0.5793999999999642,
+        "rssMiB": 121.41015625
+      }
+    ]
+  },
+  "audit": {
+    "before": {
+      "metadata": {
+        "vulnerabilities": {
+          "info": 0,
+          "low": 0,
+          "moderate": 0,
+          "high": 1,
+          "critical": 0
+        },
+        "dependencies": 252,
+        "devDependencies": 513,
+        "optionalDependencies": 95,
+        "totalDependencies": 765
+      },
+      "advisories": [
+        {
+          "package": "deepmerge-ts",
+          "severity": "high",
+          "id": "GHSA-ggr8-5vv4-36mx",
+          "url": "https://github.com/advisories/GHSA-ggr8-5vv4-36mx",
+          "findings": [
+            {
+              "version": "7.1.5",
+              "paths": [
+                "packages__database>@prisma/client>prisma>@prisma/config>deepmerge-ts",
+                "packages__database>prisma>@prisma/config>deepmerge-ts"
+              ],
+              "dev": false,
+              "optional": false,
+              "bundled": false
+            }
+          ]
+        }
+      ]
+    },
+    "after": {
+      "metadata": {
+        "vulnerabilities": {
+          "info": 0,
+          "low": 0,
+          "moderate": 1,
+          "high": 2,
+          "critical": 0
+        },
+        "dependencies": 353,
+        "devDependencies": 495,
+        "optionalDependencies": 96,
+        "totalDependencies": 849
+      },
+      "advisories": [
+        {
+          "package": "deepmerge-ts",
+          "severity": "high",
+          "id": "GHSA-ggr8-5vv4-36mx",
+          "url": "https://github.com/advisories/GHSA-ggr8-5vv4-36mx",
+          "findings": [
+            {
+              "version": "7.1.5",
+              "paths": [
+                "packages__database>@prisma/client>prisma>@prisma/config>deepmerge-ts",
+                "packages__database>prisma>@prisma/config>deepmerge-ts"
+              ],
+              "dev": false,
+              "optional": false,
+              "bundled": false
+            }
+          ]
+        },
+        {
+          "package": "mysql2",
+          "severity": "high",
+          "id": "GHSA-3f6p-5ww8-9rcr",
+          "url": "https://github.com/advisories/GHSA-3f6p-5ww8-9rcr",
+          "findings": [
+            {
+              "version": "3.15.3",
+              "paths": [
+                "packages__database>@prisma/client>prisma>mysql2",
+                "packages__database>prisma>mysql2"
+              ],
+              "dev": false,
+              "optional": false,
+              "bundled": false
+            }
+          ]
+        },
+        {
+          "package": "mysql2",
+          "severity": "moderate",
+          "id": "GHSA-rgwj-5xj2-c3m3",
+          "url": "https://github.com/advisories/GHSA-rgwj-5xj2-c3m3",
+          "findings": [
+            {
+              "version": "3.15.3",
+              "paths": [
+                "packages__database>@prisma/client>prisma>mysql2",
+                "packages__database>prisma>mysql2"
+              ],
+              "dev": false,
+              "optional": false,
+              "bundled": false
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "validation": {
+    "frozenInstall": "passed",
+    "generate": "passed",
+    "validate": "passed",
+    "migrationStatus": "5 migrations; up to date",
+    "builds": "database/shared/API/web passed",
+    "typecheck": "all four workspaces and seed/config/TS tests passed",
+    "tests": {
+      "api": {
+        "suites": 5,
+        "tests": 25,
+        "pass": 25,
+        "fail": 0
+      },
+      "shared": {
+        "suites": 3,
+        "tests": 19,
+        "pass": 19,
+        "fail": 0
+      },
+      "databaseUnit": {
+        "files": 1,
+        "tests": 3,
+        "pass": 3,
+        "fail": 0
+      },
+      "databaseIntegration": {
+        "files": 1,
+        "tests": 5,
+        "pass": 5,
+        "fail": 0
+      },
+      "builtApiSmoke": {
+        "files": 1,
+        "tests": 1,
+        "pass": 1,
+        "fail": 0
+      },
+      "totalPass": 53,
+      "totalFail": 0
+    },
+    "runtime": {
+      "operational": "startup/settings/read query/auth guard/shutdown verified with PostgreSQL default_transaction_read_only=on",
+      "fixture": "billing/payment/commission, sample/result/report finalization, patient/booking/invoice/report/settings reads, auth session, socket, <=10 pool connections, zero connections after shutdown",
+      "externalHttpBlocked": true,
+      "seed": "compile-verified only",
+      "installer": "PowerShell parser checked; not executed"
+    },
+    "warnings": [
+      "Prisma adapter/executor queued-query deprecation in pg8; review before pg9",
+      "Jest experimental VM Modules"
+    ]
+  },
+  "hardening": {
+    "date": "2026-10-02",
+    "recordedAtKarachi": "02/10/2026, 07:16:01",
+    "config": "packages/database/prisma7.config.ts",
+    "automaticDiscoveryVerified": [
+      "generate",
+      "validate",
+      "migrate status",
+      "migrate deploy (disposable database only)"
+    ],
+    "oldConfigAbsent": true,
+    "prisma8ConfigCreated": false,
+    "versionsUnchanged": {
+      "cli": "7.10.0",
+      "client": "7.10.0",
+      "adapter": "7.10.0",
+      "pg": "8.23.1"
+    },
+    "audits": {
+      "full": {
+        "metadata": {
+          "vulnerabilities": {
+            "info": 0,
+            "low": 0,
+            "moderate": 1,
+            "high": 2,
+            "critical": 0
+          },
+          "dependencies": 353,
+          "devDependencies": 495,
+          "optionalDependencies": 96,
+          "totalDependencies": 849
+        },
+        "advisories": [
+          {
+            "package": "deepmerge-ts",
+            "severity": "high",
+            "id": "GHSA-ggr8-5vv4-36mx",
+            "url": "https://github.com/advisories/GHSA-ggr8-5vv4-36mx",
+            "findings": [
+              {
+                "version": "7.1.5",
+                "paths": [
+                  "packages__database>@prisma/client>prisma>@prisma/config>deepmerge-ts",
+                  "packages__database>prisma>@prisma/config>deepmerge-ts"
+                ],
+                "dev": false,
+                "optional": false,
+                "bundled": false
+              }
+            ]
+          },
+          {
+            "package": "mysql2",
+            "severity": "high",
+            "id": "GHSA-3f6p-5ww8-9rcr",
+            "url": "https://github.com/advisories/GHSA-3f6p-5ww8-9rcr",
+            "findings": [
+              {
+                "version": "3.15.3",
+                "paths": [
+                  "packages__database>@prisma/client>prisma>mysql2",
+                  "packages__database>prisma>mysql2"
+                ],
+                "dev": false,
+                "optional": false,
+                "bundled": false
+              }
+            ]
+          },
+          {
+            "package": "mysql2",
+            "severity": "moderate",
+            "id": "GHSA-rgwj-5xj2-c3m3",
+            "url": "https://github.com/advisories/GHSA-rgwj-5xj2-c3m3",
+            "findings": [
+              {
+                "version": "3.15.3",
+                "paths": [
+                  "packages__database>@prisma/client>prisma>mysql2",
+                  "packages__database>prisma>mysql2"
+                ],
+                "dev": false,
+                "optional": false,
+                "bundled": false
+              }
+            ]
+          }
+        ]
+      },
+      "production": {
+        "metadata": {
+          "vulnerabilities": {
+            "info": 0,
+            "low": 0,
+            "moderate": 1,
+            "high": 2,
+            "critical": 0
+          },
+          "dependencies": 232,
+          "devDependencies": 0,
+          "optionalDependencies": 122,
+          "totalDependencies": 354
+        },
+        "advisories": [
+          {
+            "package": "deepmerge-ts",
+            "severity": "high",
+            "id": "GHSA-ggr8-5vv4-36mx",
+            "url": "https://github.com/advisories/GHSA-ggr8-5vv4-36mx",
+            "findings": [
+              {
+                "version": "7.1.5",
+                "paths": [
+                  "packages__database>@prisma/client>prisma>@prisma/config>deepmerge-ts"
+                ],
+                "dev": false,
+                "optional": true,
+                "bundled": false
+              }
+            ]
+          },
+          {
+            "package": "mysql2",
+            "severity": "high",
+            "id": "GHSA-3f6p-5ww8-9rcr",
+            "url": "https://github.com/advisories/GHSA-3f6p-5ww8-9rcr",
+            "findings": [
+              {
+                "version": "3.15.3",
+                "paths": [
+                  "packages__database>@prisma/client>prisma>mysql2"
+                ],
+                "dev": false,
+                "optional": true,
+                "bundled": false
+              }
+            ]
+          },
+          {
+            "package": "mysql2",
+            "severity": "moderate",
+            "id": "GHSA-rgwj-5xj2-c3m3",
+            "url": "https://github.com/advisories/GHSA-rgwj-5xj2-c3m3",
+            "findings": [
+              {
+                "version": "3.15.3",
+                "paths": [
+                  "packages__database>@prisma/client>prisma>mysql2"
+                ],
+                "dev": false,
+                "optional": true,
+                "bundled": false
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "exposure": {
+      "productionPackageClosureContainsAllThreeAdvisories": true,
+      "cliOrigin": true,
+      "developmentOnly": false,
+      "productionPath": "@lms/api -> @lms/database -> @prisma/client@7.10.0 -> optional peer prisma@7.10.0 -> @prisma/config@7.10.0 -> deepmerge-ts@7.1.5, or prisma@7.10.0 -> mysql2@3.15.3",
+      "developmentPath": "@lms/database devDependency -> prisma@7.10.0 -> same vulnerable config/deepmerge or mysql2",
+      "runtimeProbe": {
+        "loadedAdvisoryPackages": [],
+        "prisma8PhysicalDirectories": [],
+        "tableCount": 30
+      },
+      "probeLimit": "CJS module cache after exercised built-facade read-only query; not proof of absence from package closure or of every possible execution path",
+      "productionStagingCertified": false
+    },
+    "validation": {
+      "frozenInstall": "passed",
+      "builds": "all 4 passed",
+      "typecheck": "all 4 passed; renamed config and seed/tests checked",
+      "tests": {
+        "api": {
+          "suites": 5,
+          "tests": 25,
+          "passed": 25
+        },
+        "shared": {
+          "suites": 3,
+          "tests": 19,
+          "passed": 19
+        },
+        "databaseUnit": {
+          "files": 1,
+          "tests": 4,
+          "passed": 4
+        },
+        "databaseIntegration": {
+          "files": 1,
+          "tests": 5,
+          "passed": 5
+        },
+        "builtApiSmoke": {
+          "files": 1,
+          "tests": 1,
+          "passed": 1
+        },
+        "totalPassed": 54,
+        "failed": 0,
+        "skipped": 0
+      },
+      "migrationHashesUnchanged": true,
+      "businessSchemaUnchanged": true,
+      "schemaBytesUnchangedDuringHardening": true,
+      "original30TableFingerprintsUnchanged": true,
+      "installerParse": "passed; not executed"
+    },
+    "unchangedLimits": [
+      "2 high + 1 moderate advisories unresolved in full and prod graph",
+      "RSS increase: about 51 MiB v6 versus 112-124 MiB v7",
+      "pg queued-query deprecation and Jest VM warning",
+      "Actual production/offline staging, real SMS/PDF and sustained load untested"
+    ],
+    "runtimeRedesigned": false,
+    "dependencyResolutionsChanged": false
+  }
+}
