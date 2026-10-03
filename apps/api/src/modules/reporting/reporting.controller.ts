@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, ParseIntPipe, Query, UseGuards } from '@nestjs/common';
 import { ReportingService } from './reporting.service';
 import { canDeliverReport, isReportFinalized } from '../../common/report-eligibility.util';
 import { SessionGuard } from '../../common/guards/session.guard';
@@ -82,6 +82,8 @@ export class ReportingController {
     // Strip actual result values - only status/payment context goes out.
     return {
       ...report,
+      currentVersion: report.currentVersion ? { ...report.currentVersion, memberships: [] } : null,
+      selectedVersion: report.selectedVersion ? { ...report.selectedVersion, memberships: [] } : null,
       finalized,
       deliverable,
       invoice: {
@@ -91,6 +93,26 @@ export class ReportingController {
           results: [],
         })),
       },
+    };
+  }
+
+  @Get(':id/versions')
+  @RequirePermissions(Permission.REPORT_VIEW)
+  async versions(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.reportingService.listVersions(user.tenantId, id);
+  }
+
+  @Get(':id/versions/:versionNo')
+  @RequirePermissions(Permission.REPORT_VIEW)
+  async version(@CurrentUser() user: AuthUser, @Param('id') id: string,
+    @Param('versionNo', ParseIntPipe) versionNo: number) {
+    const report = await this.reportingService.findVersion(user.tenantId, id, versionNo);
+    const deliverable = canDeliverReport(report, report.invoice);
+    return deliverable ? { ...report, finalized: true, deliverable } : {
+      ...report, finalized: true, deliverable,
+      currentVersion: report.currentVersion ? { ...report.currentVersion, memberships: [] } : null,
+      selectedVersion: { ...report.selectedVersion, memberships: [] },
+      invoice: { ...report.invoice, samples: report.invoice.samples.map(s => ({ ...s, results: [] })) },
     };
   }
 }

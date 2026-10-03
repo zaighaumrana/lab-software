@@ -104,7 +104,13 @@ test('built Nest API, billing transactions, reads, auth, socket and shutdown on 
     assert.equal((await db.result.findUniqueOrThrow({ where: { id: entered.id } })).status, 'RELEASED');
     assert.equal(await db.sampleEvent.count({ where: { sampleId: sample.id, eventType: 'TESTING_STARTED' } }), 1);
     assert.equal(await db.visit.count({ where: { bookingId: booking.id } }), 1);
-    await request(`/reports/${report.id}`);
+    const preview = await request(`/reports/${report.id}`);
+    assert.equal(preview.currentVersion.versionNo, 1);
+    assert.equal(preview.currentVersion.memberships.length, 0, 'Unpaid preview must redact version result values too');
+    const history = await request(`/reports/${report.id}/versions`);
+    assert.equal(history.length, 1);
+    const historical = await request(`/reports/${report.id}/versions/1`);
+    assert.equal(historical.selectedVersion.memberships.length, 0);
     for (const path of [`/patients/${patient.id}`, `/bookings/${booking.id}`, `/billing/invoices/${invoice.id}`,
       '/billing/invoices', '/reports', '/settings', '/laboratory/samples/pending']) {
       await request(path);

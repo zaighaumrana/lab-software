@@ -2,62 +2,51 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { ReportStatus } from '@lms/database';
 import { clinicalResultInclude, projectClinicalResult } from '../laboratory/clinical-results';
+import { reportBaseInclude, reportVersionInclude, projectReportVersion } from './report-version.projection';
 
 @Injectable()
 export class ReportingService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findById(tenantId: string, id: string) {
-    const report = await this.prisma.report.findFirst({
-      where: { id, tenantId },
-      include: {
-        invoice: {
-          include: {
-            booking: { include: { patient: true, doctor: true } },
-            lines: { include: { test: true, package: true } },
-            samples: {
-              include: {
-                results: {
-                  where: { status: 'RELEASED' },
-                  include: clinicalResultInclude,
-                  orderBy: { createdAt: 'asc' },
-                },
-              },
-            },
-            payments: { orderBy: { receivedAt: 'asc' } },
-          },
-        },
-      },
-    });
-
-    if (!report) throw new NotFoundException('Report not found');
-    return { ...report, invoice: { ...report.invoice, samples: report.invoice.samples.map(s=>({ ...s, results:s.results.map(projectClinicalResult) })) } };
+    return this.readCurrent({ id, tenantId });
   }
 
   async findByTrackingId(tenantId: string, trackingId: string) {
-    const report = await this.prisma.report.findFirst({
-      where: { tenantId, trackingId },
-      include: {
-        invoice: {
-          include: {
-            booking: { include: { patient: true } },
-            lines: { include: { test: true } },
-            samples: {
-              include: {
-                results: {
-                  where: { status: 'RELEASED' },
-                  include: clinicalResultInclude,
-                },
-              },
-            },
-            payments: true,
-          },
-        },
-      },
-    });
+    return this.readCurrent({ tenantId, trackingId });
+  }
 
+  private async readCurrent(where: { tenantId: string; id?: string; trackingId?: string }) {
+    const report = await this.prisma.report.findFirst({
+      where, include: reportBaseInclude,
+    });
     if (!report) throw new NotFoundException('Report not found');
-    return { ...report, invoice: { ...report.invoice, samples: report.invoice.samples.map(s=>({ ...s, results:s.results.map(projectClinicalResult) })) } };
+    if (report.currentVersion) return projectReportVersion(report, report.currentVersion);
+
+    // Explicit compatibility path: no version exists, so only here scan current legacy releases.
+    const samples = await this.prisma.sample.findMany({
+      where: { tenantId: where.tenantId, invoiceId: report.invoiceId },
+      include: { results: { where: { status: 'RELEASED' }, include: clinicalResultInclude, orderBy: { createdAt: 'asc' } } },
+    });
+    return { ...report, currentVersion: null, selectedVersion: null,
+      invoice: { ...report.invoice, samples: samples.map(s => ({ ...s, results: s.results.map(projectClinicalResult) })) } };
+  }
+
+  async listVersions(tenantId: string, reportId: string) {
+    if (!await this.prisma.report.findFirst({ where: { id: reportId, tenantId }, select: { id: true } })) {
+      throw new NotFoundException('Report not found');
+    }
+    return this.prisma.reportVersion.findMany({ where: { tenantId, reportId }, orderBy: { versionNo: 'asc' } });
+  }
+
+  async findVersion(tenantId: string, reportId: string, versionNo: number) {
+    const report = await this.prisma.report.findFirst({ where: { id: reportId, tenantId }, include: reportBaseInclude });
+    if (!report) throw new NotFoundException('Report not found');
+    const version = await this.prisma.reportVersion.findFirst({
+      where: { tenantId, reportId, versionNo }, include: reportVersionInclude,
+    });
+    if (!version) throw new NotFoundException('Report version not found');
+    return projectReportVersion(report, version);
   }
 
   async listByInvoice(tenantId: string, invoiceId: string) {
@@ -129,13 +118,19 @@ export class ReportingService {
    * is what lets a reprint be told apart from an original print if that
    * distinction is ever needed later.
    */
-  async markPrinted(tenantId: string, id: string) {
-    await this.prisma.report.updateMany({
-      where: { id, tenantId },
-      data: {
-        printedAt: new Date(),
-        printCount: { increment: 1 },
-      },
+  async markPrinted(tenantId: string, id: string, versionId?: string) {
+    await this.prisma.$transaction(async tx => {
+      const rows = await tx.$queryRaw<{id:string}[]>`SELECT id FROM reports WHERE id=${id} AND "tenantId"=${tenantId} FOR UPDATE`;
+      if (!rows.length) throw new NotFoundException('Report not found');
+      if (versionId) {
+        const version = await tx.reportVersion.findFirst({ where: { id: versionId, tenantId, reportId: id, pdfPath: { not: null } } });
+        if (!version) throw new NotFoundException('Generated report artifact not found');
+        await tx.$executeRaw`WITH stamp AS MATERIALIZED (SELECT clock_timestamp() AS at)
+          UPDATE report_versions SET "firstPrintedAt"=coalesce("firstPrintedAt",stamp.at),
+          "lastPrintedAt"=stamp.at,"printCount"="printCount"+1 FROM stamp WHERE id=${versionId}`;
+      }
+      await tx.$executeRaw`UPDATE reports SET "printedAt"=coalesce("printedAt",CURRENT_TIMESTAMP AT TIME ZONE 'UTC'),
+        "printCount"="printCount"+1,"updatedAt"=CURRENT_TIMESTAMP AT TIME ZONE 'UTC' WHERE id=${id}`;
     });
   }
 }

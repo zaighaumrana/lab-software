@@ -7,6 +7,7 @@
  */
 
 export interface ReportLike {
+  currentVersionId?: string | null;
   status: string; // ReportStatus: PENDING | PARTIAL_READY | COMPLETE | AMENDED | ARCHIVED
 }
 
@@ -17,7 +18,7 @@ export interface InvoiceLike {
 /** A report is "finalized" once the lab has confirmed every result is
  * released (or it's a later amended/archived state building on that). */
 export function isReportFinalized(report: ReportLike): boolean {
-  return ['COMPLETE', 'AMENDED', 'ARCHIVED'].includes(report.status);
+  return !!report.currentVersionId || ['COMPLETE', 'AMENDED', 'ARCHIVED'].includes(report.status);
 }
 
 export function isInvoiceFullyPaid(invoice: InvoiceLike): boolean {

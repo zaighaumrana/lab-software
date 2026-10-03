@@ -26,7 +26,7 @@ async function main() {
     const env = { ...process.env, DATABASE_URL: fixture.toString(), DATABASE_TEST_URL: fixture.toString() };
     const commands = [
       [resolve('node_modules/prisma/build/index.js'), 'migrate', 'deploy'],
-      ...(process.argv[2] === 'b1' ? [[resolve('test/b1-clinical.test.cjs')]] : [
+      ...(['b1','b2'].includes(process.argv[2]) ? [[resolve(process.argv[2] === 'b2' ? 'test/b2-reports.test.cjs' : 'test/b1-clinical.test.cjs')]] : [
         [require.resolve('tsx/cli'), '--test', 'test/integration.test.ts'],
         [resolve('test/api-smoke.cjs')],
       ]),

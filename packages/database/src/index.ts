@@ -8,3 +8,4 @@ export type Decimal = Prisma.Decimal;
 export { allocateVisitAccession, captureCurrentTestVersion, captureCurrentPackageVersion,
   materializeInvoiceClinicalWork, assignSampleToOrderedTest, appendSampleEvent } from './clinical-work.js';
 export type { SampleEventInput } from './clinical-work.js';
+export { captureReleasedReportVersion } from './report-versions.js';

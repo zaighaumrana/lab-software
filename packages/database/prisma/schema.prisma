@@ -120,6 +120,7 @@ model User {
   cashShiftsClosed CashShift[] @relation("CashShiftClosedBy")
   sampleEvents SampleEvent[]
   resultCorrections Result[] @relation("ResultCorrectionActor")
+  reportReleases ReportVersion[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, username])
@@ -748,12 +749,14 @@ model Result {
   clinicalValues ResultValue[] @relation("ClinicalResultValues")
   amendedFrom Result?       @relation("ResultAmendments", fields: [amendedFromResultId], references: [id])
   amendments  Result[]      @relation("ResultAmendments")
+  reportMemberships ReportVersionResult[]
   orderedTest OrderedTest? @relation(fields: [tenantId, orderedTestId, testVersionId], references: [tenantId, id, testVersionId], onDelete: Restrict, onUpdate: Restrict)
   assignment SampleTest? @relation(fields: [sampleId, orderedTestId], references: [sampleId, orderedTestId], onDelete: Restrict, onUpdate: Restrict)
   amendmentActor User? @relation("ResultCorrectionActor", fields: [tenantId, amendmentActorId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([orderedTestId, revisionNo])
   @@unique([id, testVersionId])
+  @@unique([id, orderedTestId])
 
   @@index([tenantId])
   @@index([sampleId])
@@ -820,6 +823,7 @@ model Report {
   branchId      String
   invoiceId     String       @unique
   visitId       String?      @unique
+  currentVersionId String?   @unique
   status        ReportStatus @default(PENDING)
   reportNumber  String
   trackingId    String       // Public lookup ID
@@ -836,7 +840,11 @@ model Report {
   branch  Branch  @relation(fields: [branchId], references: [id])
   invoice Invoice @relation(fields: [invoiceId], references: [id])
   visit Visit? @relation(fields: [tenantId, branchId, visitId], references: [tenantId, branchId, id], onDelete: Restrict, onUpdate: Restrict)
+  versions ReportVersion[] @relation("ReportVersions")
+  currentVersion ReportVersion? @relation("CurrentReportVersion", fields: [tenantId, id, currentVersionId], references: [tenantId, reportId, id], onDelete: Restrict, onUpdate: Restrict)
 
+  @@unique([tenantId, id, currentVersionId])
+  @@unique([tenantId, id])
   @@unique([tenantId, branchId, visitId])
   @@unique([tenantId, reportNumber])
   @@unique([tenantId, trackingId])
@@ -1063,6 +1071,62 @@ model Configuration {
   @@map("configurations")
 }
 
+enum ReportVersionKind {
+  INITIAL
+  AMENDMENT
+}
+
+model ReportVersion {
+  id String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  tenantId String
+  reportId String
+  versionNo Int
+  previousVersionId String?
+  kind ReportVersionKind
+  releasedAt DateTime @default(now()) @db.Timestamptz(3)
+  releasedById String?
+  amendmentReason String?
+  displaySnapshot Json
+  contentHash String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  pdfPath String?
+  pdfSha256 String?
+  pdfByteSize Int?
+  pdfGeneratedAt DateTime? @db.Timestamptz(3)
+  renderSettingsSnapshot Json?
+  firstPrintedAt DateTime? @db.Timestamptz(3)
+  lastPrintedAt DateTime? @db.Timestamptz(3)
+  printCount Int @default(0)
+  report Report @relation("ReportVersions", fields: [tenantId, reportId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  currentFor Report? @relation("CurrentReportVersion")
+  previousVersion ReportVersion? @relation("ReportVersionChain", fields: [reportId, previousVersionId], references: [reportId, id], onDelete: Restrict, onUpdate: Restrict)
+  successors ReportVersion[] @relation("ReportVersionChain")
+  releasedBy User? @relation(fields: [tenantId, releasedById], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  memberships ReportVersionResult[]
+  @@unique([tenantId, reportId, id])
+  @@unique([reportId, id])
+  @@unique([reportId, versionNo])
+  @@unique([reportId, contentHash])
+  @@index([tenantId, releasedById])
+  @@map("report_versions")
+}
+
+model ReportVersionResult {
+  reportVersionId String
+  orderedTestId String
+  resultId String
+  sortOrder Int
+  version ReportVersion @relation(fields: [reportVersionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  orderedTest OrderedTest @relation(fields: [orderedTestId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  result Result @relation(fields: [resultId, orderedTestId], references: [id, orderedTestId], onDelete: Restrict, onUpdate: Restrict)
+  @@id([reportVersionId, orderedTestId])
+  @@unique([reportVersionId, resultId])
+  @@unique([reportVersionId, sortOrder])
+  @@index([resultId, orderedTestId])
+  @@index([orderedTestId])
+  @@map("report_version_results")
+}
+
 // Phase A: captures are immutable evidence, not retrospective clinical approval.
 enum CaptureProvenance {
   LEGACY_CURRENT
@@ -1232,6 +1296,7 @@ model OrderedTest {
   assignments SampleTest[]
   results Result[]
 
+  reportMemberships ReportVersionResult[]
   @@unique([tenantId, id, testVersionId])
   @@unique([visitId, occurrenceNo])
   @@unique([tenantId, branchId, visitId, id])

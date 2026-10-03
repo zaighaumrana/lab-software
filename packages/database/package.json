@@ -17,6 +17,7 @@
     "test": "pnpm build && tsx --test test/client.test.ts",
     "test:integration": "pnpm build && tsx test/run-integration.ts",
     "test:b1": "pnpm build && tsx test/run-integration.ts b1",
+    "test:b2": "pnpm build && tsx test/run-integration.ts b2",
     "test:phase-a": "pnpm build && tsx test/run-phase-a.ts",
     "validate": "prisma validate",
     "migrate:status": "prisma migrate status"

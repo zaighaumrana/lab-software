@@ -29,7 +29,7 @@ function testBlockHtml(result: any): string {
   `;
 }
 
-/** `report` is whatever reportingService.findById(...) returns. */
+/** Version projections already contain frozen display identity and exact membership values. */
 export function buildReportHtml(report: any, settings: PrintSettings): string {
   const inv = report.invoice;
   const patient = inv?.booking?.patient;
@@ -40,7 +40,7 @@ export function buildReportHtml(report: any, settings: PrintSettings): string {
     <div class="doc-label">Report No.</div>
     <div style="font-size:12pt; font-weight:700;">${esc(report.reportNumber)}</div>
     <div style="font-size:7.5pt; color:#64748b; margin-top:2px;">
-      ${report.generatedAt ? new Date(report.generatedAt).toLocaleString() : ''}
+      ${(report.selectedVersion?.releasedAt ?? report.generatedAt) ? new Date(report.selectedVersion?.releasedAt ?? report.generatedAt).toLocaleString() : ''}
     </div>
   `;
 

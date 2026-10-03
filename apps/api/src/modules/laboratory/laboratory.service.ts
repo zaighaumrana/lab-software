@@ -18,6 +18,7 @@ import {
   SampleEventType,
   appendSampleEvent,
   assignSampleToOrderedTest,
+  captureReleasedReportVersion,
 } from '@lms/database';
 import { NotificationsService } from '../notifications/notifications.service';
 import { LaboratoryGateway } from './laboratory.gateway';
@@ -996,7 +997,13 @@ export class LaboratoryService {
           generatedAt: allReleased ? new Date() : null,
         },
       });
+      if (allReleased && invoice.visitId) await captureReleasedReportVersion(tx, tenantId, created.id);
       return { justCompleted: allReleased, trackingId: created.trackingId };
+    }
+
+    if (allReleased && invoice.visitId) {
+      const versionId = await captureReleasedReportVersion(tx, tenantId, invoice.report.id);
+      return { justCompleted: versionId !== invoice.report.currentVersionId, trackingId: invoice.report.trackingId };
     }
 
     const wasComplete = invoice.report.status === ReportStatus.COMPLETE;
@@ -1005,7 +1012,7 @@ export class LaboratoryService {
         where: { id: invoice.report.id },
         data: {
           status: targetStatus,
-          generatedAt: allReleased ? (invoice.report.generatedAt ?? new Date()) : null,
+          generatedAt: allReleased || invoice.report.currentVersionId ? (invoice.report.generatedAt ?? new Date()) : null,
         },
       });
       // Only the PENDING/PARTIAL_READY → COMPLETE transition is a genuine
