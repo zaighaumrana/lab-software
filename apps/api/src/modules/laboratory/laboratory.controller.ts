@@ -185,7 +185,7 @@ export class LaboratoryController {
 
   /**
    * PATCH /laboratory/results/:id/reopen
-   * Explicit, authorized un-finalize: RELEASED → ENTERED. Requires a reason.
+   * Create a V2 correction draft while retaining the release; legacy reopening is isolated.
    */
   @Patch('results/:id/reopen')
   @RequirePermissions(Permission.RESULT_FINALIZE)
@@ -209,6 +209,6 @@ export class LaboratoryController {
     @Param('id') id: string,
     @Body() dto: AmendResultDto,
   ) {
-    return this.laboratoryService.amendResult(user.tenantId, id, dto);
+    return this.laboratoryService.amendResult(user.tenantId, id, dto, user.userId);
   }
 }

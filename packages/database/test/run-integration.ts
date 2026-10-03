@@ -26,8 +26,10 @@ async function main() {
     const env = { ...process.env, DATABASE_URL: fixture.toString(), DATABASE_TEST_URL: fixture.toString() };
     const commands = [
       [resolve('node_modules/prisma/build/index.js'), 'migrate', 'deploy'],
-      [require.resolve('tsx/cli'), '--test', 'test/integration.test.ts'],
-      [resolve('test/api-smoke.cjs')],
+      ...(process.argv[2] === 'b1' ? [[resolve('test/b1-clinical.test.cjs')]] : [
+        [require.resolve('tsx/cli'), '--test', 'test/integration.test.ts'],
+        [resolve('test/api-smoke.cjs')],
+      ]),
     ];
     for (const args of commands) {
       const result = spawnSync(process.execPath, args, { env, stdio: 'inherit', timeout: 120_000 });

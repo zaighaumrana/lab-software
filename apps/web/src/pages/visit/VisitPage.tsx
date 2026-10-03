@@ -62,6 +62,9 @@ export function VisitPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [sampleId, setSampleId] = useState<string | null>(null);
+  const [orderedTestIds, setOrderedTestIds] = useState<string[]>([]);
+  const [collectedOrderIds, setCollectedOrderIds] = useState<string[]>([]);
+  const [sampleType, setSampleType] = useState('Blood');
 
   useEffect(() => {
     Promise.all([
@@ -256,14 +259,7 @@ export function VisitPage() {
         amount: Number(payAmount),
         method: payMethod,
       });
-      setInvoice(result.invoice);
-
-      // Auto-collect sample for convenience
-      const sample = await labApi.collectSample({
-        invoiceId: result.invoice.id,
-        sampleType: 'Blood',
-      });
-      setSampleId(sample.id);
+      setInvoice({...result.invoice,visitId:invoice.visitId,visit:invoice.visit});
       setStep('done');
     } catch (err: unknown) {
       const msg =
@@ -273,6 +269,19 @@ export function VisitPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function collectSelectedSpecimen() {
+    if (!invoice || (invoice.visitId && !orderedTestIds.length)) return;
+    setLoading(true); setError('');
+    try {
+      const sample=await labApi.collectSample({invoiceId:invoice.id,sampleType,
+        ...(invoice.visitId ? {orderedTestIds} : {})});
+      setSampleId(sample.id);
+      setCollectedOrderIds(prev=>[...prev,...orderedTestIds]); setOrderedTestIds([]);
+    } catch (err:unknown) {
+      setError((err as {response?:{data?:{message?:string}}}).response?.data?.message ?? 'Sample collection failed');
+    } finally { setLoading(false); }
   }
 
   function resetAll() {
@@ -293,6 +302,7 @@ export function VisitPage() {
     setDiscounts({});
     setDiscountReasons({});
     setSampleId(null);
+    setOrderedTestIds([]); setCollectedOrderIds([]); setSampleType('Blood');
   }
 
   return (
@@ -693,7 +703,7 @@ export function VisitPage() {
           </p>
 
           <button className="btn-primary w-full" onClick={handlePayment} disabled={loading}>
-            {loading ? 'Processing…' : 'Record Payment & Collect Sample'}
+            {loading ? 'Processing…' : 'Record Payment'}
           </button>
         </div>
       )}
@@ -702,7 +712,7 @@ export function VisitPage() {
       {step === 'done' && invoice && (
         <div className="card space-y-4 text-center">
           <div className="text-4xl">✓</div>
-          <h2 className="text-xl font-semibold text-green-700">Visit Complete</h2>
+          <h2 className="text-xl font-semibold text-green-700">Payment Recorded</h2>
           <p className="text-sm text-slate-600">
             Invoice <strong>{invoice.invoiceNumber}</strong>
             {sampleId && (
@@ -712,6 +722,19 @@ export function VisitPage() {
               </>
             )}
           </p>
+          <div className="space-y-2 text-left">
+            <label className="label">Specimen type</label>
+            <input className="input" value={sampleType} onChange={e=>setSampleType(e.target.value)} />
+            {(invoice.visit?.orderedTests ?? []).filter(o=>!collectedOrderIds.includes(o.id)).map(o=>(
+              <label key={o.id} className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={orderedTestIds.includes(o.id)} onChange={()=>setOrderedTestIds(prev=>prev.includes(o.id)?prev.filter(id=>id!==o.id):[...prev,o.id])} />
+                {o.testVersion.nameSnapshot} (occurrence {o.occurrenceNo})
+              </label>
+            ))}
+            <button className="btn-primary" disabled={loading || !sampleType.trim() || (!!invoice.visitId && !orderedTestIds.length)} onClick={collectSelectedSpecimen}>
+              {loading ? 'Collecting…' : 'Collect selected specimen'}
+            </button>
+          </div>
           <div className="flex flex-wrap justify-center gap-3">
             <a href={`/invoices/${invoice.id}`} className="btn-primary">
               Print invoice / receipt

@@ -187,6 +187,8 @@ export class CatalogService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      // Serialize the editable definition replacement with Phase A capture's parent lock.
+      await tx.$queryRaw`SELECT id FROM tests WHERE id=${testId} AND "tenantId"=${tenantId} FOR UPDATE`;
       // Cascade delete removes reference ranges & choices for the old parameters.
       await tx.testParameter.deleteMany({ where: { testId } });
 

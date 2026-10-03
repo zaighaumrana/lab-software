@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CollectSampleDto } from './dto/collect-sample.dto';
-import { EnterResultDto } from './dto/enter-result.dto';
+import { EnterResultDto, ResultValueInputDto } from './dto/enter-result.dto';
 import { AmendResultDto } from './dto/amend-result.dto';
 import {
   SampleStatus,
@@ -17,10 +17,15 @@ import {
   Decimal,
   SampleEventType,
   appendSampleEvent,
+  assignSampleToOrderedTest,
 } from '@lms/database';
 import { NotificationsService } from '../notifications/notifications.service';
 import { LaboratoryGateway } from './laboratory.gateway';
 import { generateReportNumber, generateTrackingId } from '../../common/id-generators.util';
+import { clinicalResultInclude, projectClinicalResult, enterOccurrenceResult, releaseOccurrenceResult,
+  reopenOccurrenceResult, pickCompatibleRange, ageAtCollection } from './clinical-results';
+
+type LegacyEntry = Omit<EnterResultDto,'testId'|'invoiceLineId'|'values'> & { testId:string;invoiceLineId:string;values:(ResultValueInputDto & {testParameterId:string})[] };
 
 function generateSampleCode(): string {
   const now = new Date();
@@ -52,8 +57,15 @@ export class LaboratoryService {
       include: { booking: { include: { patient: true } } },
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
+    if (invoice.branchId!==branchId) throw new BadRequestException('Invoice belongs to another branch');
+    if (invoice.visitId && !dto.orderedTestIds?.length) throw new BadRequestException('Select the OrderedTests assigned to this specimen');
+    if (!invoice.visitId && dto.orderedTestIds?.length) throw new BadRequestException('Legacy invoice has no occurrence assignments');
 
     const sample = await this.prisma.$transaction(async (tx) => {
+      // Scope is checked before creation so assignment failures roll back sample and event.
+      const ids = dto.orderedTestIds ?? [];
+      const assigned = await tx.orderedTest.count({where:{id:{in:ids},tenantId,branchId,visitId:invoice.visitId ?? ''}});
+      if (new Set(ids).size!==ids.length || assigned!==ids.length) throw new BadRequestException('Invalid specimen occurrence scope');
       const created = await tx.sample.create({
       data: {
         tenantId,
@@ -68,6 +80,7 @@ export class LaboratoryService {
         notes: dto.notes,
       },
       });
+      for (const id of [...ids].sort()) await assignSampleToOrderedTest(tx,created.id,id);
       await appendSampleEvent(tx, { tenantId, sampleId: created.id, actorId: collectedById,
         eventType: SampleEventType.COLLECTED, toStatus: SampleStatus.COLLECTED,
         occurredAt: created.collectedAt ?? new Date() });
@@ -167,16 +180,16 @@ export class LaboratoryService {
     const sample = await this.prisma.sample.findFirst({
       where: { id, tenantId },
       include: {
+        assignments: { include: { orderedTest: { include: { testVersion: { include: { versionParameters: { include: { choices:true,referenceRanges:true } } } } } } } },
         results: {
-          include: {
-            test: true,
-            values: { include: { parameter: true } },
-          },
+          where:{status:{in:[ResultStatus.ENTERED,ResultStatus.RELEASED]}},
+          include: clinicalResultInclude,
         },
         invoice: {
           include: {
             booking: { include: { patient: true } },
             lines: { include: { test: true, package: true } },
+            visit:{include:{orderedTests:{include:{testVersion:true},orderBy:{occurrenceNo:'asc'}}}},
             // Needed to judge collection-readiness across the WHOLE
             // patient invoice, not just this one sample — an invoice can
             // have multiple samples (e.g. blood + urine) and the report
@@ -187,10 +200,7 @@ export class LaboratoryService {
             samples: {
               include: {
                 results: {
-                  include: {
-                    test: true,
-                    values: { include: { parameter: true } },
-                  },
+                  include: clinicalResultInclude,
                 },
               },
             },
@@ -207,7 +217,7 @@ export class LaboratoryService {
       ? this.buildInvoiceResultsPreview(sample.invoice)
       : [];
 
-    return { ...sample, invoiceReadiness, invoiceResultsPreview };
+    return { ...sample, results:sample.results.map(projectClinicalResult), invoiceReadiness, invoiceResultsPreview };
   }
 
   /**
@@ -220,9 +230,21 @@ export class LaboratoryService {
    * directly.
    */
   private computeInvoiceReadiness(invoice: {
+    visitId?:string|null;
+    visit?:{orderedTests:{id:string}[]}|null;
     lines: { testId: string | null }[];
-    samples: { results: { testId: string; status: string }[] }[];
+    samples: { results: { testId: string; status: string;orderedTestId?:string|null }[] }[];
   }) {
+    if (invoice.visitId) {
+      const work=invoice.visit?.orderedTests ?? [];
+      const results=invoice.samples.flatMap(s=>s.results);
+      const covered=work.map(o=>{
+        const current=results.filter(r=>r.orderedTestId===o.id);
+        return current.find(r=>r.status===ResultStatus.ENTERED) ?? current.find(r=>r.status===ResultStatus.RELEASED);
+      });
+      return {testLineCount:work.length,enteredCount:covered.filter(Boolean).length,
+        allEntered:work.length>0 && covered.every(Boolean),allReleased:work.length>0 && covered.every(r=>r?.status===ResultStatus.RELEASED)};
+    }
     const testIds = invoice.lines.filter((l) => l.testId).map((l) => l.testId as string);
     const entered = new Set<string>();
     const released = new Set<string>();
@@ -254,21 +276,37 @@ export class LaboratoryService {
    * missing).
    */
   private buildInvoiceResultsPreview(invoice: {
+    visitId?:string|null;
+    visit?:{orderedTests:{id:string;occurrenceNo:number;testVersion:{testId:string;codeSnapshot:string;nameSnapshot:string}}[]}|null;
     lines: { testId: string | null }[];
     samples: {
       results: {
         testId: string;
         status: string;
+        orderedTestId?:string|null;
         test: { code: string; name: string };
         values: {
           valueNumeric: unknown;
           valueText: string | null;
           unit: string | null;
-          parameter: { name: string; unit: string | null; sortOrder: number };
+          parameter: { name: string; unit: string | null; sortOrder: number }|null;
+          versionParameter?:{name:string;unit:string|null;sortOrder:number}|null;
         }[];
       }[];
     }[];
   }) {
+    if (invoice.visitId) {
+      return (invoice.visit?.orderedTests ?? []).flatMap(o=>{
+        const matches=invoice.samples.flatMap(s=>s.results).filter(r=>r.orderedTestId===o.id);
+        const r=matches.find(r=>r.status===ResultStatus.ENTERED) ?? matches.find(r=>r.status===ResultStatus.RELEASED);
+        if (!r) return [];
+        return [{orderedTestId:o.id,occurrenceNo:o.occurrenceNo,testId:o.testVersion.testId,testCode:o.testVersion.codeSnapshot,
+          testName:o.testVersion.nameSnapshot,status:r.status,values:r.values.map(v=>{
+            const p=v.versionParameter ?? v.parameter;
+            return {label:p?.name ?? 'Unresolved parameter',unit:v.unit ?? p?.unit ?? null,value:v.valueText ?? (v.valueNumeric!=null?String(v.valueNumeric):'')};
+          })}];
+      });
+    }
     const testIds = invoice.lines.filter((l) => l.testId).map((l) => l.testId as string);
     // A test could theoretically have results on more than one sample
     // (shouldn't normally happen, but don't silently drop data if it
@@ -296,10 +334,10 @@ export class LaboratoryService {
           testName: r.test.name,
           status: r.status,
           values: [...r.values]
-            .sort((a, b) => a.parameter.sortOrder - b.parameter.sortOrder)
+            .sort((a, b) => (a.parameter?.sortOrder ?? 0) - (b.parameter?.sortOrder ?? 0))
             .map((v) => ({
-              label: v.parameter.name,
-              unit: v.unit ?? v.parameter.unit ?? null,
+              label: v.parameter?.name ?? 'Unresolved parameter',
+              unit: v.unit ?? v.parameter?.unit ?? null,
               value: v.valueText ?? (v.valueNumeric != null ? String(v.valueNumeric) : ''),
             })),
         };
@@ -336,6 +374,25 @@ export class LaboratoryService {
   // ---------------------------------------------------------------------------
 
   async enterResult(tenantId: string, dto: EnterResultDto, enteredById?: string) {
+    const sample=await this.prisma.sample.findFirst({where:{id:dto.sampleId,tenantId},include:{invoice:true}});
+    if (!sample) throw new NotFoundException('Sample not found');
+    if (sample.invoice.visitId) {
+      const outcome=await this.prisma.$transaction(async tx=>{
+        const result=await enterOccurrenceResult(tx,tenantId,dto,enteredById);
+        const report=await this.recomputeReportStatus(tx,tenantId,sample.invoiceId);
+        return {result,report};
+      });
+      if(outcome.report.justCompleted) await this.notifyReportReady(tenantId,sample.invoiceId,outcome.report.trackingId);
+      this.gateway.notifySampleChanged(tenantId,sample.id);
+      return projectClinicalResult(outcome.result);
+    }
+    if(dto.orderedTestId || !dto.testId || !dto.invoiceLineId || dto.values?.some(v=>!v.testParameterId || v.versionParameterId)) {
+      throw new BadRequestException('Legacy work requires its catalog/source parameter identifiers');
+    }
+    return this.enterLegacyResult(tenantId,dto as LegacyEntry,enteredById);
+  }
+
+  private async enterLegacyResult(tenantId: string, dto: LegacyEntry, enteredById?: string) {
     const sample = await this.getSample(tenantId, dto.sampleId);
 
     if (
@@ -389,9 +446,8 @@ export class LaboratoryService {
     }
 
     const patient = sample.invoice.booking?.patient;
-    const ageMonths = patient?.dateOfBirth
-      ? this.ageInMonths(patient.dateOfBirth)
-      : null;
+    const collection = await this.prisma.sampleEvent.findFirst({where:{sampleId:dto.sampleId,tenantId,eventType:SampleEventType.COLLECTED},orderBy:{recordedAt:'asc'}});
+    const ageMonths = ageAtCollection(patient?.dateOfBirth ?? null,collection?.occurredAt ?? null);
     const gender = patient?.gender ?? null;
 
     // Evaluate each value against its parameter's reference ranges
@@ -531,6 +587,17 @@ export class LaboratoryService {
       where: { id: resultId, tenantId },
     });
     if (!existing) throw new NotFoundException('Result not found');
+    if(existing.orderedTestId) {
+      const outcome=await this.prisma.$transaction(async tx=>{
+        const result=await releaseOccurrenceResult(tx,tenantId,resultId,actorId);
+        const sample=await tx.sample.findUniqueOrThrow({where:{id:result.sampleId}});
+        const report=await this.recomputeReportStatus(tx,tenantId,sample.invoiceId);
+        return {result,sample,report};
+      });
+      if(outcome.report.justCompleted) await this.notifyReportReady(tenantId,outcome.sample.invoiceId,outcome.report.trackingId);
+      this.gateway.notifySampleChanged(tenantId,outcome.sample.id);
+      return projectClinicalResult(outcome.result);
+    }
     if (existing.status !== ResultStatus.ENTERED) {
       throw new BadRequestException(
         `Cannot finalize a result in status ${existing.status}`,
@@ -586,6 +653,20 @@ export class LaboratoryService {
    * can never disagree.
    */
   async markInvoiceReady(tenantId: string, invoiceId: string, actorId?: string) {
+    const clinical=await this.prisma.invoice.findFirst({where:{id:invoiceId,tenantId},select:{visitId:true}});
+    if (clinical?.visitId) {
+      const outcome=await this.prisma.$transaction(async tx=>{
+        await tx.$queryRaw`SELECT id FROM invoices WHERE id=${invoiceId} AND "tenantId"=${tenantId} FOR UPDATE`;
+        const invoice=await tx.invoice.findUniqueOrThrow({where:{id:invoiceId},include:{lines:true,visit:{include:{orderedTests:true}},samples:{include:{results:true}}}});
+        if(!this.computeInvoiceReadiness(invoice).allEntered) throw new BadRequestException('Each OrderedTest occurrence needs a result');
+        const drafts=invoice.samples.flatMap(s=>s.results).filter(r=>r.orderedTestId && r.status===ResultStatus.ENTERED).sort((a,b)=>a.orderedTestId!.localeCompare(b.orderedTestId!));
+        for(const draft of drafts) await releaseOccurrenceResult(tx,tenantId,draft.id,actorId);
+        return {released:drafts.length,samples:invoice.samples,report:await this.recomputeReportStatus(tx,tenantId,invoiceId)};
+      });
+      if(outcome.report.justCompleted) await this.notifyReportReady(tenantId,invoiceId,outcome.report.trackingId);
+      for(const s of outcome.samples) this.gateway.notifySampleChanged(tenantId,s.id);
+      return {invoiceId,released:outcome.released};
+    }
     const invoice = await this.prisma.invoice.findFirst({
       where: { id: invoiceId, tenantId },
       include: { lines: true, samples: { include: { results: true } } },
@@ -660,6 +741,16 @@ export class LaboratoryService {
       where: { id: resultId, tenantId },
     });
     if (!existing) throw new NotFoundException('Result not found');
+    if(existing.orderedTestId) {
+      const draft=await this.prisma.$transaction(async tx=>{
+        const result=await reopenOccurrenceResult(tx,tenantId,resultId,reason,actorId);
+        const sample=await tx.sample.findUniqueOrThrow({where:{id:result.sampleId}});
+        await this.recomputeReportStatus(tx,tenantId,sample.invoiceId);
+        return result;
+      });
+      this.gateway.notifySampleChanged(tenantId,draft.sampleId);
+      return projectClinicalResult(draft);
+    }
     if (existing.status !== ResultStatus.RELEASED) {
       throw new BadRequestException(
         `Cannot reopen a result in status ${existing.status}`,
@@ -740,6 +831,16 @@ export class LaboratoryService {
     });
 
     if (!original) throw new NotFoundException('Result not found');
+    if(original.orderedTestId) {
+      const result=await this.prisma.$transaction(async tx=>{
+        await reopenOccurrenceResult(tx,tenantId,resultId,dto.amendmentReason,amendedById);
+        const replacement=await enterOccurrenceResult(tx,tenantId,{sampleId:original.sampleId,orderedTestId:original.orderedTestId!,values:dto.values,releaseImmediately:true},amendedById);
+        await this.recomputeReportStatus(tx,tenantId,original.sample.invoiceId);
+        return replacement;
+      });
+      this.gateway.notifySampleChanged(tenantId,original.sampleId);
+      return projectClinicalResult(result);
+    }
     if (original.status !== ResultStatus.RELEASED) {
       throw new BadRequestException(
         `Only RELEASED results can be amended. Current status: ${original.status}`,
@@ -757,13 +858,12 @@ export class LaboratoryService {
       })
     )?.invoice?.booking?.patient;
 
-    const ageMonths = patient?.dateOfBirth
-      ? this.ageInMonths(patient.dateOfBirth)
-      : null;
+    const collection = await this.prisma.sampleEvent.findFirst({where:{sampleId:original.sampleId,tenantId,eventType:SampleEventType.COLLECTED},orderBy:{recordedAt:'asc'}});
+    const ageMonths = ageAtCollection(patient?.dateOfBirth ?? null,collection?.occurredAt ?? null);
     const gender = patient?.gender ?? null;
 
     const evaluated = dto.values.map((v) => {
-      const param = paramMap.get(v.testParameterId);
+      const param = v.testParameterId ? paramMap.get(v.testParameterId) : undefined;
       if (!param) {
         throw new BadRequestException(`Parameter ${v.testParameterId} invalid for this test`);
       }
@@ -782,7 +882,7 @@ export class LaboratoryService {
       }
 
       return {
-        testParameterId: v.testParameterId,
+        testParameterId: param.id,
         valueNumeric: v.valueNumeric !== undefined ? new Decimal(v.valueNumeric) : null,
         valueText: v.valueText ?? null,
         unit: v.unit ?? param.unit,
@@ -863,31 +963,19 @@ export class LaboratoryService {
     invoiceId: string,
   ): Promise<{ justCompleted: boolean; trackingId?: string }> {
     const invoice = await tx.invoice.findFirst({
-      where: { id: invoiceId },
+      where: { id: invoiceId,tenantId },
       include: {
         lines: true,
+        visit:{include:{orderedTests:true}},
         report: true,
         samples: { include: { results: true } },
       },
     });
     if (!invoice) return { justCompleted: false };
 
-    const releasedTestIds = new Set<string>();
-    const enteredOrReleasedTestIds = new Set<string>();
-    for (const sample of invoice.samples) {
-      for (const result of sample.results) {
-        if (result.status === ResultStatus.RELEASED) {
-          releasedTestIds.add(result.testId);
-          enteredOrReleasedTestIds.add(result.testId);
-        } else if (result.status === ResultStatus.ENTERED) {
-          enteredOrReleasedTestIds.add(result.testId);
-        }
-      }
-    }
-
-    const testLineCount = invoice.lines.filter((l) => l.testId).length;
-    const allReleased = testLineCount > 0 && releasedTestIds.size >= testLineCount;
-    const anyProgress = enteredOrReleasedTestIds.size > 0;
+    const readiness=this.computeInvoiceReadiness(invoice);
+    const allReleased = readiness.allReleased;
+    const anyProgress = readiness.enteredCount>0;
     const targetStatus = allReleased
       ? ReportStatus.COMPLETE
       : anyProgress
@@ -901,6 +989,7 @@ export class LaboratoryService {
           tenantId,
           branchId: invoice.branchId,
           invoiceId,
+          visitId:invoice.visitId,
           status: targetStatus,
           reportNumber: generateReportNumber(),
           trackingId: generateTrackingId(),
@@ -931,15 +1020,6 @@ export class LaboratoryService {
   // Reference range helpers
   // ---------------------------------------------------------------------------
 
-  private ageInMonths(dob: Date): number {
-    const now = new Date();
-    let months =
-      (now.getFullYear() - dob.getFullYear()) * 12 +
-      (now.getMonth() - dob.getMonth());
-    if (now.getDate() < dob.getDate()) months -= 1;
-    return Math.max(0, months);
-  }
-
   private pickReferenceRange(
     ranges: {
       gender: Gender | null;
@@ -955,21 +1035,7 @@ export class LaboratoryService {
     gender: Gender | null,
     ageMonths: number | null,
   ) {
-    const scored = ranges.map((r) => {
-      let score = 0;
-      if (r.gender && gender && r.gender === gender) score += 2;
-      if (r.gender === null) score += 1;
-      if (
-        ageMonths !== null &&
-        (r.ageMinMonths === null || ageMonths >= r.ageMinMonths) &&
-        (r.ageMaxMonths === null || ageMonths <= r.ageMaxMonths)
-      ) {
-        score += 2;
-      }
-      return { range: r, score };
-    });
-    scored.sort((a, b) => b.score - a.score);
-    return scored[0]?.range ?? null;
+    return pickCompatibleRange(ranges,gender,ageMonths);
   }
 
   private evaluateAgainstRange(

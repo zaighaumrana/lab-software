@@ -123,6 +123,8 @@ export interface Payment {
 }
 
 export interface Invoice {
+  visitId?: string | null;
+  visit?: { orderedTests: OrderedTest[] } | null;
   id: string;
   invoiceNumber: string;
   status: string;
@@ -158,6 +160,8 @@ export interface InvoiceResultPreviewValue {
 }
 
 export interface InvoiceResultPreview {
+  orderedTestId?: string;
+  occurrenceNo?: number;
   testId: string;
   testCode: string;
   testName: string;
@@ -166,6 +170,8 @@ export interface InvoiceResultPreview {
 }
 
 export interface Sample {
+  visitId?: string | null;
+  assignments?: { orderedTest: OrderedTest }[];
   id: string;
   sampleCode: string;
   status: string;
@@ -191,7 +197,8 @@ export interface Sample {
 
 export interface ResultValue {
   id: string;
-  testParameterId: string;
+  testParameterId?: string | null;
+  versionParameterId?: string | null;
   valueNumeric?: number | string | null;
   valueText?: string | null;
   unit?: string | null;
@@ -201,6 +208,9 @@ export interface ResultValue {
 }
 
 export interface Result {
+  orderedTestId?: string | null;
+  testVersionId?: string | null;
+  revisionNo?: number | null;
   id: string;
   status: string;
   isCritical: boolean;
@@ -210,6 +220,13 @@ export interface Result {
   enteredAt: string;
   releasedAt?: string | null;
   notes?: string | null;
+}
+
+export interface OrderedTest {
+  id: string;
+  occurrenceNo: number;
+  invoiceLineId?: string | null;
+  testVersion: { testId: string; codeSnapshot: string; nameSnapshot: string; versionParameters: TestParameter[] };
 }
 
 export interface Report {

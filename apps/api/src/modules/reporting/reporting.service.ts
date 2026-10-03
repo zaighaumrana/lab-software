@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { ReportStatus } from '@lms/database';
+import { clinicalResultInclude, projectClinicalResult } from '../laboratory/clinical-results';
 
 @Injectable()
 export class ReportingService {
@@ -17,14 +18,8 @@ export class ReportingService {
             samples: {
               include: {
                 results: {
-                  where: { status: { in: ['RELEASED', 'SUPERSEDED'] } },
-                  include: {
-                    test: true,
-                    values: {
-                      include: { parameter: true },
-                      orderBy: { parameter: { sortOrder: 'asc' } },
-                    },
-                  },
+                  where: { status: 'RELEASED' },
+                  include: clinicalResultInclude,
                   orderBy: { createdAt: 'asc' },
                 },
               },
@@ -36,7 +31,7 @@ export class ReportingService {
     });
 
     if (!report) throw new NotFoundException('Report not found');
-    return report;
+    return { ...report, invoice: { ...report.invoice, samples: report.invoice.samples.map(s=>({ ...s, results:s.results.map(projectClinicalResult) })) } };
   }
 
   async findByTrackingId(tenantId: string, trackingId: string) {
@@ -51,13 +46,7 @@ export class ReportingService {
               include: {
                 results: {
                   where: { status: 'RELEASED' },
-                  include: {
-                    test: true,
-                    values: {
-                      include: { parameter: true },
-                      orderBy: { parameter: { sortOrder: 'asc' } },
-                    },
-                  },
+                  include: clinicalResultInclude,
                 },
               },
             },
@@ -68,7 +57,7 @@ export class ReportingService {
     });
 
     if (!report) throw new NotFoundException('Report not found');
-    return report;
+    return { ...report, invoice: { ...report.invoice, samples: report.invoice.samples.map(s=>({ ...s, results:s.results.map(projectClinicalResult) })) } };
   }
 
   async listByInvoice(tenantId: string, invoiceId: string) {

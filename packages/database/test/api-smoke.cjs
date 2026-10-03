@@ -81,7 +81,9 @@ test('built Nest API, billing transactions, reads, auth, socket and shutdown on 
       body: JSON.stringify({ amount: 200, method: 'CASH' }) });
     assert.equal(rejected.status, 400);
     assert.equal(await db.payment.count({ where: { invoiceId: invoice.id } }), 1);
-    const sample = await request('/laboratory/samples', 'POST', { invoiceId: invoice.id, sampleType: 'Blood' });
+    const orders = invoice.visit.orderedTests;
+    assert.equal(orders.length, 3);
+    const sample = await request('/laboratory/samples', 'POST', { invoiceId: invoice.id, sampleType: 'Blood', orderedTestIds:orders.map(o=>o.id) });
     await request(`/laboratory/samples/${sample.id}/receive`, 'PATCH');
     await request(`/laboratory/samples/${sample.id}/accept`, 'PATCH', {});
     const initialEvents = await db.sampleEvent.findMany({ where: { sampleId: sample.id }, orderBy: { recordedAt: 'asc' } });
@@ -89,18 +91,19 @@ test('built Nest API, billing transactions, reads, auth, socket and shutdown on 
     assert(initialEvents.every(e=>e.actorId && e.captureProvenance==='PROSPECTIVE_CURRENT'));
     assert.equal(initialEvents[1].fromStatus, 'COLLECTED');
     assert.equal(initialEvents[2].fromStatus, 'RECEIVED_AT_LAB');
-    const entered = await request('/laboratory/results', 'POST', { sampleId: sample.id, invoiceLineId: invoice.lines[0].id,
-      testId: catalog.id, values: [{ testParameterId: catalog.parameters[0].id, valueNumeric: 0.123399 }],
+    const entered = await request('/laboratory/results', 'POST', { sampleId: sample.id, orderedTestId:orders[0].id,
+      values: [{ versionParameterId: orders[0].testVersion.versionParameters[0].id, valueNumeric: 0.123399 }],
       releaseImmediately: false });
     assert.equal(new Decimal(entered.values[0].valueNumeric).toFixed(6), '0.123399');
     assert.equal(entered.values[0].flag, 'LOW');
+    for (const o of orders.slice(1)) await request('/laboratory/results','POST',{sampleId:sample.id,orderedTestId:o.id,
+      values:[{versionParameterId:o.testVersion.versionParameters[0].id,valueNumeric:0.5}]});
     await request(`/laboratory/invoices/${invoice.id}/ready-for-collection`, 'PATCH');
     const report = await db.report.findUniqueOrThrow({ where: { invoiceId: invoice.id } });
     assert.equal(report.status, 'COMPLETE');
     assert.equal((await db.result.findUniqueOrThrow({ where: { id: entered.id } })).status, 'RELEASED');
     assert.equal(await db.sampleEvent.count({ where: { sampleId: sample.id, eventType: 'TESTING_STARTED' } }), 1);
-    // Authoring/cutover are deferred: legacy invoice issuance must not partially dual-write work.
-    assert.equal(await db.visit.count({ where: { bookingId: booking.id } }), 0);
+    assert.equal(await db.visit.count({ where: { bookingId: booking.id } }), 1);
     await request(`/reports/${report.id}`);
     for (const path of [`/patients/${patient.id}`, `/bookings/${booking.id}`, `/billing/invoices/${invoice.id}`,
       '/billing/invoices', '/reports', '/settings', '/laboratory/samples/pending']) {

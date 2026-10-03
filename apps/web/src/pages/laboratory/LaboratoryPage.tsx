@@ -6,13 +6,14 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { Loading } from '../../components/Loading';
 import { EmptyState } from '../../components/EmptyState';
 import { connectLabSocket } from '../../lib/labSocket';
+type ClinicalTest = Test & { orderedTestId?: string };
 
 export function LaboratoryPage() {
   const [samples, setSamples] = useState<Sample[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Sample | null>(null);
   const [tests, setTests] = useState<Test[]>([]);
-  const [activeTest, setActiveTest] = useState<Test | null>(null);
+  const [activeTest, setActiveTest] = useState<ClinicalTest | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -155,18 +156,26 @@ export function LaboratoryPage() {
   const [showReadyPreview, setShowReadyPreview] = useState(false);
 
   function existingResultFor(sample: Sample, testId: string): Result | undefined {
-    return sample.results?.find(
-      (r) => r.testId === testId && (r.status === 'ENTERED' || r.status === 'RELEASED'),
-    );
+    const matching = sample.results?.filter(r => sample.visitId ? r.orderedTestId === testId : r.testId === testId);
+    return matching?.find(r=>r.status==='ENTERED') ?? matching?.find(r=>r.status==='RELEASED');
   }
 
-  function openResultEntry(sample: Sample, test: Test) {
+  function testsForSample(sample: Sample): ClinicalTest[] {
+    if (sample.visitId) return (sample.assignments ?? []).map(({orderedTest:o})=>({
+      id:o.id, orderedTestId:o.id, code:o.testVersion.codeSnapshot,
+      name:`${o.testVersion.nameSnapshot} (occurrence ${o.occurrenceNo})`,
+      basePrice:0,isActive:true,isPanel:false,parameters:o.testVersion.versionParameters,
+    }));
+    return (sample.invoice?.lines ?? []).filter(l=>l.testId).map(l=>tests.find(t=>t.id===l.testId)).filter((t):t is Test=>!!t);
+  }
+
+  function openResultEntry(sample: Sample, test: ClinicalTest) {
     setSelected(sample);
     setActiveTest(test);
     const existing = existingResultFor(sample, test.id);
     const initial: Record<string, string> = {};
     test.parameters.forEach((p) => {
-      const existingValue = existing?.values.find((v) => v.testParameterId === p.id);
+      const existingValue = existing?.values.find((v) => test.orderedTestId ? v.versionParameterId === p.id : v.testParameterId === p.id);
       initial[p.id] =
         existingValue?.valueNumeric != null
           ? String(existingValue.valueNumeric)
@@ -182,7 +191,7 @@ export function LaboratoryPage() {
     const invoiceLine = selected.invoice?.lines?.find(
       (l) => l.testId === activeTest.id,
     );
-    if (!invoiceLine) {
+    if (!activeTest.orderedTestId && !invoiceLine) {
       setError('No matching invoice line for this test');
       return;
     }
@@ -190,16 +199,15 @@ export function LaboratoryPage() {
     const payloadValues = activeTest.parameters
       .filter((p) => values[p.id] !== undefined && values[p.id] !== '')
       .map((p) => ({
-        testParameterId: p.id,
+        ...(activeTest.orderedTestId ? {versionParameterId:p.id} : {testParameterId:p.id}),
         valueNumeric:
           p.valueType === 'NUMERIC' || !p.valueType
             ? Number(values[p.id])
             : undefined,
         valueText:
-          p.valueType === 'TEXT' || p.valueType === 'CHOICE'
+          p.valueType !== 'NUMERIC'
             ? values[p.id]
             : undefined,
-        unit: p.unit ?? undefined,
       }));
 
     if (payloadValues.length === 0) {
@@ -213,8 +221,7 @@ export function LaboratoryPage() {
     try {
       const result: Result = await labApi.enterResult({
         sampleId: selected.id,
-        invoiceLineId: invoiceLine.id,
-        testId: activeTest.id,
+        ...(activeTest.orderedTestId ? {orderedTestId:activeTest.orderedTestId} : {invoiceLineId:invoiceLine!.id,testId:activeTest.id}),
         values: payloadValues,
         releaseImmediately: finalize,
       });
@@ -535,18 +542,14 @@ export function LaboratoryPage() {
                   selected.status === 'IN_TESTING') && (
                   <div className="space-y-2">
                     <h3 className="text-sm font-semibold">Tests</h3>
-                    {selected.invoice?.lines
-                      ?.filter((l) => l.testId)
-                      .map((line) => {
-                        const test = tests.find((t) => t.id === line.testId);
-                        if (!test) return null;
+                    {testsForSample(selected).map((test) => {
                         const existing = existingResultFor(selected, test.id);
                         const isFinalized = existing?.status === 'RELEASED';
                         const isEntered = existing?.status === 'ENTERED';
 
                         return (
                           <div
-                            key={line.id}
+                            key={test.id}
                             className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
                           >
                             <div className="flex items-center justify-between gap-2">
@@ -616,7 +619,7 @@ export function LaboratoryPage() {
                                       </label>
                                       <input
                                         className="input"
-                                        type={p.valueType === 'TEXT' ? 'text' : 'number'}
+                                        type={p.valueType === 'NUMERIC' ? 'number' : 'text'}
                                         step="any"
                                         value={values[p.id] ?? ''}
                                         onChange={(e) =>
@@ -743,10 +746,10 @@ export function LaboratoryPage() {
                 <p className="text-sm text-slate-400">No results to preview.</p>
               )}
               {(selected.invoiceResultsPreview ?? []).map((r) => (
-                <div key={r.testId} className="rounded-lg border border-slate-200 p-3">
+                <div key={r.orderedTestId ?? r.testId} className="rounded-lg border border-slate-200 p-3">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-slate-800">
-                      {r.testCode} — {r.testName}
+                      {r.testCode} — {r.testName}{r.occurrenceNo ? ` (occurrence ${r.occurrenceNo})` : ''}
                     </h3>
                     <span
                       className={`rounded px-2 py-0.5 text-[11px] font-medium ${

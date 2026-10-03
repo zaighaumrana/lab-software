@@ -25,7 +25,7 @@ export async function captureCurrentPackageVersion(tx: Prisma.TransactionClient,
   return row.id;
 }
 
-/** Foundation factory, not enabled in the legacy billing endpoint until clinical authoring/cutover. */
+/** Materialize occurrence work inside the caller's financial transaction. */
 export async function materializeInvoiceClinicalWork(tx: Prisma.TransactionClient, invoiceId: string): Promise<string> {
   const [row] = await tx.$queryRaw<{ id: string }[]>`
     SELECT phase_a_materialize_invoice(${invoiceId}::text, false) AS id`;

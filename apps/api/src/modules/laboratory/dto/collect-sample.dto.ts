@@ -1,8 +1,13 @@
-import { IsString, IsOptional, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsDateString, IsArray, ArrayUnique } from 'class-validator';
 
 export class CollectSampleDto {
   @IsString()
   invoiceId!: string;
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsString({ each: true })
+  orderedTestIds?: string[];
 
   @IsOptional()
   @IsString()

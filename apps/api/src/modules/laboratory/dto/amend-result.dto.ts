@@ -8,8 +8,12 @@ import {
 import { Type } from 'class-transformer';
 
 export class AmendValueInputDto {
+  @IsOptional()
   @IsString()
-  testParameterId!: string;
+  testParameterId?: string;
+  @IsOptional()
+  @IsString()
+  versionParameterId?: string;
 
   @IsOptional()
   @IsNumber()

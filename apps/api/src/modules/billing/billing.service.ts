@@ -17,6 +17,7 @@ import {
   ReportStatus,
   Prisma,
   Decimal,
+  materializeInvoiceClinicalWork,
 } from '@lms/database';
 import { generateReportNumber, generateTrackingId } from '../../common/id-generators.util';
 
@@ -44,6 +45,7 @@ export class BillingService {
         company: true,
         report: true,
         samples: { select: { id: true, sampleCode: true, status: true } },
+        visit: { include: { orderedTests: { include: { testVersion: { include: { versionParameters: { include: { referenceRanges:true,choices:true } } } } }, orderBy:{occurrenceNo:'asc'} } } },
       },
     });
 
@@ -209,6 +211,11 @@ export class BillingService {
     const invoiceNumber = generateInvoiceNumber();
 
     const invoice = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM bookings WHERE id=${dto.bookingId} AND "tenantId"=${tenantId} FOR UPDATE`;
+      const currentBooking = await tx.booking.findFirst({where:{id:dto.bookingId,tenantId,branchId}});
+      if (!currentBooking || ![BookingStatus.CONFIRMED,BookingStatus.CHECKED_IN].includes(currentBooking.status as 'CONFIRMED'|'CHECKED_IN')) {
+        throw new BadRequestException('Booking is not available for conversion in this branch');
+      }
       const inv = await tx.invoice.create({
         data: {
           tenantId,
@@ -253,13 +260,15 @@ export class BillingService {
       // lab happens to finalize a test, which can be days later. Create
       // the Report row now, in PENDING status; laboratory.service.ts's
       // recomputeReportStatus() updates this same row as results come in.
-      const hasTestLines = resolvedLines.some((l) => l.testId);
-      if (hasTestLines) {
+      const visitId = await materializeInvoiceClinicalWork(tx,inv.id);
+      const occurrenceCount = await tx.orderedTest.count({where:{visitId}});
+      if (occurrenceCount > 0) {
         await tx.report.create({
           data: {
             tenantId,
             branchId,
             invoiceId: inv.id,
+            visitId,
             status: ReportStatus.PENDING,
             reportNumber: generateReportNumber(),
             trackingId: generateTrackingId(),
@@ -306,7 +315,8 @@ export class BillingService {
         }
       }
 
-      return inv;
+      return tx.invoice.findUniqueOrThrow({where:{id:inv.id},include:{lines:true,booking:{include:{patient:true}},report:true,
+        visit:{include:{orderedTests:{orderBy:{occurrenceNo:'asc'},include:{testVersion:{include:{versionParameters:{include:{choices:true,referenceRanges:true}}}}}}}}}});
     });
 
     // TODO: raise InvoiceIssued domain event (doctor share calculation is done above)

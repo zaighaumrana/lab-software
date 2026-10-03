@@ -9,8 +9,13 @@ import {
 import { Type } from 'class-transformer';
 
 export class ResultValueInputDto {
+  @IsOptional()
   @IsString()
-  testParameterId!: string;
+  testParameterId?: string;
+
+  @IsOptional()
+  @IsString()
+  versionParameterId?: string;
 
   @IsOptional()
   @IsNumber()
@@ -33,11 +38,17 @@ export class EnterResultDto {
   @IsString()
   sampleId!: string;
 
+  @IsOptional()
   @IsString()
-  invoiceLineId!: string;
+  invoiceLineId?: string;
 
+  @IsOptional()
   @IsString()
-  testId!: string;
+  testId?: string;
+
+  @IsOptional()
+  @IsString()
+  orderedTestId?: string;
 
   /**
    * One entry per parameter.
@@ -53,7 +64,7 @@ export class EnterResultDto {
   @IsString()
   notes?: string;
 
-  /** If true (default), release immediately after entry (single-step workflow) */
+  /** Release only when explicitly true. */
   @IsOptional()
   @IsBoolean()
   releaseImmediately?: boolean;

@@ -119,6 +119,7 @@ model User {
   cashShiftsOpened CashShift[] @relation("CashShiftOpenedBy")
   cashShiftsClosed CashShift[] @relation("CashShiftClosedBy")
   sampleEvents SampleEvent[]
+  resultCorrections Result[] @relation("ResultCorrectionActor")
 
   @@unique([tenantId, id])
   @@unique([tenantId, username])
@@ -721,6 +722,11 @@ model Result {
   sampleId            String
   invoiceLineId       String
   testId              String
+  orderedTestId       String?
+  testVersionId       String?
+  revisionNo          Int?
+  amendmentReason     String?
+  amendmentActorId    String?
   status              ResultStatus @default(ENTERED)
   /// True if any of its ResultValues is critical
   isCritical          Boolean      @default(false)
@@ -739,8 +745,15 @@ model Result {
   invoiceLine InvoiceLine   @relation(fields: [invoiceLineId], references: [id])
   test        Test          @relation(fields: [testId], references: [id])
   values      ResultValue[]
+  clinicalValues ResultValue[] @relation("ClinicalResultValues")
   amendedFrom Result?       @relation("ResultAmendments", fields: [amendedFromResultId], references: [id])
   amendments  Result[]      @relation("ResultAmendments")
+  orderedTest OrderedTest? @relation(fields: [tenantId, orderedTestId, testVersionId], references: [tenantId, id, testVersionId], onDelete: Restrict, onUpdate: Restrict)
+  assignment SampleTest? @relation(fields: [sampleId, orderedTestId], references: [sampleId, orderedTestId], onDelete: Restrict, onUpdate: Restrict)
+  amendmentActor User? @relation("ResultCorrectionActor", fields: [tenantId, amendmentActorId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([orderedTestId, revisionNo])
+  @@unique([id, testVersionId])
 
   @@index([tenantId])
   @@index([sampleId])
@@ -753,7 +766,13 @@ model Result {
 model ResultValue {
   id              String      @id @default(cuid())
   resultId        String
-  testParameterId String
+  testParameterId String?
+  versionParameterId String?
+  testVersionId String?
+  selectedRangeId String?
+  evaluationGender Gender?
+  evaluationAgeMonths Int?
+  evaluatedAt DateTime? @db.Timestamptz(3)
   valueNumeric    Decimal?    @db.Decimal(16, 6)
   valueText       String?
   unit            String?
@@ -764,9 +783,15 @@ model ResultValue {
   updatedAt       DateTime    @updatedAt
 
   result    Result        @relation(fields: [resultId], references: [id], onDelete: Cascade)
-  parameter TestParameter @relation(fields: [testParameterId], references: [id])
+  parameter TestParameter? @relation(fields: [testParameterId], references: [id], onDelete: Restrict)
+  clinicalResult Result? @relation("ClinicalResultValues", fields: [resultId, testVersionId], references: [id, testVersionId], onDelete: Restrict, onUpdate: Restrict)
+  versionParameter TestVersionParameter? @relation(fields: [testVersionId, versionParameterId], references: [testVersionId, id], onDelete: Restrict, onUpdate: Restrict)
+  selectedRange TestVersionReferenceRange? @relation(fields: [versionParameterId, selectedRangeId], references: [versionParameterId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([resultId, testParameterId])
+  @@unique([resultId, versionParameterId])
+  @@index([testVersionId, versionParameterId])
+  @@index([versionParameterId, selectedRangeId])
   @@index([resultId])
   @@index([testParameterId])
   @@map("result_values")
@@ -1142,6 +1167,7 @@ model TestVersion {
 
   test Test @relation(fields: [tenantId, testId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   parameters TestParameter[]
+  versionParameters TestVersionParameter[]
   packageItems PackageItem[]
   orderedTests OrderedTest[]
 
@@ -1204,7 +1230,9 @@ model OrderedTest {
   invoiceLine InvoiceLine? @relation(fields: [invoiceLineId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   packageVersion PackageVersion? @relation(fields: [tenantId, packageVersionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   assignments SampleTest[]
+  results Result[]
 
+  @@unique([tenantId, id, testVersionId])
   @@unique([visitId, occurrenceNo])
   @@unique([tenantId, branchId, visitId, id])
   @@unique([invoiceLineId, sourceUnitNo, sourceMemberNo])
@@ -1228,6 +1256,7 @@ model SampleTest {
 
   sample Sample @relation(fields: [tenantId, branchId, visitId, sampleId], references: [tenantId, branchId, visitId, id], onDelete: Restrict, onUpdate: Restrict)
   orderedTest OrderedTest @relation(fields: [tenantId, branchId, visitId, orderedTestId], references: [tenantId, branchId, visitId, id], onDelete: Restrict, onUpdate: Restrict)
+  results Result[]
 
   @@unique([sampleId, orderedTestId])
   @@index([orderedTestId])
@@ -1275,4 +1304,59 @@ model IdentifierCounter {
   @@id([tenantId, namespace, scopeKey, periodKey])
   @@index([tenantId, branchId])
   @@map("identifier_counters")
+}
+
+// B1 immutable normalized reads of the retained Phase A definition payload.
+model TestVersionParameter {
+  id String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  testVersionId String
+  legacyParameterId String
+  code String
+  name String
+  valueType ParameterValueType
+  unit String?
+  sortOrder Int
+  isRequired Boolean
+  decimalPlaces Int?
+  testVersion TestVersion @relation(fields: [testVersionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  choices TestVersionParameterChoice[]
+  referenceRanges TestVersionReferenceRange[]
+  resultValues ResultValue[]
+  @@unique([testVersionId, id])
+  @@unique([testVersionId, legacyParameterId])
+  @@unique([testVersionId, code])
+  @@map("test_version_parameters")
+}
+
+model TestVersionParameterChoice {
+  id String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  versionParameterId String
+  legacyChoiceId String
+  value String
+  label String
+  sortOrder Int
+  parameter TestVersionParameter @relation(fields: [versionParameterId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([versionParameterId, legacyChoiceId])
+  @@unique([versionParameterId, value])
+  @@map("test_version_parameter_choices")
+}
+
+model TestVersionReferenceRange {
+  id String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  versionParameterId String
+  legacyRangeId String
+  gender Gender?
+  ageMinMonths Int?
+  ageMaxMonths Int?
+  lowNormal Decimal? @db.Decimal(12, 4)
+  highNormal Decimal? @db.Decimal(12, 4)
+  criticalLow Decimal? @db.Decimal(12, 4)
+  criticalHigh Decimal? @db.Decimal(12, 4)
+  unit String?
+  interpretation String?
+  parameter TestVersionParameter @relation(fields: [versionParameterId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  resultValues ResultValue[]
+  @@unique([versionParameterId, id])
+  @@unique([versionParameterId, legacyRangeId])
+  @@map("test_version_reference_ranges")
 }

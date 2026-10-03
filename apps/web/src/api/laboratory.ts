@@ -13,6 +13,7 @@ export async function getSample(id: string) {
 
 export async function collectSample(payload: {
   invoiceId: string;
+  orderedTestIds?: string[];
   sampleType?: string;
   notes?: string;
 }) {
@@ -60,10 +61,12 @@ export async function markInvoiceReady(invoiceId: string) {
 
 export async function enterResult(payload: {
   sampleId: string;
-  invoiceLineId: string;
-  testId: string;
+  orderedTestId?: string;
+  invoiceLineId?: string;
+  testId?: string;
   values: {
-    testParameterId: string;
+    testParameterId?: string;
+    versionParameterId?: string;
     valueNumeric?: number;
     valueText?: string;
     unit?: string;

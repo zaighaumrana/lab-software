@@ -54,6 +54,7 @@ test('legacy identifiers, money, result precision, parameter FKs and printed rep
   assert.equal(inv.payments[0].amount.toFixed(2),'100.10');assert.equal(inv.shares[0].calculatedAmount.toFixed(2),'37.50');
   assert.equal(inv.report!.id,'legacy-report');assert.equal(inv.report!.printCount,2);assert.equal(inv.report!.status,'PARTIAL_READY');
   const value=await db.resultValue.findUniqueOrThrow({where:{id:'legacy-value-cbc'},include:{parameter:true}});
+  assert(value.parameter, 'Legacy value retains its catalog parameter');
   assert.equal(value.valueNumeric!.toFixed(6),'0.123399');assert.equal(value.parameter.id,'legacy-param-wbc');assert.equal(value.flag,'LOW');
   const patient=await db.patient.findUniqueOrThrow({where:{id:'legacy-patient'}});
   assert.equal(patient.labNumber,'LAB-PRESERVE');assert.equal(patient.mrcNumber,'MRC-PRESERVE');
