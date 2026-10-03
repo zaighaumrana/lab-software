@@ -229,3 +229,16 @@ The requirement is "the client must not need Node.js installed" — not "must us
 - Confirmation the target deployment OS is Windows.
 - Access to at least two real Windows machines or VMs (one to act as server, one as workstation) — needed for every round of testing, not just the first, since this architecture specifically requires verifying cross-machine LAN communication, not just a single-box install.
 - **The core software should be functionally stable first:** registration → billing → sample → results → finalization → report → printing (per `03_Core_Domain_Design.md`). Packaging work should not start changing the application's structure — freeze the core flow, then package what's frozen. Packaging around software that's still actively changing means redoing installer work repeatedly for no reason.
+
+
+## E1 prerequisite now implemented (2026-10-04)
+
+Use the reusable `scripts/provision-runtime-db.ps1` helper before restricted API
+startup. `-ConfigureAdminConnectionOnly` privately verifies installation/admin
+access without role/grant changes. Normal provisioning generates or privately
+accepts the runtime login password, verifies grants and writes the ignored
+`apps/api/.env.runtime`. Subsequent deployments use owner migrations followed by
+`-GrantsOnly`. Preserve owner/admin tooling separately; the production API service
+account must not be able to read the owner environment file. No full installer,
+service-account rollout or backup/restore is implemented by this helper.
+See [E1 deployment details](Database_V2_Phase_E1_Runtime_DB_Security_2026-10-04.md).

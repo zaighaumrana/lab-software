@@ -53,7 +53,7 @@ if (-not (Test-Path $envPath)) {
         Copy-Item $envExample $envPath
         Write-Host "  Created packages\database\.env from .env.example" -ForegroundColor Green
         Write-Host "  IMPORTANT: Edit this file and set your real DATABASE_URL" -ForegroundColor Yellow
-        Write-Host "  Example: DATABASE_URL=`"postgresql://postgres:YOUR_PASSWORD@localhost:5432/lms?schema=public`"" -ForegroundColor Yellow
+        # Owner credentials belong only in the untracked local environment.
     } else {
         Write-Host "  WARNING: .env.example not found. Create packages\database\.env manually." -ForegroundColor Yellow
     }
@@ -81,6 +81,9 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "  Migrations applied." -ForegroundColor Green
 }
 
+# Development first-time setup only; never run this seed on an existing installation.
+# Production deployment: migrate:deploy -> scripts/provision-runtime-db.ps1 -GrantsOnly
+# -> verified restricted RUNTIME_DATABASE_URL -> API start. See Phase E1 documentation.
 # 7. Seed
 Write-Host "`n[7/7] Seeding default data..." -ForegroundColor Yellow
 pnpm db:seed
@@ -101,7 +104,10 @@ Default IDs (for headers during early testing):
   x-tenant-id: default-tenant
   x-branch-id: default-branch
 
-Start the API:
+Before API start, provision and verify isolated runtime credentials:
+  .\scripts\provision-runtime-db.ps1
+
+Then start the API:
   pnpm dev:api
 
 API will be at http://localhost:3000

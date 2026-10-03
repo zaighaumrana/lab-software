@@ -20,17 +20,27 @@ test('Prisma 7 CLI automatically discovers the versioned config without a databa
 });
 
 test('construction requires an explicit direct PostgreSQL URL', async () => {
-  const previous = process.env.DATABASE_URL;
-  delete process.env.DATABASE_URL;
+  const keys = ['DATABASE_URL','RUNTIME_DATABASE_URL','DB_RUNTIME_MODE','NODE_ENV'] as const;
+  const previous = Object.fromEntries(keys.map(key=>[key,process.env[key]]));
+  delete process.env.DATABASE_URL;delete process.env.RUNTIME_DATABASE_URL;delete process.env.DB_RUNTIME_MODE;
   try {
     assert.throws(() => createDatabaseClient(), /DATABASE_URL is required/);
     assert.throws(() => createDatabaseClient({ connectionString: 'invalid' }), /PostgreSQL URL/);
     assert.throws(() => createDatabaseClient({ connectionString: 'prisma://localhost/db' }), /direct PostgreSQL/);
     const client = createDatabaseClient({ connectionString: 'postgresql://localhost/fixture?schema=public' });
     await client.$disconnect(); // construction opens no pool connections
+    process.env.DATABASE_URL='postgresql://localhost/owner_fixture';
+    process.env.DB_RUNTIME_MODE='development';process.env.NODE_ENV='production';
+    assert.throws(()=>createDatabaseClient(), /RUNTIME_DATABASE_URL is required/);
+    process.env.NODE_ENV='test';process.env.DB_RUNTIME_MODE='hardened';
+    assert.throws(()=>createDatabaseClient(), /RUNTIME_DATABASE_URL is required/);
+    process.env.DB_RUNTIME_MODE='development';
+    await createDatabaseClient().$disconnect();
+    process.env.RUNTIME_DATABASE_URL='invalid';
+    assert.throws(()=>createDatabaseClient(), /PostgreSQL URL/); // runtime always wins over owner fallback
+    await createDatabaseClient({connectionString:'postgresql://localhost/explicit_fixture'}).$disconnect();
   } finally {
-    if (previous === undefined) delete process.env.DATABASE_URL;
-    else process.env.DATABASE_URL = previous;
+    for(const key of keys){if(previous[key]===undefined)delete process.env[key];else process.env[key]=previous[key];}
   }
 });
 

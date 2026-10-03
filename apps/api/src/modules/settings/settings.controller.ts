@@ -16,7 +16,7 @@ import { SettingsService } from './settings.service';
 import { DiscountModeDto } from './dto/discount-mode.dto';
 import { CreateUserDto, UpdateUserDto } from './dto/create-user.dto';
 import { BrandingDto, PrintLayoutDto } from './dto/branding.dto';
-import { SaveSmsTemplateDto, SmsTemplateRecord } from './dto/sms-settings.dto';
+import { SaveSmsTemplateDto, SmsTemplateRecord, SmsProviderConfigDto } from './dto/sms-settings.dto';
 import { SessionGuard } from '../../common/guards/session.guard';
 import { PermissionGuard } from '../../common/guards/permission.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
@@ -115,6 +115,13 @@ export class SettingsController {
   @RequirePermissions(Permission.SETTINGS_MANAGE)
   async getSmsSettings(@CurrentUser() user: AuthUser) {
     return this.settingsService.getSmsSettings(user.tenantId);
+  }
+
+  @Put('sms-provider')
+  @UseGuards(SessionGuard, PermissionGuard)
+  @RequirePermissions(Permission.SETTINGS_MANAGE)
+  saveSmsProvider(@CurrentUser() user: AuthUser, @Body() dto: SmsProviderConfigDto) {
+    return this.settingsService.saveSmsProvider(user.tenantId,user.role,dto);
   }
 
   @Put('sms/:key')

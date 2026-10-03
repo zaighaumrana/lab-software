@@ -8,7 +8,7 @@ import { loadDatabaseEnvironment } from '../src/environment';
 import * as bcrypt from 'bcrypt';
 
 loadDatabaseEnvironment();
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({ connectionString: process.env.DATABASE_URL });
 
 async function main() {
   console.log('Seeding database...');

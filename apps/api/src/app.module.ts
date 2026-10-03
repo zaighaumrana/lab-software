@@ -1,5 +1,6 @@
 ﻿import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { resolve } from 'node:path';
 import { NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { auditContext } from './common/audit';
 import { PrismaModule } from './common/prisma/prisma.module';
@@ -22,7 +23,9 @@ import { CashShiftsModule } from './modules/cash-shifts/cash-shifts.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env', '../../packages/database/.env'],
+      envFilePath: process.env.DB_RUNTIME_MODE==='development' && process.env.NODE_ENV!=='production'
+        ? [resolve(__dirname,'../.env'),resolve(__dirname,'../../../packages/database/.env')]
+        : [resolve(__dirname,'../.env.runtime')],
     }),
     PrismaModule,
     AuthModule,

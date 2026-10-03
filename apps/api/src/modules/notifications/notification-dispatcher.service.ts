@@ -6,6 +6,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { appendAudit } from '../../common/audit';
 import { SMS_GATEWAY, SmsGateway, SmsSendResult } from './providers/sms-gateway.interface';
 import { MAX_NOTIFICATION_ATTEMPTS } from './notifications.service';
+import { getSmsProviderConfig, selectSmsGateway, SMS_PROVIDER_KEY } from './sms-provider-config';
 
 const LEASE_SECONDS=120;
 const BATCH_SIZE=10;
@@ -39,7 +40,7 @@ export class NotificationDispatcher implements OnModuleInit,OnModuleDestroy {
       const claim=await this.claimDue();if(!claim)break;
       await this.dispatchClaim(claim.id,claim.owner);
     }
-    if(this.gateway.checkDelivery)for(let i=0;i<3&&!this.stopping;i++)if(!await this.pollDelivery())break;
+    for(let i=0;i<3&&!this.stopping;i++)if(!await this.pollDelivery())break;
   }
   /** Public for deterministic fixture checks; ownership is a DB lease, never a process mutex. */
   async claimDue():Promise<{id:string;owner:string}|null> {
@@ -80,18 +81,25 @@ export class NotificationDispatcher implements OnModuleInit,OnModuleDestroy {
   }
   private async beginDispatch(id:string,owner:string) {
     return this.prisma.$transaction(async tx=>{
+      const candidate=await tx.notification.findUnique({where:{id},select:{tenantId:true}});
+      if(!candidate)return null;
+      // Same tenant -> notification lock order as configuration cancellation/manual retry.
+      await tx.$queryRaw`SELECT id FROM tenants WHERE id=${candidate.tenantId} FOR SHARE`;
+      const config=await getSmsProviderConfig(tx,candidate.tenantId);
       const rows=await tx.$queryRaw<{id:string}[]>`SELECT id FROM notifications WHERE id=${id} AND "claimedBy"=${owner}
         AND status='SENDING' AND "dispatchStartedAt" IS NULL AND "claimExpiresAt">clock_timestamp() FOR UPDATE`;
       if(!rows.length)return null;
       const row=await tx.notification.findUniqueOrThrow({where:{id}});
       const patient=await this.currentPatient(tx,row);
       const variables=row.providerVariables;
-      const errorCode=!patient?'NO_PATIENT_CONTEXT':!patient.smsConsent?'CONSENT_WITHDRAWN':
+      const selected=selectSmsGateway(config.provider,this.gateway);
+      const errorCode=!config.enabled?'PROVIDER_DISABLED':!selected||config.provider!==row.provider?'PROVIDER_CHANGED':
+        !patient?'NO_PATIENT_CONTEXT':!patient.smsConsent?'CONSENT_WITHDRAWN':
         !normalizePakistaniMobile(row.recipient)?'INVALID_RECIPIENT':!row.providerTemplateId?'MISSING_TEMPLATE':
         !variables || typeof variables!=='object'||Array.isArray(variables)||Object.values(variables).some(v=>typeof v!=='string')?'UNSUPPORTED_VARIABLES':
-        !this.gateway.isConfigured()?'PROVIDER_NOT_CONFIGURED':row.attempts>=MAX_NOTIFICATION_ATTEMPTS?'ATTEMPT_LIMIT':null;
+        !selected.isConfigured()?'PROVIDER_NOT_CONFIGURED':row.attempts>=MAX_NOTIFICATION_ATTEMPTS?'ATTEMPT_LIMIT':null;
       if(errorCode) {
-        const status=['CONSENT_WITHDRAWN','NO_PATIENT_CONTEXT','ATTEMPT_LIMIT'].includes(errorCode)?'ABANDONED':'FAILED';
+        const status=['PROVIDER_DISABLED','PROVIDER_CHANGED','CONSENT_WITHDRAWN','NO_PATIENT_CONTEXT','ATTEMPT_LIMIT'].includes(errorCode)?'ABANDONED':'FAILED';
         await tx.notification.update({where:{id},data:{...clearLease,status,nextAttemptAt:null,lastErrorCode:errorCode,lastError:errorCode}});
         await appendAudit(tx,{tenantId:row.tenantId,actorId:null,action:status==='FAILED'?'NOTIFICATION_FAILED':'NOTIFICATION_ABANDONED',entityType:'Notification',entityId:id,after:{reason:errorCode}});
         return null;
@@ -104,7 +112,7 @@ export class NotificationDispatcher implements OnModuleInit,OnModuleDestroy {
   async dispatchClaim(id:string,owner:string) {
     const row=await this.beginDispatch(id,owner);if(!row)return;
     let result:SmsSendResult;
-    try{result=await this.gateway.send({mobile:normalizePakistaniMobile(row.recipient)!,templateId:row.providerTemplateId!,
+    try{result=await selectSmsGateway(row.provider!,this.gateway)!.send({mobile:normalizePakistaniMobile(row.recipient)!,templateId:row.providerTemplateId!,
       variables:row.providerVariables as Record<string,string>,unicode:row.messageType==='unicode'});}
     catch{result={success:false,failureKind:'AMBIGUOUS',errorCode:'NETWORK_UNCERTAIN',rawResponse:''};}
     await this.prisma.$transaction(async tx=>{
@@ -130,16 +138,27 @@ export class NotificationDispatcher implements OnModuleInit,OnModuleDestroy {
   private async pollDelivery():Promise<boolean> {
     const owner=randomUUID();
     const row=await this.prisma.$transaction(async tx=>{
-      const rows=await tx.$queryRaw<{id:string}[]>`SELECT id FROM notifications WHERE status IN ('SENT','RECONCILIATION_REQUIRED')
-        AND "providerMessageId" IS NOT NULL AND "nextDeliveryCheckAt"<=clock_timestamp() AND "deliveryChecks"<3
-        AND ("claimExpiresAt" IS NULL OR "claimExpiresAt"<=clock_timestamp()) ORDER BY "nextDeliveryCheckAt",id LIMIT 1 FOR UPDATE SKIP LOCKED`;
+      const rows=await tx.$queryRaw<{id:string;tenantId:string}[]>`SELECT n.id,n."tenantId" FROM notifications n
+        LEFT JOIN configurations c ON c."tenantId"=n."tenantId" AND c.key=${SMS_PROVIDER_KEY}
+        WHERE n.status IN ('SENT','RECONCILIATION_REQUIRED') AND (c.id IS NULL OR c.value->>'enabled'='true')
+        AND n.provider=COALESCE(c.value->>'provider','SENDPK')
+        AND n."providerMessageId" IS NOT NULL AND n."nextDeliveryCheckAt"<=clock_timestamp() AND n."deliveryChecks"<3
+        AND (n."claimExpiresAt" IS NULL OR n."claimExpiresAt"<=clock_timestamp()) ORDER BY n."nextDeliveryCheckAt",n.id LIMIT 1`;
       if(!rows.length)return null;
+      await tx.$queryRaw`SELECT id FROM tenants WHERE id=${rows[0].tenantId} FOR SHARE`;
+      const config=await getSmsProviderConfig(tx,rows[0].tenantId);
+      if(!config.enabled||!selectSmsGateway(config.provider,this.gateway)?.checkDelivery)return null;
+      const locked=await tx.$queryRaw<{id:string}[]>`SELECT id FROM notifications WHERE id=${rows[0].id}
+        AND provider=${config.provider}
+        AND "nextDeliveryCheckAt"<=clock_timestamp() AND "deliveryChecks"<3
+        AND ("claimExpiresAt" IS NULL OR "claimExpiresAt"<=clock_timestamp()) FOR UPDATE SKIP LOCKED`;
+      if(!locked.length)return null;
       const [{now}]=await tx.$queryRaw<{now:Date}[]>`SELECT clock_timestamp() AS now`;
       return tx.notification.update({where:{id:rows[0].id},data:{claimedBy:owner,claimedAt:now,claimExpiresAt:new Date(now.getTime()+LEASE_SECONDS*1000),deliveryChecks:{increment:1}}});
     });
     if(!row)return false;
     let providerStatus='UNKNOWN';
-    try{const result=await this.gateway.checkDelivery!(row.providerMessageId!);if(['DELIVERED','FAILED','PENDING'].includes(result))providerStatus=result;}catch{ /* Lookup failure never causes a resend. */ }
+    try{const result=await selectSmsGateway(row.provider!,this.gateway)!.checkDelivery!(row.providerMessageId!);if(['DELIVERED','FAILED','PENDING'].includes(result))providerStatus=result;}catch{ /* Lookup failure never causes a resend. */ }
     await this.prisma.$transaction(async tx=>{
       const owned=await tx.$queryRaw<{id:string}[]>`SELECT id FROM notifications WHERE id=${row.id} AND "claimedBy"=${owner} FOR UPDATE`;
       if(!owned.length)return;

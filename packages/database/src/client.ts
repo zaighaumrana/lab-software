@@ -1,5 +1,6 @@
 import { InstantSafePrismaPg } from './instant-adapter.js';
 import { PrismaClient as GeneratedPrismaClient } from './generated/prisma/client.js';
+import { hardenedRuntime } from './runtime-security.js';
 
 export interface DatabaseClientOptions {
   /** Explicit override for isolated tests/tooling; runtime uses Nest-loaded env. */
@@ -9,8 +10,10 @@ export interface DatabaseClientOptions {
 /** Owns the PostgreSQL pool; $disconnect disposes the adapter's owned pool. */
 export class PrismaClient extends GeneratedPrismaClient {
   constructor(options: DatabaseClientOptions = {}) {
-    const connectionString = options.connectionString ?? process.env.DATABASE_URL;
-    if (!connectionString) throw new Error('DATABASE_URL is required');
+    const developmentFallback = !hardenedRuntime() && process.env.DB_RUNTIME_MODE === 'development';
+    const connectionString = options.connectionString ?? (process.env.RUNTIME_DATABASE_URL ||
+      (developmentFallback ? process.env.DATABASE_URL : undefined));
+    if (!connectionString) throw new Error('RUNTIME_DATABASE_URL is required; DATABASE_URL fallback requires explicit DB_RUNTIME_MODE=development');
     let url: URL;
     try { url = new URL(connectionString); }
     catch { throw new Error('DATABASE_URL must be a PostgreSQL URL'); }

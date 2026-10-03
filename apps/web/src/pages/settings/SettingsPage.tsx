@@ -7,7 +7,7 @@ import { Loading } from '../../components/Loading';
 import { Navigate } from 'react-router';
 import { SmsSettingsTab } from './SmsSettingsTab';
 
-type Tab = 'users' | 'branding' | 'print' | 'report-layout' | 'sms' | 'billing';
+type Tab = 'users' | 'branding' | 'print' | 'report-layout' | 'sms' | 'billing' | 'channels';
 
 const ROLES = [
   { value: 'ADMIN', label: 'Admin' },
@@ -22,13 +22,20 @@ const ROLES = [
 
 export function SettingsPage() {
   const { user } = useAuth();
-  const { branding, printLayout, discountMode, refresh } = useSettings();
+  const { branding, printLayout, discountMode, smsProvider, refresh } = useSettings();
   const [mode,setMode]=useState(discountMode);
   const [tab, setTab] = useState<Tab>('users');
   const [users, setUsers] = useState<StaffUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  useEffect(()=>{if(!smsProvider.enabled&&tab==='sms')setTab('channels');},[smsProvider.enabled,tab]);
+
+  async function saveSmsEnabled(enabled:boolean) {
+    setError('');setMessage('');
+    try {await settingsApi.saveSmsProvider({enabled,provider:smsProvider.provider});await refresh();setMessage(enabled?'SMS enabled':'SMS disabled');}
+    catch {await refresh();setError('Failed to update SMS settings');}
+  }
 
   // User form
   const [uForm, setUForm] = useState({
@@ -152,9 +159,10 @@ export function SettingsPage() {
             ['print', 'Print layout'],
             ['report-layout', 'Report Print Layout'],
             ['sms', 'SMS / Notifications'],
+            ['channels', 'Optional features'],
             ['billing', 'Invoice discounts'],
           ] as const
-        ).map(([id, label]) => (
+        ).filter(([id])=>id!=='sms'||smsProvider.enabled).map(([id, label]) => (
           <button
             key={id}
             type="button"
@@ -536,7 +544,14 @@ export function SettingsPage() {
         </form>
       )}
 
-      {tab === 'sms' && <SmsSettingsTab />}
+      {tab === 'channels' && <div className="card space-y-4">
+        <label className="flex items-center gap-3"><input type="checkbox" checked={smsProvider.enabled}
+          onChange={e=>void saveSmsEnabled(e.target.checked)} />Enable SMS</label>
+        {smsProvider.enabled && <label className="block">SMS provider
+          <select className="input mt-1" value={smsProvider.provider} onChange={()=>{}}><option value="SENDPK">SendPK</option></select>
+        </label>}
+      </div>}
+      {tab === 'sms' && smsProvider.enabled && <SmsSettingsTab />}
     </div>
   );
 }

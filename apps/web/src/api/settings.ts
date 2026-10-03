@@ -39,8 +39,13 @@ export interface StaffUser {
   createdAt?: string;
 }
 
+export interface SmsProviderConfig { enabled: boolean; provider: 'SENDPK' }
+export async function saveSmsProvider(value:SmsProviderConfig) {
+  return (await api.put<SmsProviderConfig>('/settings/sms-provider',value)).data;
+}
+
 export async function getSettings() {
-  const { data } = await api.get<{ branding: Branding; printLayout: PrintLayout; discountMode: DiscountMode }>(
+  const { data } = await api.get<{ branding: Branding; printLayout: PrintLayout; discountMode: DiscountMode; smsProvider: SmsProviderConfig }>(
     '/settings',
   );
   return data;
@@ -89,6 +94,7 @@ export async function updateUser(
 // ----- SMS / Notifications -----
 
 export interface SmsProviderStatus {
+  enabled: boolean;
   name: string;
   configured: boolean;
   sender: string | null;

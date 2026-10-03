@@ -9,7 +9,8 @@ import {
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CreateUserDto, UpdateUserDto } from './dto/create-user.dto';
 import { BrandingDto, PrintLayoutDto } from './dto/branding.dto';
-import { SaveSmsTemplateDto, SmsTemplateRecord } from './dto/sms-settings.dto';
+import { SaveSmsTemplateDto, SmsTemplateRecord, SmsProviderConfigDto } from './dto/sms-settings.dto';
+import { getSmsProviderConfig, selectSmsGateway, SMS_PROVIDER_KEY, IMPLEMENTED_SMS_PROVIDERS } from '../notifications/sms-provider-config';
 import { Role } from '@lms/database';
 import * as bcrypt from 'bcrypt';
 import { appendAudit } from '../../common/audit';
@@ -191,12 +192,13 @@ export class SettingsService {
 
   /** Combined settings for UI + print headers */
   async getPublicSettings(tenantId: string) {
-    const [branding, printLayout, discountMode] = await Promise.all([
+    const [branding, printLayout, discountMode, smsProvider] = await Promise.all([
       this.getBranding(tenantId),
       this.getPrintLayout(tenantId),
       this.getDiscountMode(tenantId),
+      getSmsProviderConfig(this.prisma,tenantId),
     ]);
-    return { branding, printLayout, discountMode };
+    return { branding, printLayout, discountMode, smsProvider };
   }
 
   private async saveConfiguration(tenantId:string,key:string,value:Record<string,unknown>,branding=false) {
@@ -236,6 +238,34 @@ export class SettingsService {
 
   // ----- SMS / Notifications -----
 
+  async saveSmsProvider(tenantId:string,actorRole:string,dto:SmsProviderConfigDto) {
+    this.assertAdmin(actorRole);
+    if(typeof dto.enabled!=='boolean'||!IMPLEMENTED_SMS_PROVIDERS.includes(dto.provider as 'SENDPK')) throw new BadRequestException('Unsupported SMS provider configuration');
+    return this.prisma.$transaction(async tx=>{
+      await tx.$queryRaw`SELECT id FROM tenants WHERE id=${tenantId} FOR UPDATE`;
+      const before=await getSmsProviderConfig(tx,tenantId);
+      const value={enabled:dto.enabled,provider:dto.provider};
+      await tx.configuration.upsert({where:{tenantId_key:{tenantId,key:SMS_PROVIDER_KEY}},create:{tenantId,key:SMS_PROVIDER_KEY,value},update:{value}});
+      if(!value.enabled) {
+        // Cancel only work known not to have started I/O. Frozen history is retained.
+        const cancelled=await tx.$queryRaw<{id:string}[]>`UPDATE notifications SET status='ABANDONED',"lastErrorCode"='PROVIDER_DISABLED',
+          "lastError"='PROVIDER_DISABLED',"nextAttemptAt"=NULL,"claimedBy"=NULL,"claimedAt"=NULL,"claimExpiresAt"=NULL,"updatedAt"=clock_timestamp()
+          WHERE "tenantId"=${tenantId} AND channel='SMS' AND (status IN ('QUEUED','RETRYING') OR
+            (status='SENDING' AND "dispatchStartedAt" IS NULL AND "claimedBy" IS NOT NULL)) RETURNING id`;
+        for(const row of cancelled)await appendAudit(tx,{tenantId,action:'NOTIFICATION_ABANDONED',entityType:'Notification',entityId:row.id,after:{reason:'PROVIDER_DISABLED'}});
+      }
+      if(before.enabled!==value.enabled||before.provider!==value.provider)await appendAudit(tx,{tenantId,action:'SETTINGS_CHANGE',entityType:'Configuration',entityId:SMS_PROVIDER_KEY,before:{enabled:before.enabled,provider:before.provider},after:value});
+      return value;
+    });
+  }
+
+  private async requireSmsProvider(tenantId:string) {
+    const config=await getSmsProviderConfig(this.prisma,tenantId);
+    const gateway=selectSmsGateway(config.provider,this.smsGateway);
+    if(!config.enabled||!gateway)throw new BadRequestException('SMS provider is disabled or unavailable');
+    return gateway;
+  }
+
   /**
    * Everything the Settings → SMS screen needs: provider connection status
    * (never the API key itself), and both events' current configuration
@@ -243,6 +273,9 @@ export class SettingsService {
    * @lms/shared so the frontend never has to hardcode either.
    */
   async getSmsSettings(tenantId: string) {
+    const config=await getSmsProviderConfig(this.prisma,tenantId);
+    const gateway=config.enabled?selectSmsGateway(config.provider,this.smsGateway):undefined;
+    if(!gateway)return {provider:{name:config.provider,enabled:config.enabled,configured:false,sender:null,balance:null},events:[]};
     const rows = await this.prisma.smsTemplate.findMany({
       where: { tenantId, key: { in: SMS_EVENT_DEFINITIONS.map((d) => d.key) } },
     });
@@ -270,10 +303,11 @@ export class SettingsService {
 
     return {
       provider: {
-        name: 'SENDPK',
-        configured: this.smsGateway.isConfigured(),
-        sender: this.smsGateway.isConfigured() ? this.smsGateway.getSenderId() : null,
-        balance: await this.tryGetBalance(),
+        name: config.provider,
+        enabled: config.enabled,
+        configured: gateway.isConfigured(),
+        sender: gateway.isConfigured() ? gateway.getSenderId() : null,
+        balance: await this.tryGetBalance(tenantId),
       },
       events,
     };
@@ -308,6 +342,8 @@ export class SettingsService {
 
     return this.prisma.$transaction(async tx=>{
       await tx.$queryRaw`SELECT id FROM tenants WHERE id=${tenantId} FOR UPDATE`;
+      const provider=await getSmsProviderConfig(tx,tenantId);
+      if(!provider.enabled||!selectSmsGateway(provider.provider,this.smsGateway))throw new BadRequestException('SMS provider is disabled or unavailable');
       const existing=await tx.smsTemplate.findUnique({where:{tenantId_key:{tenantId,key:key as SmsEventKey}}});
     // A SENDPK mapping is only meaningful for the exact wording it was
     // approved against — if the admin changes the body without also
@@ -337,16 +373,18 @@ export class SettingsService {
    */
   async syncSendPkTemplates(tenantId: string, actorRole: string) {
     this.assertAdmin(actorRole);
-
-    if (!this.smsGateway.listTemplates) {
+    const gateway=await this.requireSmsProvider(tenantId);
+    if (!gateway.listTemplates) {
       throw new BadRequestException(
         'The configured SMS gateway does not support listing templates',
       );
     }
-    const templates = await this.smsGateway.listTemplates();
+    const templates = await gateway.listTemplates();
 
     await this.prisma.$transaction(async tx=>{
     await tx.$queryRaw`SELECT id FROM tenants WHERE id=${tenantId} FOR UPDATE`;
+    const provider=await getSmsProviderConfig(tx,tenantId);
+    if(!provider.enabled||!selectSmsGateway(provider.provider,this.smsGateway))throw new BadRequestException('SMS provider is disabled or unavailable');
     const mapped = await tx.smsTemplate.findMany({where:{tenantId,sendpkTemplateId:{not:null}}});
     for (const row of mapped) {
       const match = templates.find((t) => t.id === row.sendpkTemplateId);
@@ -368,10 +406,12 @@ export class SettingsService {
     return templates;
   }
 
-  private async tryGetBalance(): Promise<number | null> {
-    if (!this.smsGateway.isConfigured() || !this.smsGateway.checkBalance) return null;
+  private async tryGetBalance(tenantId:string): Promise<number | null> {
+    const config=await getSmsProviderConfig(this.prisma,tenantId);
+    const gateway=config.enabled?selectSmsGateway(config.provider,this.smsGateway):undefined;
+    if (!gateway?.isConfigured() || !gateway.checkBalance) return null;
     try {
-      return await this.smsGateway.checkBalance();
+      return await gateway.checkBalance();
     } catch {
       return null;
     }

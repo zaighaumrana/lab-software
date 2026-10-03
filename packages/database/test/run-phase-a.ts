@@ -51,7 +51,7 @@ async function main() {
       let c: Client|undefined;
       try {
         await admin.query(`CREATE DATABASE ${quote(name)}`); created=true;
-        const env = {...process.env,DATABASE_URL:url.toString(),DATABASE_TEST_URL:url.toString()};
+        const env = {...process.env,DATABASE_URL:url.toString(),DATABASE_TEST_URL:url.toString(),RUNTIME_DATABASE_URL:'',DB_RUNTIME_MODE:'development',NODE_ENV:'test',SENDPK_API_KEY:'',SENDPK_SENDER:''};
         function cli(args: string[]) {
           const result = spawnSync(process.execPath,[resolve('node_modules/prisma/build/index.js'),...args],{env,stdio:'inherit',timeout:120_000});
           if (result.error || result.status!==0) throw Error(`Disposable CLI failed: ${result.error?.message ?? result.status}`);

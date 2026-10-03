@@ -4,6 +4,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationStatus, Prisma } from '@lms/database';
 import { SMS_GATEWAY, SmsGateway } from './providers/sms-gateway.interface';
 import { appendAudit } from '../../common/audit';
+import { getSmsProviderConfig, selectSmsGateway } from './sms-provider-config';
 import { SmsEventKey, getSmsEventDefinition, validatePlaceholders, renderLocalTemplate, buildSendPkVariables,
   calculateSmsSegments, normalizePakistaniMobile } from '@lms/shared';
 
@@ -22,6 +23,8 @@ export class NotificationsService {
     const definition = getSmsEventDefinition(eventKey);
     if (!definition) return {skipped:true,reason:'NOT_CONFIGURED'};
     await tx.$queryRaw`SELECT id FROM tenants WHERE id=${tenantId} FOR SHARE`;
+    const providerConfig=await getSmsProviderConfig(tx,tenantId);
+    if (!providerConfig.enabled || !selectSmsGateway(providerConfig.provider,this.gateway)) return {skipped:true,reason:'DISABLED'};
     if (opts.patientId) {
       await tx.$queryRaw`SELECT id FROM patients WHERE id=${opts.patientId} AND "tenantId"=${tenantId} FOR SHARE`;
       const patient=await tx.patient.findFirst({where:{id:opts.patientId,tenantId}});
@@ -46,7 +49,7 @@ export class NotificationsService {
     const inserted=await tx.$queryRaw<{id:string}[]>`INSERT INTO notifications
       (id,"tenantId",channel,status,recipient,body,"templateKey","relatedType","relatedId",provider,
        "providerTemplateId","providerVariables","messageType","smsParts","patientId","nextAttemptAt","lastErrorCode","lastError","updatedAt")
-      VALUES (${id},${tenantId},'SMS',${status}::"NotificationStatus",${mobile??recipient},${body},${eventKey},${opts.relatedType},${opts.relatedId},'SENDPK',
+      VALUES (${id},${tenantId},'SMS',${status}::"NotificationStatus",${mobile??recipient},${body},${eventKey},${opts.relatedType},${opts.relatedId},${providerConfig.provider},
        ${template.sendpkTemplateId},${JSON.stringify(providerVariables)}::jsonb,${segments.type},${segments.parts},${opts.patientId??null},
        CASE WHEN ${errorCode}::text IS NULL THEN clock_timestamp() ELSE NULL END,${errorCode},${errorCode},clock_timestamp())
       ON CONFLICT ("tenantId","relatedType","relatedId","templateKey") DO NOTHING RETURNING id`;
@@ -66,9 +69,13 @@ export class NotificationsService {
   }
   async retry(notificationId:string,tenantId:string) {
     return this.prisma.$transaction(async tx=>{
+      await tx.$queryRaw`SELECT id FROM tenants WHERE id=${tenantId} FOR SHARE`;
+      const config=await getSmsProviderConfig(tx,tenantId);
+      if (!config.enabled || !selectSmsGateway(config.provider,this.gateway)) throw new BadRequestException('SMS provider is disabled or unavailable');
       await tx.$queryRaw`SELECT id FROM notifications WHERE id=${notificationId} AND "tenantId"=${tenantId} FOR UPDATE`;
       const row=await tx.notification.findFirst({where:{id:notificationId,tenantId}});
       if (!row) throw new NotFoundException('Notification not found');
+      if (row.provider!==config.provider) throw new BadRequestException('Frozen notification uses a different provider');
       if (!['FAILED','RETRYING','ABANDONED'].includes(row.status) || row.attempts>=MAX_NOTIFICATION_ATTEMPTS) throw new BadRequestException('Notification is not eligible for retry');
       if (!row.providerTemplateId || !normalizePakistaniMobile(row.recipient) || row.lastErrorCode==='UNSUPPORTED_VARIABLES') throw new BadRequestException('Frozen notification payload is not sendable');
       if (!this.gateway.isConfigured()) throw new BadRequestException('SMS provider is not configured');

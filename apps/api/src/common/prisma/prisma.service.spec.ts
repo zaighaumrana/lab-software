@@ -4,8 +4,10 @@ import { PrismaService } from './prisma.service';
 
 describe('Prisma singleton lifecycle', () => {
   it('shares one provider and connects/disconnects exactly once', async () => {
-    const previous = process.env.DATABASE_URL;
-    process.env.DATABASE_URL = 'postgresql://localhost/fixture';
+    const keys=['RUNTIME_DATABASE_URL','DB_RUNTIME_MODE','NODE_ENV'] as const;
+    const previous=Object.fromEntries(keys.map(key=>[key,process.env[key]]));
+    process.env.RUNTIME_DATABASE_URL = 'postgresql://localhost/fixture';
+    process.env.DB_RUNTIME_MODE='development';process.env.NODE_ENV='test';
     const connect = jest.spyOn(PrismaService.prototype, '$connect').mockResolvedValue(undefined);
     const disconnect = jest.spyOn(PrismaService.prototype, '$disconnect').mockResolvedValue(undefined);
     try {
@@ -19,8 +21,7 @@ describe('Prisma singleton lifecycle', () => {
     } finally {
       connect.mockRestore();
       disconnect.mockRestore();
-      if (previous === undefined) delete process.env.DATABASE_URL;
-      else process.env.DATABASE_URL = previous;
+      for(const key of keys){if(previous[key]===undefined)delete process.env[key];else process.env[key]=previous[key];}
     }
   });
 });

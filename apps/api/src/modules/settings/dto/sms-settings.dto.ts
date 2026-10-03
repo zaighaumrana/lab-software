@@ -1,4 +1,12 @@
-import { IsString, IsOptional, IsBoolean, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, MaxLength, IsIn } from 'class-validator';
+import { IMPLEMENTED_SMS_PROVIDERS } from '../../notifications/sms-provider-config';
+
+export class SmsProviderConfigDto {
+  @IsBoolean()
+  enabled!: boolean;
+  @IsIn(IMPLEMENTED_SMS_PROVIDERS)
+  provider!: string;
+}
 
 export class SaveSmsTemplateDto {
   @IsString()

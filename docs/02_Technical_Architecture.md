@@ -759,16 +759,20 @@ Potential product triggers include:
 
 Not every trigger is currently implemented.
 
-### Current Gap
+### Implemented D2/E1 boundary (2026-10-04)
 
-SMS/network delivery currently occurs too directly in some request flows for the final Offline / Enterprise reliability model.
+Automatic sample/report intent and audit commit inside the business transaction.
+PostgreSQL leases, immutable attempt evidence, bounded retries and conservative
+uncertainty handling govern background delivery. No network call holds business
+transaction locks. A tenant master SMS switch is independent from template event
+switches; disabled SMS creates no new intent, cancels pending pre-dispatch work,
+and suppresses provider calls. Admin Optional features keeps re-enabling accessible;
+SMS navigation/templates disappear when off. SENDPK is the only implemented choice.
 
-The target pattern is:
+The implemented pattern is:
 
 ```text
-Business transaction completes
-        v
-Notification queued locally
+Business transaction + notification intent commit together
         v
 Background dispatcher
         v
@@ -993,3 +997,14 @@ The implementation is not complete until backup creation **and restoration** are
 **Future extensions:** cloud infrastructure automation, tenant control plane, additional integrations, analyzers, device adapters, advanced observability, storage providers, identity providers, plugin/extension architecture.
 
 **Remaining open questions:** hosting/provider choices, entitlement implementation details, production network/security standards, SaaS operational targets, and deployment-specific infrastructure choices should be resolved as their implementation phases begin rather than being inferred from historical single-laboratory assumptions.
+
+
+### E1 database deployment isolation (2026-10-04)
+
+Owner/admin tooling uses `packages/database/.env`; the hardened API loads only
+`apps/api/.env.runtime`, using `RUNTIME_DATABASE_URL`. Owner/migration
+`DATABASE_URL` and provisioning credentials must stay out of the API service
+environment and inaccessible to its Windows service account. Catalog startup
+checks reject owner/dangerous runtime privileges. Deployment orders owner
+`migrate deploy`, deterministic grant verification, then restricted API startup.
+See [E1 implementation and rollout](Database_V2_Phase_E1_Runtime_DB_Security_2026-10-04.md).

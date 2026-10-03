@@ -6,11 +6,12 @@ import {
   type ReactNode,
 } from 'react';
 import * as settingsApi from '../api/settings';
-import type { Branding, PrintLayout, DiscountMode } from '../api/settings';
+import type { Branding, PrintLayout, DiscountMode, SmsProviderConfig } from '../api/settings';
 
 interface SettingsContextValue {
   branding: Branding;
   discountMode: DiscountMode;
+  smsProvider: SmsProviderConfig;
   printLayout: PrintLayout;
   loading: boolean;
   refresh: () => Promise<void>;
@@ -53,6 +54,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [branding, setBranding] = useState<Branding>(defaultBranding);
   const [printLayout, setPrintLayout] = useState<PrintLayout>(defaultPrint);
   const [discountMode,setDiscountMode]=useState<DiscountMode>('PER_LINE');
+  const [smsProvider,setSmsProvider]=useState<SmsProviderConfig>({enabled:false,provider:'SENDPK'});
   const [loading, setLoading] = useState(true);
 
   async function refresh() {
@@ -61,6 +63,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setBranding({ ...defaultBranding, ...data.branding });
       setPrintLayout({ ...defaultPrint, ...data.printLayout });
       setDiscountMode(data.discountMode ?? 'PER_LINE');
+      setSmsProvider(data.smsProvider ?? {enabled:true,provider:'SENDPK'});
       applyCssVars({ ...defaultBranding, ...data.branding });
     } catch {
       applyCssVars(defaultBranding);
@@ -71,10 +74,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     refresh();
+    const onFocus=()=>{void refresh();};
+    window.addEventListener('focus',onFocus);
+    return ()=>window.removeEventListener('focus',onFocus);
   }, []);
 
   return (
-    <SettingsContext.Provider value={{ branding, printLayout, discountMode, loading, refresh }}>
+    <SettingsContext.Provider value={{ branding, printLayout, discountMode, smsProvider, loading, refresh }}>
       {children}
     </SettingsContext.Provider>
   );

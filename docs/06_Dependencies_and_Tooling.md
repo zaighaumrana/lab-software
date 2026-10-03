@@ -103,7 +103,7 @@ The managed browser was absent before this task. Downloading the new managed Chr
 
 **Socket.IO retained.** The laboratory screen uses reconnection, session authentication, tenant rooms and push events. Native WebSocket would need reconnection/room/protocol logic. Updated server/client remain on the compatible 4.8 series; invalid-session rejection was verified against the running gateway.
 
-**Prisma 7.10.0 pinned.** The database package generates TypeScript into ignored `src/generated/prisma`, then compiles its CommonJS facade and client to `dist`. Only the root package export is public. `src/client.ts` owns DATABASE_URL validation, schema selection, PrismaPg and one owned pg pool per client. Nest provides one global PrismaService and calls connect/disconnect; shutdown hooks and auth timer cleanup allow graceful exit. Pool max is 10, connection/acquisition timeout 5 seconds, driver idle timeout remains 10 seconds; transaction defaults remain 2s maxWait/5s timeout. CLI/seed share package-local env loading; runtime uses existing Nest ConfigModule, with external variables taking precedence. Generate after schema changes, before starting API/seed or building a fresh checkout. No domain or migration SQL change; operational data fingerprints match. Prisma 8 migration readiness localizes infrastructure, but its different query API may still need business query changes. See [the report](Prisma_7_Migration_2026-10-02.md) for tests, memory increase and three unresolved audit advisories. [Upgrade guide](https://www.prisma.io/docs/guides/upgrade-prisma-orm/v7).
+**Prisma 7.10.0 pinned.** The database package generates TypeScript into ignored `src/generated/prisma`, then compiles its CommonJS facade and client to `dist`. Only the root package export is public. `src/client.ts` owns runtime URL validation, schema selection, PrismaPg and one owned pg pool per client. Nest provides one global PrismaService and calls connect/disconnect; shutdown hooks and auth timer cleanup allow graceful exit. Pool max is 10, connection/acquisition timeout 5 seconds, driver idle timeout remains 10 seconds; transaction defaults remain 2s maxWait/5s timeout. CLI/seed share package-local env loading; runtime uses existing Nest ConfigModule, with external variables taking precedence. Generate after schema changes, before starting API/seed or building a fresh checkout. No domain or migration SQL change; operational data fingerprints match. Prisma 8 migration readiness localizes infrastructure, but its different query API may still need business query changes. See [the report](Prisma_7_Migration_2026-10-02.md) for tests, memory increase and three unresolved audit advisories. [Upgrade guide](https://www.prisma.io/docs/guides/upgrade-prisma-orm/v7).
 
 **Tailwind 3 retained.** v4 changes browser requirements, CSS setup and defaults for utilities/rings/borders/shadows. Existing reusable `@apply` classes and print styling need visual regression coverage before that migration. Keep current v3.4.19 and its PostCSS/Autoprefixer pipeline. This is an explicit deferral, not a claim that v3 is the latest major. [Upgrade guide](https://tailwindcss.com/docs/upgrade-guide).
 
@@ -128,3 +128,21 @@ Build on matching Windows architecture: install from the lockfile, provision Chr
 `pnpm install --prod --frozen-lockfile` can reduce a staging installation but cannot replace the preceding generation/build steps. Do not prune the working development installation as a packaging test. With pnpm 11, evaluate a filtered `pnpm deploy --legacy` staging workflow and workspace-package inclusion before adopting it: the default deploy mode may require injected workspace packages. Preserve all internal links as actual packaged files and smoke-test that independent directory offline. This task does not implement or measure a final installer/production directory. Never run seed or destructive schema commands merely to validate dependency changes. Shared pnpm store pruning affects other projects and was not performed.
 
 PostgreSQL is a system dependency outside npm; the API smoke test used a running local PostgreSQL 18 instance. Do not bundle credentials from development `.env` files.
+
+
+## E1 runtime and migration connections (2026-10-04)
+
+Prisma CLI remains on owner `DATABASE_URL` through `prisma7.config.ts`. API
+`PrismaService` uses `RUNTIME_DATABASE_URL` and read-only catalog privilege checks
+in hardened/production mode. `apps/api/.env.runtime` contains runtime/provider
+values only; `packages/database/.env` is for owner/admin tools. Explicit local
+`DB_RUNTIME_MODE=development` permits owner fallback outside production only.
+`NODE_ENV=production` always enforces isolation. Explicit fixture connection
+strings and owner seed tooling remain supported. Dependencies, adapter and
+Prisma 7 RSS observations are unchanged.
+
+After owner migrations, run `scripts/provision-runtime-db.ps1 -GrantsOnly` to
+reapply current table/function policy and verify the runtime login. Default
+ordinary table/sequence privileges support new objects; function EXECUTE is an
+explicit allowlist. See [E1 report](Database_V2_Phase_E1_Runtime_DB_Security_2026-10-04.md)
+for provisioning, focused tests and production service-file separation.
