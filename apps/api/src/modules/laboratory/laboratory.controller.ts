@@ -68,7 +68,7 @@ export class LaboratoryController {
   @HttpCode(HttpStatus.CREATED)
   @RequirePermissions(Permission.LAB_SAMPLE_MANAGE)
   async collectSample(@CurrentUser() user: AuthUser, @Body() dto: CollectSampleDto) {
-    return this.laboratoryService.collectSample(user.tenantId, resolveBranchId(user), dto);
+    return this.laboratoryService.collectSample(user.tenantId, resolveBranchId(user), dto, user.userId);
   }
 
   /**
@@ -77,7 +77,7 @@ export class LaboratoryController {
   @Patch('samples/:id/receive')
   @RequirePermissions(Permission.LAB_SAMPLE_MANAGE)
   async receiveSample(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.laboratoryService.receiveSample(user.tenantId, id);
+    return this.laboratoryService.receiveSample(user.tenantId, id, user.userId);
   }
 
   /**
@@ -90,7 +90,7 @@ export class LaboratoryController {
     @Param('id') id: string,
     @Body() dto: AcceptSampleDto,
   ) {
-    return this.laboratoryService.acceptSample(user.tenantId, id, dto.notes);
+    return this.laboratoryService.acceptSample(user.tenantId, id, dto.notes, user.userId);
   }
 
   /**
@@ -103,7 +103,7 @@ export class LaboratoryController {
     @Param('id') id: string,
     @Body() dto: RejectSampleDto,
   ) {
-    return this.laboratoryService.rejectSample(user.tenantId, id, dto.rejectionReason);
+    return this.laboratoryService.rejectSample(user.tenantId, id, dto.rejectionReason, user.userId);
   }
 
   /**
@@ -112,7 +112,7 @@ export class LaboratoryController {
   @Patch('samples/:id/start-testing')
   @RequirePermissions(Permission.LAB_SAMPLE_MANAGE)
   async startTesting(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.laboratoryService.startTesting(user.tenantId, id);
+    return this.laboratoryService.startTesting(user.tenantId, id, user.userId);
   }
 
   /**

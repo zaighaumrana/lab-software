@@ -46,6 +46,8 @@ model Tenant {
   featureFlags FeatureFlag[]
   configurations Configuration[]
   smsTemplates SmsTemplate[]
+  visits Visit[]
+  identifierCounters IdentifierCounter[]
 
   @@map("tenants")
 }
@@ -69,7 +71,10 @@ model Branch {
   invoices  Invoice[]
   samples   Sample[]
   reports   Report[]
+  visits Visit[]
+  identifierCounters IdentifierCounter[]
 
+  @@unique([tenantId, id])
   @@unique([tenantId, code])
   @@index([tenantId])
   @@map("branches")
@@ -113,7 +118,9 @@ model User {
   auditLogs AuditLog[] @relation("AuditActor")
   cashShiftsOpened CashShift[] @relation("CashShiftOpenedBy")
   cashShiftsClosed CashShift[] @relation("CashShiftClosedBy")
+  sampleEvents SampleEvent[]
 
+  @@unique([tenantId, id])
   @@unique([tenantId, username])
   @@index([tenantId])
   @@map("users")
@@ -148,7 +155,9 @@ model Patient {
   branch   Branch?   @relation(fields: [branchId], references: [id])
   bookings Booking[]
   companyLinks PatientCompany[]
+  visits Visit[]
 
+  @@unique([tenantId, id])
   @@unique([tenantId, phone])
   @@unique([tenantId, labNumber])
   @@unique([tenantId, mrcNumber])
@@ -189,7 +198,9 @@ model Doctor {
   tenant      Tenant             @relation(fields: [tenantId], references: [id])
   bookings    Booking[]
   shares DoctorShare[]
+  visits Visit[]
 
+  @@unique([tenantId, id])
   @@index([tenantId])
   @@map("doctors")
 }
@@ -224,7 +235,9 @@ model Company {
   tenant   Tenant           @relation(fields: [tenantId], references: [id])
   patients PatientCompany[]
   invoices Invoice[]
+  visits Visit[]
 
+  @@unique([tenantId, id])
   @@unique([tenantId, code])
   @@index([tenantId])
   @@map("companies")
@@ -288,7 +301,9 @@ model Test {
   packageItems    PackageItem[]
   invoiceLines    InvoiceLine[]
   results         Result[]
+  versions        TestVersion[]
 
+  @@unique([tenantId, id])
   @@unique([tenantId, code])
   @@index([tenantId])
   @@map("tests")
@@ -299,6 +314,7 @@ model Test {
 model TestParameter {
   id              String             @id @default(cuid())
   testId          String
+  testVersionId   String? // Initial capture link; frozen snapshot is authoritative while editor stays legacy.
   code            String             // e.g. WBC, RBC, HGB
   name            String             // e.g. White Blood Cells
   valueType       ParameterValueType @default(NUMERIC)
@@ -310,12 +326,14 @@ model TestParameter {
   updatedAt       DateTime           @updatedAt
 
   test            Test                   @relation(fields: [testId], references: [id], onDelete: Cascade)
+  testVersion     TestVersion? @relation(fields: [testId, testVersionId], references: [testId, id], onDelete: Restrict, onUpdate: Restrict)
   referenceRanges TestReferenceRange[]
   choices         TestParameterChoice[]
   resultValues    ResultValue[]
 
   @@unique([testId, code])
   @@index([testId])
+  @@index([testId, testVersionId])
   @@map("test_parameters")
 }
 
@@ -370,7 +388,9 @@ model Package {
   tenant       Tenant        @relation(fields: [tenantId], references: [id])
   items        PackageItem[]
   invoiceLines InvoiceLine[]
+  versions PackageVersion[]
 
+  @@unique([tenantId, id])
   @@unique([tenantId, code])
   @@index([tenantId])
   @@map("packages")
@@ -382,12 +402,18 @@ model PackageItem {
   testId          String?
   nestedPackageId String? // Support nested packages
   sortOrder       Int     @default(0)
+  packageVersionId String?
+  testVersionId String?
 
   package       Package  @relation(fields: [packageId], references: [id], onDelete: Cascade)
   test          Test?    @relation(fields: [testId], references: [id])
+  packageVersion PackageVersion? @relation(fields: [packageId, packageVersionId], references: [packageId, id], onDelete: Restrict, onUpdate: Restrict)
+  testVersion TestVersion? @relation(fields: [testId, testVersionId], references: [testId, id], onDelete: Restrict, onUpdate: Restrict)
   // nestedPackage relation omitted for simplicity; handled in application layer
 
   @@index([packageId])
+  @@index([packageId, packageVersionId])
+  @@index([testId, testVersionId])
   @@map("package_items")
 }
 
@@ -438,7 +464,9 @@ model Booking {
   patient Patient @relation(fields: [patientId], references: [id])
   doctor  Doctor? @relation(fields: [doctorId], references: [id])
   invoice Invoice?
+  visit Visit?
 
+  @@unique([tenantId, branchId, patientId, id])
   @@unique([tenantId, bookingCode])
   @@index([tenantId, status])
   @@index([tenantId, patientId])
@@ -463,6 +491,8 @@ model Invoice {
   tenantId        String
   branchId        String
   bookingId       String        @unique
+  visitId         String?       @unique
+  phaseAReviewReason String?
   companyId       String?
   status          InvoiceStatus @default(DRAFT)
   invoiceNumber   String
@@ -490,7 +520,9 @@ model Invoice {
   samples  Sample[]
   report   Report?
   shares DoctorShare[]
+  visit Visit? @relation(fields: [tenantId, branchId, visitId], references: [tenantId, branchId, id], onDelete: Restrict, onUpdate: Restrict)
 
+  @@unique([tenantId, branchId, visitId])
   @@unique([tenantId, invoiceNumber])
   @@index([tenantId, status])
   @@index([branchId])
@@ -500,6 +532,7 @@ model Invoice {
 model InvoiceLine {
   id              String   @id @default(cuid())
   invoiceId       String
+  phaseAReviewReason String?
   testId          String?
   packageId       String?
   description     String
@@ -522,6 +555,7 @@ model InvoiceLine {
   test    Test?    @relation(fields: [testId], references: [id])
   package Package? @relation(fields: [packageId], references: [id])
   results Result[]
+  orderedTests OrderedTest[]
 
   @@index([invoiceId])
   @@map("invoice_lines")
@@ -631,6 +665,9 @@ model Sample {
   tenantId        String
   branchId        String
   invoiceId       String
+  visitId         String?
+  previousSampleId String?
+  phaseAReviewReason String?
   sampleCode      String       // Barcode / label code
   status          SampleStatus @default(PENDING_COLLECTION)
   sampleType      String?
@@ -652,7 +689,16 @@ model Sample {
   branch  Branch   @relation(fields: [branchId], references: [id])
   invoice Invoice  @relation(fields: [invoiceId], references: [id])
   results Result[]
+  visit Visit? @relation(fields: [tenantId, branchId, visitId], references: [tenantId, branchId, id], onDelete: Restrict, onUpdate: Restrict)
+  previousSample Sample? @relation("SampleReplacement", fields: [tenantId, branchId, visitId, previousSampleId], references: [tenantId, branchId, visitId, id], onDelete: Restrict, onUpdate: Restrict)
+  replacements Sample[] @relation("SampleReplacement")
+  assignments SampleTest[]
+  events SampleEvent[]
 
+  @@unique([tenantId, branchId, visitId, id])
+  @@unique([tenantId, id])
+  @@index([tenantId, branchId, visitId])
+  @@index([tenantId, branchId, visitId, previousSampleId])
   @@unique([tenantId, sampleCode])
   @@index([tenantId, status])
   @@index([tenantId, isOutsourced])
@@ -748,6 +794,7 @@ model Report {
   tenantId      String
   branchId      String
   invoiceId     String       @unique
+  visitId       String?      @unique
   status        ReportStatus @default(PENDING)
   reportNumber  String
   trackingId    String       // Public lookup ID
@@ -763,7 +810,9 @@ model Report {
   tenant  Tenant  @relation(fields: [tenantId], references: [id])
   branch  Branch  @relation(fields: [branchId], references: [id])
   invoice Invoice @relation(fields: [invoiceId], references: [id])
+  visit Visit? @relation(fields: [tenantId, branchId, visitId], references: [tenantId, branchId, id], onDelete: Restrict, onUpdate: Restrict)
 
+  @@unique([tenantId, branchId, visitId])
   @@unique([tenantId, reportNumber])
   @@unique([tenantId, trackingId])
   @@index([tenantId, status])
@@ -987,4 +1036,243 @@ model Configuration {
 
   @@unique([tenantId, key])
   @@map("configurations")
+}
+
+// Phase A: captures are immutable evidence, not retrospective clinical approval.
+enum CaptureProvenance {
+  LEGACY_CURRENT
+  PROSPECTIVE_CURRENT
+  @@map("DefinitionCaptureSource")
+}
+
+enum VisitSource {
+  LEGACY_INVOICE
+  BOOKING
+  WALK_IN
+}
+
+enum VisitStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum OrderedTestStatus {
+  ORDERED
+  AWAITING_SAMPLE
+  IN_PROGRESS
+  RESULT_RELEASED
+  CANCELLED
+}
+
+enum SampleEventType {
+  COLLECTED
+  RECEIVED
+  ACCEPTED
+  REJECTED
+  TESTING_STARTED
+  COMPLETED
+  RECOLLECTION_REQUESTED
+  DISCARDED
+}
+
+model Visit {
+  id String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  tenantId String
+  branchId String
+  patientId String
+  bookingId String? @unique
+  doctorId String?
+  companyId String?
+  accessionNumber String
+  source VisitSource
+  status VisitStatus @default(OPEN)
+  // Historical timezone/clinical-time evidence is insufficient: retain raw text, leave instant NULL.
+  occurredAt DateTime? @db.Timestamptz(3)
+  legacyOccurredAtRaw String?
+  patientNameSnapshot String
+  labNumberSnapshot String
+  mrcNumberSnapshot String
+  // Current master capture, not a claim about demographics at a historical sale.
+  demographicCaptureProvenance CaptureProvenance @map("demographicSource")
+  doctorNameSnapshot String?
+  companyNameSnapshot String?
+  reviewReason String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  rowVersion Int @default(1)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  branch Branch @relation(fields: [tenantId, branchId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  patient Patient @relation(fields: [tenantId, patientId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  booking Booking? @relation(fields: [tenantId, branchId, patientId, bookingId], references: [tenantId, branchId, patientId, id], onDelete: Restrict, onUpdate: Restrict)
+  doctor Doctor? @relation(fields: [tenantId, doctorId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  invoice Invoice?
+  report Report?
+  orderedTests OrderedTest[]
+  samples Sample[]
+
+  @@unique([tenantId, accessionNumber])
+  @@unique([tenantId, branchId, id])
+  @@index([tenantId, branchId, occurredAt])
+  @@index([tenantId, patientId, occurredAt])
+  @@index([tenantId, doctorId])
+  @@index([tenantId, companyId])
+  @@unique([tenantId, branchId, patientId, bookingId])
+  @@map("visits")
+}
+
+model TestVersion {
+  id String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  tenantId String
+  testId String
+  revisionNo Int
+  codeSnapshot String
+  nameSnapshot String
+  specimenType String?
+  containerRequirement String? // Unknown until clinical authoring is authorized.
+  captureProvenance CaptureProvenance @map("source")
+  definitionSnapshot Json
+  definitionHash String
+  effectiveAt DateTime? @db.Timestamptz(3)
+  approvedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  test Test @relation(fields: [tenantId, testId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  parameters TestParameter[]
+  packageItems PackageItem[]
+  orderedTests OrderedTest[]
+
+  @@unique([testId, revisionNo])
+  @@unique([testId, id])
+  @@unique([tenantId, id])
+  @@index([tenantId, testId])
+  @@map("test_versions")
+}
+
+model PackageVersion {
+  id String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  tenantId String
+  packageId String
+  revisionNo Int
+  codeSnapshot String
+  nameSnapshot String
+  captureProvenance CaptureProvenance @map("source")
+  compositionSnapshot Json
+  compositionHash String
+  reviewReason String?
+  effectiveAt DateTime? @db.Timestamptz(3)
+  approvedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  package Package @relation(fields: [tenantId, packageId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  items PackageItem[]
+  orderedTests OrderedTest[]
+
+  @@unique([packageId, revisionNo])
+  @@unique([packageId, id])
+  @@unique([tenantId, id])
+  @@index([tenantId, packageId])
+  @@map("package_versions")
+}
+
+model OrderedTest {
+  id String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  tenantId String
+  branchId String
+  visitId String
+  testVersionId String
+  invoiceLineId String?
+  packageVersionId String?
+  occurrenceNo Int
+  // Source unit/member identifies retry-safe expansion; direct member is 0.
+  sourceUnitNo Int?
+  sourceMemberNo Int?
+  captureProvenance CaptureProvenance @map("source")
+  status OrderedTestStatus @default(ORDERED)
+  specimenTypeSnapshot String?
+  repeatReason String?
+  reviewReason String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  rowVersion Int @default(1)
+
+  visit Visit @relation(fields: [tenantId, branchId, visitId], references: [tenantId, branchId, id], onDelete: Restrict, onUpdate: Restrict)
+  testVersion TestVersion @relation(fields: [tenantId, testVersionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  invoiceLine InvoiceLine? @relation(fields: [invoiceLineId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  packageVersion PackageVersion? @relation(fields: [tenantId, packageVersionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  assignments SampleTest[]
+
+  @@unique([visitId, occurrenceNo])
+  @@unique([tenantId, branchId, visitId, id])
+  @@unique([invoiceLineId, sourceUnitNo, sourceMemberNo])
+  @@index([tenantId, branchId, visitId, status])
+  @@index([tenantId, testVersionId])
+  @@index([tenantId, packageVersionId])
+  @@map("ordered_tests")
+}
+
+model SampleTest {
+  id String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  tenantId String
+  branchId String
+  visitId String
+  sampleId String
+  orderedTestId String
+  captureProvenance CaptureProvenance @map("source")
+  assignedAt DateTime @default(now()) @db.Timestamptz(3)
+  // No invented historical assignment actor/time; assignedAt is capture/assignment time.
+  evidenceResultId String?
+
+  sample Sample @relation(fields: [tenantId, branchId, visitId, sampleId], references: [tenantId, branchId, visitId, id], onDelete: Restrict, onUpdate: Restrict)
+  orderedTest OrderedTest @relation(fields: [tenantId, branchId, visitId, orderedTestId], references: [tenantId, branchId, visitId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([sampleId, orderedTestId])
+  @@index([orderedTestId])
+  @@index([tenantId, branchId, visitId, sampleId])
+  @@index([tenantId, branchId, visitId, orderedTestId])
+  @@map("sample_tests")
+}
+
+model SampleEvent {
+  id String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  tenantId String
+  sampleId String
+  actorId String?
+  eventType SampleEventType
+  fromStatus SampleStatus?
+  toStatus SampleStatus
+  occurredAt DateTime? @db.Timestamptz(3)
+  legacyOccurredAtRaw String? // Old timezone interpretation deferred.
+  recordedAt DateTime @default(now()) @db.Timestamptz(3)
+  reason String?
+  captureProvenance CaptureProvenance @map("source")
+  sourceKey String // Per-sample retry identity; new events use crypto UUID.
+
+  sample Sample @relation(fields: [tenantId, sampleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  actor User? @relation(fields: [tenantId, actorId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([sampleId, sourceKey])
+  @@index([tenantId, sampleId, recordedAt])
+  @@index([tenantId, actorId])
+  @@map("sample_events")
+}
+
+model IdentifierCounter {
+  tenantId String
+  namespace String
+  scopeKey String
+  periodKey String
+  branchId String?
+  nextValue BigInt @default(1)
+  updatedAt DateTime @default(now()) @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  branch Branch? @relation(fields: [tenantId, branchId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([tenantId, namespace, scopeKey, periodKey])
+  @@index([tenantId, branchId])
+  @@map("identifier_counters")
 }

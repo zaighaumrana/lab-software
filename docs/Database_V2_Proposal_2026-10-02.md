@@ -363,3 +363,14 @@ These decisions do not block this completed investigation; they gate future sche
 ## Documentation-phase safety result
 
 Only the gap analysis, this proposal and root `upgratdaion` are changed. Git whitespace check passes; schema/migration diffs are empty. Operational table counts/content hashes and metadata are unchanged before/after investigation. No operational writes, migration application, schema/API/UI/dependency changes, commit or push. Existing tests/build evidence is historical; V2 automated/manual acceptance above is a **future plan**.
+
+## Implementation status added 2026-10-02 — Phase A
+
+The preceding design/investigation history is preserved. A later explicit authorization implemented only Visit, OrderedTest, TestVersion, PackageVersion, SampleTest, SampleEvent and IdentifierCounter, with strictly necessary additive compatibility/constraints/helpers/tests. Four additive migrations were deployed to lms_v2 after verified backup restore and fresh/populated legacy upgrades. All original legacy row projections and old migration bytes remain unchanged; current definitions became eight TestVersion captures and one PackageVersion capture. All 75 tests, builds/typechecks and supported-DDL diffs pass.
+
+Choice A preserves the legacy editor. Immutable typed version payloads survive mutable legacy parameter/member rows; approval/history is not fabricated. A pinned-adapter offset contradiction required a narrow instant binding/parser correction without changing the session timezone or 82 old timestamp columns. Automatic billing/ordered-work activation and active package processing remain deferred; prospective specimen event history is active. Report/result revisions, range correction, finance/auth/audit/worker/sync/timezone/frontend phases remain unauthorized/unimplemented here. See [Phase A implementation and evidence](Database_V2_Phase_A_Implementation_2026-10-02.md) for exact schema, SQL, counts/hashes, constraints, timestamp correction, tests, performance and cutover prerequisites.
+
+
+### Phase A final hardening — 2026-10-03 (Asia/Karachi)
+
+Application-facing provenance now uses CaptureProvenance and mapped captureProvenance/demographicCaptureProvenance fields; physical PostgreSQL names and all nine applied migrations remain unchanged. UTC/Karachi native timestamp regressions and the final 75 tests pass. The implementation report contains the complete native-object inventory and records owner-role/TRUNCATE/search-path limits for a separately authorized least-privilege rollout. Clinical cutover and all later phases remain deferred. No commit or push.

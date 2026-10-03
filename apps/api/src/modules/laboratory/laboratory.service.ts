@@ -15,6 +15,8 @@ import {
   Gender,
   Prisma,
   Decimal,
+  SampleEventType,
+  appendSampleEvent,
 } from '@lms/database';
 import { NotificationsService } from '../notifications/notifications.service';
 import { LaboratoryGateway } from './laboratory.gateway';
@@ -51,11 +53,13 @@ export class LaboratoryService {
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
 
-    const sample = await this.prisma.sample.create({
+    const sample = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.sample.create({
       data: {
         tenantId,
         branchId,
         invoiceId: dto.invoiceId,
+        visitId: invoice.visitId,
         sampleCode: generateSampleCode(),
         status: SampleStatus.COLLECTED,
         sampleType: dto.sampleType,
@@ -63,6 +67,11 @@ export class LaboratoryService {
         collectedById: collectedById ?? null,
         notes: dto.notes,
       },
+      });
+      await appendSampleEvent(tx, { tenantId, sampleId: created.id, actorId: collectedById,
+        eventType: SampleEventType.COLLECTED, toStatus: SampleStatus.COLLECTED,
+        occurredAt: created.collectedAt ?? new Date() });
+      return created;
     });
 
     // Fire-and-forget-ish, but never inside the write above: sample
@@ -121,48 +130,36 @@ export class LaboratoryService {
     });
   }
 
-  async receiveSample(tenantId: string, sampleId: string) {
-    const sample = await this.getSample(tenantId, sampleId);
-    const allowed: SampleStatus[] = [SampleStatus.COLLECTED, SampleStatus.IN_TRANSIT];
-    if (!allowed.includes(sample.status)) {
-      throw new BadRequestException(`Cannot receive sample in status ${sample.status}`);
-    }
-    return this.prisma.sample.update({
-      where: { id: sampleId },
-      data: { status: SampleStatus.RECEIVED_AT_LAB, receivedAt: new Date() },
-    });
+  async receiveSample(tenantId: string, sampleId: string, actorId?: string) {
+    return this.transitionSample(tenantId, sampleId, [SampleStatus.COLLECTED, SampleStatus.IN_TRANSIT],
+      SampleStatus.RECEIVED_AT_LAB, SampleEventType.RECEIVED, { receivedAt: new Date() }, actorId);
   }
 
-  async acceptSample(tenantId: string, sampleId: string, notes?: string) {
-    const sample = await this.getSample(tenantId, sampleId);
-    if (sample.status !== SampleStatus.RECEIVED_AT_LAB) {
-      throw new BadRequestException(`Cannot accept sample in status ${sample.status}`);
-    }
-    return this.prisma.sample.update({
-      where: { id: sampleId },
-      data: { status: SampleStatus.ACCEPTED, acceptedAt: new Date(), notes: notes ?? sample.notes },
-    });
+  async acceptSample(tenantId: string, sampleId: string, notes?: string, actorId?: string) {
+    return this.transitionSample(tenantId, sampleId, [SampleStatus.RECEIVED_AT_LAB], SampleStatus.ACCEPTED,
+      SampleEventType.ACCEPTED, { acceptedAt: new Date(), ...(notes != null ? { notes } : {}) }, actorId);
   }
 
-  async rejectSample(tenantId: string, sampleId: string, rejectionReason: string) {
-    const sample = await this.getSample(tenantId, sampleId);
-    if (sample.status !== SampleStatus.RECEIVED_AT_LAB) {
-      throw new BadRequestException(`Cannot reject sample in status ${sample.status}`);
-    }
-    return this.prisma.sample.update({
-      where: { id: sampleId },
-      data: { status: SampleStatus.REJECTED, rejectedAt: new Date(), rejectionReason },
-    });
+  async rejectSample(tenantId: string, sampleId: string, rejectionReason: string, actorId?: string) {
+    return this.transitionSample(tenantId, sampleId, [SampleStatus.RECEIVED_AT_LAB], SampleStatus.REJECTED,
+      SampleEventType.REJECTED, { rejectedAt: new Date(), rejectionReason }, actorId, rejectionReason);
   }
 
-  async startTesting(tenantId: string, sampleId: string) {
-    const sample = await this.getSample(tenantId, sampleId);
-    if (sample.status !== SampleStatus.ACCEPTED) {
-      throw new BadRequestException(`Cannot start testing on sample in status ${sample.status}`);
-    }
-    return this.prisma.sample.update({
-      where: { id: sampleId },
-      data: { status: SampleStatus.IN_TESTING },
+  async startTesting(tenantId: string, sampleId: string, actorId?: string) {
+    return this.transitionSample(tenantId, sampleId, [SampleStatus.ACCEPTED], SampleStatus.IN_TESTING,
+      SampleEventType.TESTING_STARTED, {}, actorId);
+  }
+
+  private transitionSample(tenantId: string, sampleId: string, allowed: SampleStatus[], toStatus: SampleStatus,
+    eventType: SampleEventType, data: Prisma.SampleUpdateInput, actorId?: string, reason?: string) {
+    return this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM samples WHERE id=${sampleId} AND "tenantId"=${tenantId} FOR UPDATE`;
+      const sample = await tx.sample.findFirst({ where: { id: sampleId, tenantId } });
+      if (!sample) throw new NotFoundException('Sample not found');
+      if (!allowed.includes(sample.status)) throw new BadRequestException(`Cannot ${eventType.toLowerCase()} sample in status ${sample.status}`);
+      const updated = await tx.sample.update({ where: { id: sampleId }, data: { ...data, status: toStatus } });
+      await appendSampleEvent(tx, { tenantId, sampleId, actorId, eventType, fromStatus: sample.status, toStatus, reason });
+      return updated;
     });
   }
 
@@ -432,10 +429,12 @@ export class LaboratoryService {
 
     const result = await this.prisma.$transaction(async (tx) => {
       if (sample.status === SampleStatus.ACCEPTED) {
-        await tx.sample.update({
-          where: { id: sample.id },
+        const changed = await tx.sample.updateMany({
+          where: { id: sample.id, status: SampleStatus.ACCEPTED },
           data: { status: SampleStatus.IN_TESTING },
         });
+        if (changed.count) await appendSampleEvent(tx, { tenantId, sampleId: sample.id, actorId: enteredById,
+          eventType: SampleEventType.TESTING_STARTED, fromStatus: SampleStatus.ACCEPTED, toStatus: SampleStatus.IN_TESTING });
       }
 
       const resultData = {

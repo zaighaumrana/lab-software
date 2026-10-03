@@ -12,6 +12,12 @@ test('built Nest API, billing transactions, reads, auth, socket and shutdown on 
   const url = process.env.DATABASE_TEST_URL;
   assert(url && /^\/labflow_prisma7_test_[a-f0-9]{16}$/.test(new URL(url).pathname));
   const db = createDatabaseClient({ connectionString: url });
+  // Count transport queries without logging SQL arguments/credentials or changing the owned pool.
+  const pg = require('pg');
+  const nativeQuery = pg.Client.prototype.query;
+  let queryCount = 0;
+  pg.Client.prototype.query = function (...args) { queryCount++; return nativeQuery.apply(this, args); };
+  const measurements = [];
   const nativeFetch = global.fetch;
   global.fetch = (input, options) => {
     assert(['127.0.0.1', 'localhost'].includes(new URL(input).hostname), 'External HTTP is forbidden during offline smoke');
@@ -40,23 +46,29 @@ test('built Nest API, billing transactions, reads, auth, socket and shutdown on 
     const { ValidationPipe } = apiRequire('@nestjs/common');
     const { AppModule } = apiRequire('./dist/app.module');
     const { PrismaService } = apiRequire('./dist/common/prisma/prisma.service');
+    const startupStarted = performance.now();
     app = await NestFactory.create(AppModule, { logger: false });
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     await app.listen(0, '127.0.0.1');
+    const startupMs = performance.now() - startupStarted;
     assert.equal(app.get(PrismaService), app.get(PrismaService));
     const base = await app.getUrl();
     let sessionId;
     async function request(path, method = 'GET', body) {
+      const started = performance.now(), beforeQueries = queryCount;
       const res = await fetch(base + path, { method, headers: { 'Content-Type': 'application/json',
         'x-tenant-id': tenantId, ...(sessionId ? { 'x-session-id': sessionId } : {}) },
         ...(body ? { body: JSON.stringify(body) } : {}) });
       const result = await res.json();
       assert(res.ok, `${method} ${path}: ${res.status} ${JSON.stringify(result)}`);
+      measurements.push({ method, path: path.replace(/\/[a-z0-9]{20,}/g, '/:id'), ms: +(performance.now()-started).toFixed(2), queries: queryCount-beforeQueries });
       return result;
     }
     sessionId = (await request('/auth/login', 'POST', { username: 'orm-test-admin', password })).sessionId;
     assert(sessionId);
     await request('/auth/me');
+    const createdBooking = await request('/bookings', 'POST', { patientId: patient.id });
+    assert.equal(createdBooking.patientId, patient.id);
     const invoice = await request('/billing/invoices', 'POST', { bookingId: booking.id,
       lines: [{ testId: catalog.id, quantity: 3, manualDiscount: 0.30, manualDiscountReason: 'Fixture' }] });
     assert.equal(new Decimal(invoice.grandTotal).toFixed(2), '300.00');
@@ -72,6 +84,11 @@ test('built Nest API, billing transactions, reads, auth, socket and shutdown on 
     const sample = await request('/laboratory/samples', 'POST', { invoiceId: invoice.id, sampleType: 'Blood' });
     await request(`/laboratory/samples/${sample.id}/receive`, 'PATCH');
     await request(`/laboratory/samples/${sample.id}/accept`, 'PATCH', {});
+    const initialEvents = await db.sampleEvent.findMany({ where: { sampleId: sample.id }, orderBy: { recordedAt: 'asc' } });
+    assert.deepEqual(initialEvents.map(e=>e.eventType), ['COLLECTED','RECEIVED','ACCEPTED']);
+    assert(initialEvents.every(e=>e.actorId && e.captureProvenance==='PROSPECTIVE_CURRENT'));
+    assert.equal(initialEvents[1].fromStatus, 'COLLECTED');
+    assert.equal(initialEvents[2].fromStatus, 'RECEIVED_AT_LAB');
     const entered = await request('/laboratory/results', 'POST', { sampleId: sample.id, invoiceLineId: invoice.lines[0].id,
       testId: catalog.id, values: [{ testParameterId: catalog.parameters[0].id, valueNumeric: 0.123399 }],
       releaseImmediately: false });
@@ -81,6 +98,9 @@ test('built Nest API, billing transactions, reads, auth, socket and shutdown on 
     const report = await db.report.findUniqueOrThrow({ where: { invoiceId: invoice.id } });
     assert.equal(report.status, 'COMPLETE');
     assert.equal((await db.result.findUniqueOrThrow({ where: { id: entered.id } })).status, 'RELEASED');
+    assert.equal(await db.sampleEvent.count({ where: { sampleId: sample.id, eventType: 'TESTING_STARTED' } }), 1);
+    // Authoring/cutover are deferred: legacy invoice issuance must not partially dual-write work.
+    assert.equal(await db.visit.count({ where: { bookingId: booking.id } }), 0);
     await request(`/reports/${report.id}`);
     for (const path of [`/patients/${patient.id}`, `/bookings/${booking.id}`, `/billing/invoices/${invoice.id}`,
       '/billing/invoices', '/reports', '/settings', '/laboratory/samples/pending']) {
@@ -95,10 +115,12 @@ test('built Nest API, billing transactions, reads, auth, socket and shutdown on 
       socket.once('connect_error', e => { clearTimeout(timer); reject(e); });
     });
     console.log('Fixture-verified Decimal billing/payment/commission, auth session and Socket.IO startup.');
+    console.log('Measured isolated workflow:', JSON.stringify({ startupMs: +startupMs.toFixed(2), rssMiB: +(process.memoryUsage().rss/1048576).toFixed(2), requests: measurements }));
   } finally {
     socket?.disconnect();
     if (app) await app.close();
     await db.$disconnect();
     global.fetch = nativeFetch;
+    pg.Client.prototype.query = nativeQuery;
   }
 });

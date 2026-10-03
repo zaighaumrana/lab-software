@@ -5,3 +5,6 @@ export type { DatabaseClientOptions } from './client.js';
 import { Prisma } from './generated/prisma/client.js';
 export const Decimal = Prisma.Decimal;
 export type Decimal = Prisma.Decimal;
+export { allocateVisitAccession, captureCurrentTestVersion, captureCurrentPackageVersion,
+  materializeInvoiceClinicalWork, assignSampleToOrderedTest, appendSampleEvent } from './clinical-work.js';
+export type { SampleEventInput } from './clinical-work.js';

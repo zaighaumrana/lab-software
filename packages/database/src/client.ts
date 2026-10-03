@@ -1,4 +1,4 @@
-import { PrismaPg } from '@prisma/adapter-pg';
+import { InstantSafePrismaPg } from './instant-adapter.js';
 import { PrismaClient as GeneratedPrismaClient } from './generated/prisma/client.js';
 
 export interface DatabaseClientOptions {
@@ -18,7 +18,7 @@ export class PrismaClient extends GeneratedPrismaClient {
       throw new Error('DATABASE_URL must use a direct PostgreSQL connection');
     }
     const schema = url.searchParams.get('schema') ?? 'public';
-    const adapter = new PrismaPg({
+    const adapter = new InstantSafePrismaPg({
       connectionString,
       max: 10,
       connectionTimeoutMillis: 5_000,
