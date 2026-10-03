@@ -38,6 +38,10 @@ export class CreateUserDto {
 export class UpdateUserDto {
   @IsOptional()
   @IsString()
+  branchId?: string | null;
+
+  @IsOptional()
+  @IsString()
   fullName?: string;
 
   @IsOptional()

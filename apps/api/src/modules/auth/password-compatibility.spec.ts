@@ -26,17 +26,40 @@ describe('stored bcrypt password compatibility', () => {
       id: 'upgrade-fixture', username: 'upgrade-fixture', fullName: 'Upgrade Fixture',
       tenantId: 'fixture-tenant', branchId: null, role: 'ADMIN', passwordHash: legacyHash,
     };
-    const prisma = { user: { findFirst: jest.fn().mockResolvedValue(user), update: jest.fn().mockResolvedValue(user) } };
-    const auth = new AuthService(prisma as unknown as PrismaService);
+    const now=new Date();
+    let revoked=false;
+    const activeUser={...user,isActive:true};
+    const prisma:any={
+      user:{findFirst:jest.fn().mockResolvedValue(activeUser),findUnique:jest.fn().mockResolvedValue(activeUser),update:jest.fn().mockResolvedValue(activeUser)},
+      tenant:{findUnique:jest.fn().mockResolvedValue({id:user.tenantId,isActive:true})},
+      loginAttempt:{findUniqueOrThrow:jest.fn().mockResolvedValue({failures:0,windowStartedAt:now}),update:jest.fn()},
+      authSession:{create:jest.fn().mockResolvedValue({id:'fixture-session'}),update:jest.fn().mockImplementation(()=>{revoked=true;})},
+      auditLog:{create:jest.fn()},$executeRaw:jest.fn(),
+      $queryRaw:jest.fn().mockImplementation((parts:TemplateStringsArray)=>{
+        const sql=parts.join('');
+        if(sql.includes('AS now')) return [{now}];
+        if(sql.includes('JOIN users')) return revoked?[]:[{sessionRecordId:'fixture-session',userId:user.id,...user}];
+        if(sql.includes('FROM auth_sessions')) return [{id:'fixture-session',tenantId:user.tenantId,userId:user.id}];
+        return [];
+      }),
+    };
+    prisma.$transaction=async (fn:any)=>fn(prisma);
+    const auth = new AuthService(prisma as PrismaService);
     const result = await auth.login({ username: user.username, password });
-    expect(auth.getSession(result.sessionId).userId).toBe(user.id);
+    expect((await auth.getSession(result.sessionId)).userId).toBe(user.id);
     expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: user.id }, data: { lastLoginAt: expect.any(Date) } });
-    auth.logout(result.sessionId);
-    expect(auth.validateSession(result.sessionId)).toBeNull();
+    await auth.logout(result.sessionId);
+    expect(await auth.validateSession(result.sessionId)).toBeNull();
   });
 
   it('rejects an incorrect login without updating the fixture user', async () => {
-    const prisma = { user: { findFirst: jest.fn().mockResolvedValue({ passwordHash: legacyHash }), update: jest.fn() } };
+    const now=new Date();
+    const user={id:'invalid-fixture',tenantId:'fixture-tenant',isActive:true,passwordHash:legacyHash};
+    const prisma:any={user:{findFirst:jest.fn().mockResolvedValue(user),findUnique:jest.fn().mockResolvedValue(user),update:jest.fn()},
+      tenant:{findUnique:jest.fn().mockResolvedValue({id:user.tenantId,isActive:true})},
+      loginAttempt:{findUniqueOrThrow:jest.fn().mockResolvedValue({failures:0,windowStartedAt:now}),update:jest.fn()},
+      auditLog:{create:jest.fn()},$executeRaw:jest.fn(),$queryRaw:jest.fn().mockResolvedValue([{now}])};
+    prisma.$transaction=async (fn:any)=>fn(prisma);
     const auth = new AuthService(prisma as unknown as PrismaService);
     await expect(auth.login({ username: 'upgrade-invalid-fixture', password: 'wrong-password' })).rejects.toThrow('Invalid username or password');
     expect(prisma.user.update).not.toHaveBeenCalled();

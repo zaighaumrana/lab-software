@@ -1,5 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Decimal, Gender, Prisma, ResultFlag, ResultStatus, SampleStatus, appendSampleEvent } from '@lms/database';
+import { appendAudit } from '../../common/audit';
 import { EnterResultDto } from './dto/enter-result.dto';
 
 export const clinicalResultInclude = {
@@ -58,7 +59,10 @@ export async function releaseOccurrenceResult(tx: Prisma.TransactionClient, tena
   if (draft.amendedFromResultId) {
     await tx.result.update({ where: { id: draft.amendedFromResultId }, data: { status: ResultStatus.SUPERSEDED } });
   }
-  return tx.result.update({ where: { id }, data: { status: ResultStatus.RELEASED, releasedAt: new Date(), releasedById: actor ?? null }, include: clinicalResultInclude });
+  const released = await tx.result.update({ where: { id }, data: { status: ResultStatus.RELEASED, releasedAt: new Date(), releasedById: actor ?? null }, include: clinicalResultInclude });
+  await appendAudit(tx,{tenantId,actorId:actor,action:draft.amendedFromResultId?'AMENDMENT_RELEASE':'RESULT_RELEASE',entityType:'Result',entityId:id,
+    before:{status:draft.status},after:{status:released.status,orderedTestId:draft.orderedTestId,sourceResultId:draft.amendedFromResultId}});
+  return released;
 }
 
 export async function reopenOccurrenceResult(tx: Prisma.TransactionClient, tenantId: string, id: string, reason: string, actor?: string) {
@@ -67,7 +71,7 @@ export async function reopenOccurrenceResult(tx: Prisma.TransactionClient, tenan
   if (original.status !== ResultStatus.RELEASED) throw new BadRequestException('Only the current released result can be corrected');
   const existing = await tx.result.findFirst({ where: { orderedTestId: original.orderedTestId, status: ResultStatus.ENTERED } });
   if (existing) throw new BadRequestException('This occurrence already has an open correction draft');
-  return tx.result.create({ data: {
+  const correction = await tx.result.create({ data: {
     tenantId, sampleId: original.sampleId, invoiceLineId: original.invoiceLineId, testId: original.testId,
     orderedTestId: original.orderedTestId, testVersionId: original.testVersionId, revisionNo: original.revisionNo!+1,
     amendedFromResultId: original.id, amendmentReason: reason.trim(), amendmentActorId: actor,
@@ -77,6 +81,9 @@ export async function reopenOccurrenceResult(tx: Prisma.TransactionClient, tenan
       evaluatedAt:v.evaluatedAt, valueNumeric:v.valueNumeric, valueText:v.valueText, unit:v.unit,
       flag:v.flag, isCritical:v.isCritical, interpretation:v.interpretation })) },
   }, include: clinicalResultInclude });
+  await appendAudit(tx,{tenantId,actorId:actor,action:'CORRECTION_CREATED',entityType:'Result',entityId:correction.id,
+    before:{sourceResultId:original.id,status:original.status},after:{status:correction.status,reason:reason.trim(),orderedTestId:original.orderedTestId}});
+  return correction;
 }
 
 export async function enterOccurrenceResult(tx: Prisma.TransactionClient, tenantId: string, dto: EnterResultDto, actor?: string) {

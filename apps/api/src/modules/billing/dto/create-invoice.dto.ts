@@ -39,6 +39,15 @@ export class InvoiceLineInputDto {
 }
 
 export class CreateInvoiceDto {
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  invoiceDiscountAmount?: number;
+
+  @IsOptional()
+  @IsString()
+  invoiceDiscountReason?: string;
+
   @IsString()
   bookingId!: string;
 

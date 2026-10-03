@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
+import { appendAudit } from '../../common/audit';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import {
   CreateTestDto,
@@ -74,7 +75,8 @@ export class CatalogService {
 
     const isPanel = dto.isPanel ?? parameters.length > 1;
 
-    return this.prisma.test.create({
+    return this.prisma.$transaction(async tx=>{
+      const saved=await tx.test.create({
       data: {
         tenantId,
         code: dto.code.toUpperCase(),
@@ -136,12 +138,16 @@ export class CatalogService {
         },
       },
     });
+      await appendAudit(tx,{tenantId,action:'CATALOG_TEST_CREATE',entityType:'Test',entityId:saved.id,after:{code:saved.code,isActive:saved.isActive,basePrice:saved.basePrice.toFixed(2)}});
+      return saved;
+    });
   }
 
   async updateTest(tenantId: string, id: string, dto: Partial<CreateTestDto>) {
     await this.getTest(tenantId, id);
 
-    return this.prisma.test.update({
+    return this.prisma.$transaction(async tx=>{
+      const saved=await tx.test.update({
       where: { id },
       data: {
         ...(dto.code !== undefined ? { code: dto.code.toUpperCase() } : {}),
@@ -166,6 +172,9 @@ export class CatalogService {
           orderBy: { sortOrder: 'asc' },
         },
       },
+    });
+      await appendAudit(tx,{tenantId,action:'CATALOG_TEST_UPDATE',entityType:'Test',entityId:saved.id,after:{code:saved.code,isActive:saved.isActive,basePrice:saved.basePrice.toFixed(2)}});
+      return saved;
     });
   }
 
@@ -242,6 +251,7 @@ export class CatalogService {
         where: { id: testId },
         data: { isPanel: parameters.length > 1 },
       });
+      await appendAudit(tx,{tenantId,action:'CATALOG_PARAMETERS_REPLACE',entityType:'Test',entityId:testId,after:{parameterCount:parameters.length}});
     });
 
     return this.getTest(tenantId, testId);
@@ -288,7 +298,8 @@ export class CatalogService {
       }
     }
 
-    return this.prisma.package.create({
+    return this.prisma.$transaction(async tx=>{
+      const saved=await tx.package.create({
       data: {
         tenantId,
         code: dto.code.toUpperCase(),
@@ -306,6 +317,9 @@ export class CatalogService {
       include: {
         items: { include: { test: true } },
       },
+    });
+      await appendAudit(tx,{tenantId,action:'CATALOG_PACKAGE_CREATE',entityType:'Package',entityId:saved.id,after:{code:saved.code,isActive:saved.isActive,basePrice:saved.basePrice.toFixed(2)}});
+      return saved;
     });
   }
 }

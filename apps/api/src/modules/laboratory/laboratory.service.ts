@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { appendAudit } from '../../common/audit';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CollectSampleDto } from './dto/collect-sample.dto';
 import { EnterResultDto, ResultValueInputDto } from './dto/enter-result.dto';
@@ -380,7 +381,7 @@ export class LaboratoryService {
     if (sample.invoice.visitId) {
       const outcome=await this.prisma.$transaction(async tx=>{
         const result=await enterOccurrenceResult(tx,tenantId,dto,enteredById);
-        const report=await this.recomputeReportStatus(tx,tenantId,sample.invoiceId);
+        const report=await this.recomputeReportStatus(tx,tenantId,sample.invoiceId,enteredById);
         return {result,report};
       });
       if(outcome.report.justCompleted) await this.notifyReportReady(tenantId,sample.invoiceId,outcome.report.trackingId);
@@ -549,6 +550,7 @@ export class LaboratoryService {
             },
           });
 
+      if (shouldRelease) await appendAudit(tx,{tenantId,actorId:enteredById,action:'RESULT_RELEASE',entityType:'Result',entityId:created.id,after:{status:created.status,legacy:true}});
       let reportOutcome: { justCompleted: boolean; trackingId?: string } = {
         justCompleted: false,
       };
@@ -557,6 +559,7 @@ export class LaboratoryService {
           tx,
           tenantId,
           sample.invoiceId,
+          enteredById,
         );
       }
 
@@ -592,7 +595,7 @@ export class LaboratoryService {
       const outcome=await this.prisma.$transaction(async tx=>{
         const result=await releaseOccurrenceResult(tx,tenantId,resultId,actorId);
         const sample=await tx.sample.findUniqueOrThrow({where:{id:result.sampleId}});
-        const report=await this.recomputeReportStatus(tx,tenantId,sample.invoiceId);
+        const report=await this.recomputeReportStatus(tx,tenantId,sample.invoiceId,actorId);
         return {result,sample,report};
       });
       if(outcome.report.justCompleted) await this.notifyReportReady(tenantId,outcome.sample.invoiceId,outcome.report.trackingId);
@@ -620,10 +623,12 @@ export class LaboratoryService {
         },
         include: { test: true, values: { include: { parameter: true } } },
       });
+      await appendAudit(tx,{tenantId,actorId,action:'RESULT_RELEASE',entityType:'Result',entityId:resultId,before:{status:existing.status},after:{status:updated.status,legacy:true}});
       const reportOutcome = await this.recomputeReportStatus(
         tx,
         tenantId,
         sampleForResult.invoiceId,
+        actorId,
       );
       return { updated, reportOutcome };
     });
@@ -662,7 +667,7 @@ export class LaboratoryService {
         if(!this.computeInvoiceReadiness(invoice).allEntered) throw new BadRequestException('Each OrderedTest occurrence needs a result');
         const drafts=invoice.samples.flatMap(s=>s.results).filter(r=>r.orderedTestId && r.status===ResultStatus.ENTERED).sort((a,b)=>a.orderedTestId!.localeCompare(b.orderedTestId!));
         for(const draft of drafts) await releaseOccurrenceResult(tx,tenantId,draft.id,actorId);
-        return {released:drafts.length,samples:invoice.samples,report:await this.recomputeReportStatus(tx,tenantId,invoiceId)};
+        return {released:drafts.length,samples:invoice.samples,report:await this.recomputeReportStatus(tx,tenantId,invoiceId,actorId)};
       });
       if(outcome.report.justCompleted) await this.notifyReportReady(tenantId,invoiceId,outcome.report.trackingId);
       for(const s of outcome.samples) this.gateway.notifySampleChanged(tenantId,s.id);
@@ -709,8 +714,9 @@ export class LaboratoryService {
             releasedAt: new Date(),
           },
         });
+        await appendAudit(tx,{tenantId,actorId,action:'RESULT_RELEASE',entityType:'Result',entityId:resultId,after:{status:'RELEASED',legacy:true}});
       }
-      return this.recomputeReportStatus(tx, tenantId, invoiceId);
+      return this.recomputeReportStatus(tx,tenantId,invoiceId,actorId);
     });
 
     if (reportOutcome.justCompleted) {
@@ -746,7 +752,7 @@ export class LaboratoryService {
       const draft=await this.prisma.$transaction(async tx=>{
         const result=await reopenOccurrenceResult(tx,tenantId,resultId,reason,actorId);
         const sample=await tx.sample.findUniqueOrThrow({where:{id:result.sampleId}});
-        await this.recomputeReportStatus(tx,tenantId,sample.invoiceId);
+        await this.recomputeReportStatus(tx,tenantId,sample.invoiceId,actorId);
         return result;
       });
       this.gateway.notifySampleChanged(tenantId,draft.sampleId);
@@ -771,9 +777,10 @@ export class LaboratoryService {
         },
         include: { test: true, values: { include: { parameter: true } } },
       });
+      await appendAudit(tx,{tenantId,actorId,action:'RESULT_REOPEN',entityType:'Result',entityId:resultId,before:{status:existing.status},after:{status:result.status,reason:reason.trim(),legacy:true}});
       const sample = await tx.sample.findUnique({ where: { id: existing.sampleId } });
       if (sample) {
-        await this.recomputeReportStatus(tx, tenantId, sample.invoiceId);
+        await this.recomputeReportStatus(tx,tenantId,sample.invoiceId,actorId);
       }
       return result;
     });
@@ -836,7 +843,7 @@ export class LaboratoryService {
       const result=await this.prisma.$transaction(async tx=>{
         await reopenOccurrenceResult(tx,tenantId,resultId,dto.amendmentReason,amendedById);
         const replacement=await enterOccurrenceResult(tx,tenantId,{sampleId:original.sampleId,orderedTestId:original.orderedTestId!,values:dto.values,releaseImmediately:true},amendedById);
-        await this.recomputeReportStatus(tx,tenantId,original.sample.invoiceId);
+        await this.recomputeReportStatus(tx,tenantId,original.sample.invoiceId,amendedById);
         return replacement;
       });
       this.gateway.notifySampleChanged(tenantId,original.sampleId);
@@ -943,6 +950,7 @@ export class LaboratoryService {
         });
       }
 
+      await appendAudit(tx,{tenantId,actorId:amendedById,action:'AMENDMENT_RELEASE',entityType:'Result',entityId:newResult.id,before:{sourceResultId:original.id,status:original.status},after:{status:newResult.status,reason:dto.amendmentReason,legacy:true}});
       return newResult;
     });
   }
@@ -962,6 +970,7 @@ export class LaboratoryService {
     tx: Prisma.TransactionClient,
     tenantId: string,
     invoiceId: string,
+    actorId?: string,
   ): Promise<{ justCompleted: boolean; trackingId?: string }> {
     const invoice = await tx.invoice.findFirst({
       where: { id: invoiceId,tenantId },
@@ -997,12 +1006,16 @@ export class LaboratoryService {
           generatedAt: allReleased ? new Date() : null,
         },
       });
-      if (allReleased && invoice.visitId) await captureReleasedReportVersion(tx, tenantId, created.id);
+      if (allReleased && invoice.visitId) {
+        const versionId=await captureReleasedReportVersion(tx,tenantId,created.id);
+        if (versionId) await appendAudit(tx,{tenantId,actorId,action:'REPORT_VERSION_RELEASE',entityType:'ReportVersion',entityId:versionId,after:{reportId:created.id,status:'COMPLETE'}});
+      }
       return { justCompleted: allReleased, trackingId: created.trackingId };
     }
 
     if (allReleased && invoice.visitId) {
       const versionId = await captureReleasedReportVersion(tx, tenantId, invoice.report.id);
+      if (versionId && versionId!==invoice.report.currentVersionId) await appendAudit(tx,{tenantId,actorId,action:'REPORT_VERSION_RELEASE',entityType:'ReportVersion',entityId:versionId,after:{reportId:invoice.report.id,status:'COMPLETE'}});
       return { justCompleted: versionId !== invoice.report.currentVersionId, trackingId: invoice.report.trackingId };
     }
 

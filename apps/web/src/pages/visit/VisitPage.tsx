@@ -9,6 +9,7 @@ import * as billingApi from '../../api/billing';
 import * as labApi from '../../api/laboratory';
 import type { Patient, Test, Package, Doctor, Booking, Invoice } from '../../types';
 import { StatusBadge } from '../../components/StatusBadge';
+import { useSettings } from '../../contexts/SettingsContext';
 import { Loading } from '../../components/Loading';
 
 type Step = 'patient' | 'tests' | 'payment' | 'done';
@@ -26,6 +27,10 @@ function money(n: number | string | undefined) {
 }
 
 export function VisitPage() {
+  const {discountMode,refresh:refreshSettings}=useSettings();
+  const invoiceLevel=discountMode==='INVOICE_LEVEL';
+  const [invoiceDiscount,setInvoiceDiscount]=useState('');
+  const [invoiceDiscountReason,setInvoiceDiscountReason]=useState('');
   const [params] = useSearchParams();
   const preselectedPatientId = params.get('patientId');
 
@@ -181,6 +186,7 @@ export function VisitPage() {
   }
 
   function lineDiscount(id: string, basePrice: number) {
+    if (invoiceLevel) return 0;
     const raw = Number(discounts[id] || 0);
     if (!raw || raw <= 0) return 0;
     return Math.min(raw, basePrice);
@@ -197,6 +203,14 @@ export function VisitPage() {
       const base = Number(p?.basePrice ?? 0);
       return sum + (base - lineDiscount(id, base));
     }, 0);
+
+  const estimatedSubtotal=selectedTestIds.reduce((sum,id)=>sum+Number(tests.find(t=>t.id===id)?.basePrice??0),0)+selectedPackageIds.reduce((sum,id)=>sum+Number(packages.find(p=>p.id===id)?.basePrice??0),0);
+  const initialDiscount=invoiceLevel?Number(invoiceDiscount||0):estimatedSubtotal-estimatedTotal;
+  const estimatedGrandTotal=estimatedSubtotal-initialDiscount;
+  const invalidInvoiceDiscount=invoiceLevel && (!Number.isFinite(initialDiscount) || initialDiscount<0 || initialDiscount>estimatedSubtotal || Math.abs(initialDiscount*100-Math.round(initialDiscount*100))>0.000001);
+
+  // Refresh display settings when the operator returns from another workstation/window.
+  useEffect(()=>{const refetch=()=>{void refreshSettings();};window.addEventListener('focus',refetch);return ()=>window.removeEventListener('focus',refetch);},[refreshSettings]);
 
   async function createVisit() {
     if (!patient) return;
@@ -239,6 +253,8 @@ export function VisitPage() {
       ];
       const inv = await billingApi.createInvoice({
         bookingId: b.id,
+        invoiceDiscountAmount: invoiceLevel?Number(invoiceDiscount||0):undefined,
+        invoiceDiscountReason: invoiceLevel?invoiceDiscountReason||undefined:undefined,
         lines,
       });
       setInvoice(inv);
@@ -249,6 +265,7 @@ export function VisitPage() {
         (err as { response?: { data?: { message?: string } } })?.response?.data
           ?.message || 'Failed to create visit';
       setError(msg);
+      void refreshSettings();
     } finally {
       setLoading(false);
     }
@@ -551,7 +568,7 @@ export function VisitPage() {
                       <span className="flex-1 text-sm font-medium">{pkg.name}</span>
                       <span className="text-sm text-slate-600">{money(base)}</span>
                     </label>
-                    {selected && (
+                    {selected && !invoiceLevel && (
                       <div className="mt-2 flex flex-wrap items-center gap-2 pl-7">
                         <label className="text-xs text-slate-500">Discount (Rs)</label>
                         <input
@@ -595,7 +612,7 @@ export function VisitPage() {
                       </span>
                       <span className="text-sm text-slate-600">{money(base)}</span>
                     </label>
-                    {selected && (
+                    {selected && !invoiceLevel && (
                       <div className="mt-2 flex flex-wrap items-center gap-2 pl-7">
                         <label className="text-xs text-slate-500">Discount (Rs)</label>
                         <input
@@ -623,12 +640,19 @@ export function VisitPage() {
             </div>
           </div>
 
+          {invoiceLevel && <div className="card space-y-2">
+            <label className="label" htmlFor="invoice-discount">Invoice Discount (Rs)</label>
+            <input id="invoice-discount" className="input" type="number" min={0} max={estimatedSubtotal} step="0.01" value={invoiceDiscount} onChange={e=>setInvoiceDiscount(e.target.value)} />
+            <input className="input" aria-label="Invoice discount reason" placeholder="Reason (optional)" value={invoiceDiscountReason} onChange={e=>setInvoiceDiscountReason(e.target.value)} />
+            <div className="flex justify-between text-sm"><span>Subtotal</span><span>{money(estimatedSubtotal)}</span></div>
+            <div className="flex justify-between text-sm"><span>Invoice Discount</span><span>- {money(initialDiscount)}</span></div>
+          </div>}
           <div className="card flex items-center justify-between">
             <div className="text-sm">
-              Estimated total:{' '}
-              <span className="text-lg font-bold">{money(estimatedTotal)}</span>
+              {invoiceLevel?'Grand Total':'Estimated total'}:{' '}
+              <span className="text-lg font-bold">{money(estimatedGrandTotal)}</span>
             </div>
-            <button className="btn-primary" onClick={createVisit} disabled={loading}>
+            <button className="btn-primary" onClick={createVisit} disabled={loading || invalidInvoiceDiscount}>
               {loading ? 'Creating…' : 'Create Invoice'}
             </button>
           </div>
@@ -648,7 +672,7 @@ export function VisitPage() {
               <tr className="text-xs uppercase text-slate-500">
                 <th className="py-1">Test</th>
                 <th className="py-1 text-right">Original</th>
-                <th className="py-1 text-right">Discount</th>
+                {invoice.discountMode!=='INVOICE_LEVEL' && <th className="py-1 text-right">Discount</th>}
                 <th className="py-1 text-right">Final</th>
               </tr>
             </thead>
@@ -657,9 +681,9 @@ export function VisitPage() {
                 <tr key={l.id} className="border-t border-slate-100">
                   <td className="py-1.5">{l.description}</td>
                   <td className="py-1.5 text-right">{money(l.basePrice ?? l.unitPrice)}</td>
-                  <td className="py-1.5 text-right text-amber-700">
+                  {invoice.discountMode!=='INVOICE_LEVEL' && <td className="py-1.5 text-right text-amber-700">
                     {Number(l.discountAmount ?? 0) > 0 ? `- ${money(l.discountAmount)}` : '—'}
-                  </td>
+                  </td>}
                   <td className="py-1.5 text-right font-medium">{money(l.lineTotal)}</td>
                 </tr>
               ))}
@@ -667,6 +691,10 @@ export function VisitPage() {
           </table>
 
           <div className="space-y-1 border-t border-slate-200 pt-2 text-sm">
+            {invoice.discountMode==='INVOICE_LEVEL' && <>
+              <div className="flex justify-between"><span>Subtotal</span><span>{money(invoice.subtotal)}</span></div>
+              <div className="flex justify-between"><span>Invoice Discount</span><span>{money(invoice.invoiceDiscountAmount)}</span></div>
+            </>}
             <div className="flex justify-between font-semibold">
               <span>Total</span>
               <span>{money(invoice.grandTotal)}</span>

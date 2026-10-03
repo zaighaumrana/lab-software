@@ -161,7 +161,7 @@ export function InvoicePrintPage() {
             <span>{money(invoice.subtotal)}</span>
           </div>
           <div className="row">
-            <span>Discount</span>
+            <span>{invoice.discountMode==='INVOICE_LEVEL'?'Invoice Discount':'Discount'}</span>
             <span>{money(invoice.discountTotal)}</span>
           </div>
           <div className="row grand">

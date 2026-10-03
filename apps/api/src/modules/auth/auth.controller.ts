@@ -44,7 +44,7 @@ export class AuthController {
       sessionId = sessionHeader;
     }
     if (sessionId) {
-      this.authService.logout(sessionId);
+      await this.authService.logout(sessionId);
     }
     return { ok: true };
   }

@@ -12,6 +12,8 @@ import { BrandingDto, PrintLayoutDto } from './dto/branding.dto';
 import { SaveSmsTemplateDto, SmsTemplateRecord } from './dto/sms-settings.dto';
 import { Role } from '@lms/database';
 import * as bcrypt from 'bcrypt';
+import { appendAudit } from '../../common/audit';
+import { DiscountModeDto } from './dto/discount-mode.dto';
 import {
   SMS_EVENT_DEFINITIONS,
   getSmsEventDefinition,
@@ -89,63 +91,39 @@ export class SettingsService {
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
-    return this.prisma.user.create({
-      data: {
-        tenantId,
-        username: dto.username.trim(),
-        passwordHash,
-        fullName: dto.fullName.trim(),
-        role: dto.role as Role,
-        email: dto.email,
-        branchId: dto.branchId || null,
-        isActive: true,
-      },
-      select: {
-        id: true,
-        username: true,
-        fullName: true,
-        role: true,
-        email: true,
-        isActive: true,
-        createdAt: true,
-      },
+    return this.prisma.$transaction(async tx => {
+      if (dto.branchId && !await tx.branch.findFirst({where:{id:dto.branchId,tenantId,isActive:true}})) throw new BadRequestException('Branch not found');
+      const user = await tx.user.create({data:{tenantId,username:dto.username.trim(),passwordHash,fullName:dto.fullName.trim(),
+        role:dto.role as Role,email:dto.email,branchId:dto.branchId || null,isActive:true},
+        select:{id:true,username:true,fullName:true,role:true,email:true,isActive:true,createdAt:true,branchId:true}});
+      await appendAudit(tx,{tenantId,action:'USER_CREATE',entityType:'User',entityId:user.id,after:{role:user.role,branchId:user.branchId,isActive:true}});
+      return user;
     });
   }
 
-  async updateUser(
-    tenantId: string,
-    actorRole: string,
-    userId: string,
-    dto: UpdateUserDto,
-  ) {
+  async updateUser(tenantId: string, actorRole: string, userId: string, dto: UpdateUserDto) {
     this.assertAdmin(actorRole);
-
-    const user = await this.prisma.user.findFirst({
-      where: { id: userId, tenantId },
-    });
-    if (!user) throw new NotFoundException('User not found');
-
-    const data: Record<string, unknown> = {};
-    if (dto.fullName !== undefined) data.fullName = dto.fullName.trim();
-    if (dto.role !== undefined) data.role = dto.role as Role;
-    if (dto.email !== undefined) data.email = dto.email;
-    if (dto.isActive !== undefined) data.isActive = dto.isActive;
-    if (dto.password) {
-      data.passwordHash = await bcrypt.hash(dto.password, 10);
-    }
-
-    return this.prisma.user.update({
-      where: { id: userId },
-      data,
-      select: {
-        id: true,
-        username: true,
-        fullName: true,
-        role: true,
-        email: true,
-        isActive: true,
-        lastLoginAt: true,
-      },
+    const passwordHash = dto.password ? await bcrypt.hash(dto.password,10) : undefined;
+    return this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM users WHERE id=${userId} AND "tenantId"=${tenantId} FOR UPDATE`;
+      const user = await tx.user.findFirst({where:{id:userId,tenantId}});
+      if (!user) throw new NotFoundException('User not found');
+      if (dto.branchId && !await tx.branch.findFirst({where:{id:dto.branchId,tenantId,isActive:true}})) throw new BadRequestException('Branch not found');
+      const updated = await tx.user.update({where:{id:userId},data:{
+        ...(dto.fullName!==undefined?{fullName:dto.fullName.trim()}:{}),...(dto.email!==undefined?{email:dto.email}:{}),
+        ...(dto.role!==undefined?{role:dto.role as Role}:{}),...(dto.branchId!==undefined?{branchId:dto.branchId || null}:{}),
+        ...(dto.isActive!==undefined?{isActive:dto.isActive}:{}),...(passwordHash?{passwordHash}:{})},
+        select:{id:true,username:true,fullName:true,role:true,email:true,isActive:true,lastLoginAt:true,branchId:true}});
+      if (!updated.isActive || passwordHash) await tx.authSession.updateMany({where:{tenantId,userId,revokedAt:null},
+        data:{revokedAt:new Date(),revocationReason:passwordHash?'ADMIN_PASSWORD_RESET':'USER_DEACTIVATE'}});
+      const changes = [
+        ['isActive',updated.isActive?'USER_REACTIVATE':'USER_DEACTIVATE'],['role','ROLE_CHANGE'],['branchId','BRANCH_ASSIGNMENT_CHANGE'],
+      ] as const;
+      for (const [field,action] of changes) if (user[field]!==updated[field]) await appendAudit(tx,{tenantId,action,entityType:'User',entityId:userId,
+        before:{[field]:user[field]},after:{[field]:updated[field]}});
+      if (passwordHash) await appendAudit(tx,{tenantId,action:'PASSWORD_CHANGE',entityType:'User',entityId:userId,after:{administrativeReset:true,allSessionsRevoked:true}});
+      if (dto.fullName!==undefined || dto.email!==undefined) await appendAudit(tx,{tenantId,action:'USER_PROFILE_CHANGE',entityType:'User',entityId:userId,after:{profileUpdated:true}});
+      return updated;
     });
   }
 
@@ -172,17 +150,7 @@ export class SettingsService {
       logoDataUrl: dto.logoDataUrl ?? null,
     };
 
-    await this.prisma.configuration.upsert({
-      where: { tenantId_key: { tenantId, key: KEY_BRANDING } },
-      create: { tenantId, key: KEY_BRANDING, value },
-      update: { value },
-    });
-
-    // Keep tenant display name in sync
-    await this.prisma.tenant.update({
-      where: { id: tenantId },
-      data: { name: value.labName },
-    });
+    await this.saveConfiguration(tenantId,KEY_BRANDING,value,true);
 
     return value;
   }
@@ -216,22 +184,54 @@ export class SettingsService {
       reportPagination: dto.reportPagination || DEFAULT_PRINT.reportPagination,
     };
 
-    await this.prisma.configuration.upsert({
-      where: { tenantId_key: { tenantId, key: KEY_PRINT } },
-      create: { tenantId, key: KEY_PRINT, value },
-      update: { value },
-    });
+    await this.saveConfiguration(tenantId,KEY_PRINT,value);
 
     return value;
   }
 
   /** Combined settings for UI + print headers */
   async getPublicSettings(tenantId: string) {
-    const [branding, printLayout] = await Promise.all([
+    const [branding, printLayout, discountMode] = await Promise.all([
       this.getBranding(tenantId),
       this.getPrintLayout(tenantId),
+      this.getDiscountMode(tenantId),
     ]);
-    return { branding, printLayout };
+    return { branding, printLayout, discountMode };
+  }
+
+  private async saveConfiguration(tenantId:string,key:string,value:Record<string,unknown>,branding=false) {
+    return this.prisma.$transaction(async tx=>{
+      // Tenant lock also serializes invoice-mode reads when no configuration row exists yet.
+      await tx.$queryRaw`SELECT id FROM tenants WHERE id=${tenantId} FOR UPDATE`;
+      const before=await tx.configuration.findUnique({where:{tenantId_key:{tenantId,key}}});
+      await tx.configuration.upsert({where:{tenantId_key:{tenantId,key}},create:{tenantId,key,value:value as never},update:{value:value as never}});
+      if (branding) await tx.tenant.update({where:{id:tenantId},data:{name:String(value.labName)}});
+      const changed=Object.keys(value).filter(k=>JSON.stringify((before?.value as Record<string,unknown> | undefined)?.[k])!==JSON.stringify(value[k]));
+      if (changed.length) await appendAudit(tx,{tenantId,action:'SETTINGS_CHANGE',entityType:'Configuration',entityId:key,
+        before:{configured:!!before},after:{changedFields:changed.join(','),...(key==='invoice_discount_mode'?{mode:value.mode}: {})}});
+    });
+  }
+  async getDiscountMode(tenantId:string):Promise<'PER_LINE'|'INVOICE_LEVEL'> {
+    const row=await this.prisma.configuration.findUnique({where:{tenantId_key:{tenantId,key:'invoice_discount_mode'}}});
+    return (row?.value as {mode?:string}|null)?.mode==='INVOICE_LEVEL'?'INVOICE_LEVEL':'PER_LINE';
+  }
+  async saveDiscountMode(tenantId:string,actorRole:string,dto:DiscountModeDto) {
+    this.assertAdmin(actorRole);
+    if (!['PER_LINE','INVOICE_LEVEL'].includes(dto.mode)) throw new BadRequestException('Invalid discount mode');
+    await this.saveConfiguration(tenantId,'invoice_discount_mode',{mode:dto.mode});
+    return {mode:dto.mode};
+  }
+  async listAudit(tenantId:string,role:string,query:Record<string,string|undefined>) {
+    this.assertAdmin(role);
+    const page=Number(query.page??1),limit=Number(query.limit??50);
+    if (!Number.isInteger(page)||page<1||page>10000||!Number.isInteger(limit)||limit<1||limit>100) throw new BadRequestException('Invalid audit pagination');
+    const from=query.from?new Date(query.from):undefined,to=query.to?new Date(query.to):undefined;
+    if ((from&&!Number.isFinite(from.getTime()))||(to&&!Number.isFinite(to.getTime()))||(from&&to&&from>to)) throw new BadRequestException('Invalid audit date range');
+    const where={tenantId,...(query.entityType?{entityType:query.entityType}:{}),...(query.entityId?{entityId:query.entityId}:{}),
+      ...(query.actorId?{actorId:query.actorId}:{}),...(query.action?{action:query.action}:{}),
+      ...(from||to?{createdAt:{...(from?{gte:from}:{}),...(to?{lte:to}:{})}}:{})};
+    const [items,total]=await this.prisma.$transaction([this.prisma.auditLog.findMany({where,orderBy:[{createdAt:'desc'},{id:'desc'}],skip:(page-1)*limit,take:limit}),this.prisma.auditLog.count({where})]);
+    return {items,total,page,limit};
   }
 
   // ----- SMS / Notifications -----
@@ -306,10 +306,9 @@ export class SettingsService {
       );
     }
 
-    const existing = await this.prisma.smsTemplate.findUnique({
-      where: { tenantId_key: { tenantId, key: key as SmsEventKey } },
-    });
-
+    return this.prisma.$transaction(async tx=>{
+      await tx.$queryRaw`SELECT id FROM tenants WHERE id=${tenantId} FOR UPDATE`;
+      const existing=await tx.smsTemplate.findUnique({where:{tenantId_key:{tenantId,key:key as SmsEventKey}}});
     // A SENDPK mapping is only meaningful for the exact wording it was
     // approved against — if the admin changes the body without also
     // re-selecting a template, keep the existing mapping (they may be
@@ -323,10 +322,10 @@ export class SettingsService {
         dto.sendpkTemplateId !== undefined ? dto.sendpkTemplateId : (existing?.sendpkTemplateId ?? null),
     };
 
-    return this.prisma.smsTemplate.upsert({
-      where: { tenantId_key: { tenantId, key: key as SmsEventKey } },
-      create: { tenantId, key: key as SmsEventKey, ...data },
-      update: data,
+      const saved=await tx.smsTemplate.upsert({where:{tenantId_key:{tenantId,key:key as SmsEventKey}},create:{tenantId,key:key as SmsEventKey,...data},update:data});
+      if (!existing || existing.body!==saved.body || existing.isActive!==saved.isActive || existing.sendpkTemplateId!==saved.sendpkTemplateId) await appendAudit(tx,{tenantId,action:'SETTINGS_CHANGE',entityType:'SmsTemplate',entityId:saved.id,
+        after:{isActive:saved.isActive,templateMappingChanged:existing?.sendpkTemplateId!==saved.sendpkTemplateId,wordingChanged:existing?.body!==saved.body}});
+      return saved;
     });
   }
 
@@ -346,13 +345,13 @@ export class SettingsService {
     }
     const templates = await this.smsGateway.listTemplates();
 
-    const mapped = await this.prisma.smsTemplate.findMany({
-      where: { tenantId, sendpkTemplateId: { not: null } },
-    });
+    await this.prisma.$transaction(async tx=>{
+    await tx.$queryRaw`SELECT id FROM tenants WHERE id=${tenantId} FOR UPDATE`;
+    const mapped = await tx.smsTemplate.findMany({where:{tenantId,sendpkTemplateId:{not:null}}});
     for (const row of mapped) {
       const match = templates.find((t) => t.id === row.sendpkTemplateId);
       if (match) {
-        await this.prisma.smsTemplate.update({
+        await tx.smsTemplate.update({
           where: { id: row.id },
           data: {
             sendpkTemplateName: match.name,
@@ -364,6 +363,8 @@ export class SettingsService {
       }
     }
 
+    if (mapped.length) await appendAudit(tx,{tenantId,action:'SETTINGS_CHANGE',entityType:'SmsTemplate',entityId:'PROVIDER_SYNC',after:{mappedTemplates:mapped.length}});
+    });
     return templates;
   }
 

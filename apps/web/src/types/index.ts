@@ -123,6 +123,9 @@ export interface Payment {
 }
 
 export interface Invoice {
+  discountMode: 'PER_LINE' | 'INVOICE_LEVEL';
+  invoiceDiscountAmount: string;
+  invoiceDiscountReason?: string | null;
   visitId?: string | null;
   visit?: { orderedTests: OrderedTest[] } | null;
   id: string;

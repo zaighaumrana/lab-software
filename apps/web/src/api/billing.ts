@@ -17,6 +17,8 @@ export async function listInvoices(params?: string | InvoiceListParams) {
 
 export async function createInvoice(payload: {
   bookingId: string;
+  invoiceDiscountAmount?: number;
+  invoiceDiscountReason?: string;
   notes?: string;
   lines: {
     testId?: string;

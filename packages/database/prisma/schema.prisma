@@ -48,6 +48,7 @@ model Tenant {
   smsTemplates SmsTemplate[]
   visits Visit[]
   identifierCounters IdentifierCounter[]
+  sessions AuthSession[]
 
   @@map("tenants")
 }
@@ -123,6 +124,7 @@ model User {
   reportReleases ReportVersion[]
   recordedPayments Payment[]
   invoiceAdjustments InvoiceAdjustment[]
+  sessions AuthSession[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, username])
@@ -133,6 +135,33 @@ model User {
 // =============================================================================
 // PATIENT MANAGEMENT
 // =============================================================================
+
+model AuthSession {
+  id String @id @default(cuid())
+  tokenHash String @unique
+  tenantId String
+  userId String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  lastSeenAt DateTime @default(now()) @db.Timestamptz(3)
+  expiresAt DateTime @db.Timestamptz(3)
+  revokedAt DateTime? @db.Timestamptz(3)
+  revocationReason String?
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  user User @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  @@index([tenantId, userId, revokedAt])
+  @@index([expiresAt])
+  @@map("auth_sessions")
+}
+
+model LoginAttempt {
+  attemptKey String @id
+  failures Int @default(0)
+  windowStartedAt DateTime @default(now()) @db.Timestamptz(3)
+  lockedUntil DateTime? @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @db.Timestamptz(3)
+  @@index([updatedAt])
+  @@map("login_attempts")
+}
 
 model Patient {
   id          String    @id @default(cuid())
@@ -502,6 +531,9 @@ model Invoice {
   invoiceNumber   String
   subtotal        Decimal       @db.Decimal(12, 2)
   discountTotal   Decimal       @db.Decimal(12, 2) @default(0)
+  discountMode String @default("PER_LINE")
+  invoiceDiscountAmount Decimal @db.Decimal(12, 2) @default(0)
+  invoiceDiscountReason String?
   taxTotal        Decimal       @db.Decimal(12, 2) @default(0)
   grandTotal      Decimal       @db.Decimal(12, 2)
   amountPaid      Decimal       @db.Decimal(12, 2) @default(0)
@@ -1048,6 +1080,8 @@ model AuditLog {
 
   @@index([tenantId, entityType, entityId])
   @@index([tenantId, createdAt])
+  @@index([tenantId, actorId, createdAt])
+  @@index([tenantId, action, createdAt])
   @@map("audit_logs")
 }
 

@@ -7,7 +7,7 @@ import { Loading } from '../../components/Loading';
 import { Navigate } from 'react-router';
 import { SmsSettingsTab } from './SmsSettingsTab';
 
-type Tab = 'users' | 'branding' | 'print' | 'report-layout' | 'sms';
+type Tab = 'users' | 'branding' | 'print' | 'report-layout' | 'sms' | 'billing';
 
 const ROLES = [
   { value: 'ADMIN', label: 'Admin' },
@@ -22,7 +22,8 @@ const ROLES = [
 
 export function SettingsPage() {
   const { user } = useAuth();
-  const { branding, printLayout, refresh } = useSettings();
+  const { branding, printLayout, discountMode, refresh } = useSettings();
+  const [mode,setMode]=useState(discountMode);
   const [tab, setTab] = useState<Tab>('users');
   const [users, setUsers] = useState<StaffUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -44,9 +45,10 @@ export function SettingsPage() {
   const [pForm, setPForm] = useState(printLayout);
 
   useEffect(() => {
+    setMode(discountMode);
     setBForm(branding);
     setPForm(printLayout);
-  }, [branding, printLayout]);
+  }, [branding, printLayout, discountMode]);
 
   useEffect(() => {
     if (tab === 'users' && user?.role === 'ADMIN') {
@@ -150,6 +152,7 @@ export function SettingsPage() {
             ['print', 'Print layout'],
             ['report-layout', 'Report Print Layout'],
             ['sms', 'SMS / Notifications'],
+            ['billing', 'Invoice discounts'],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -174,6 +177,15 @@ export function SettingsPage() {
         <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
 
+      {tab === 'billing' && (
+        <form className="card space-y-3" onSubmit={async e=>{e.preventDefault();setError('');setMessage('');try{await settingsApi.saveDiscountMode(mode);await refresh();setMessage('Discount mode saved for new invoices');}catch{setError('Could not save discount mode');}}}>
+          <h2 className="font-semibold">Invoice discount mode</h2>
+          <p className="text-sm text-slate-500">Applies to new invoices. Existing invoices keep their original discounts.</p>
+          <label className="block"><input type="radio" name="discountMode" checked={mode==='PER_LINE'} onChange={()=>setMode('PER_LINE')} /> Per test / package</label>
+          <label className="block"><input type="radio" name="discountMode" checked={mode==='INVOICE_LEVEL'} onChange={()=>setMode('INVOICE_LEVEL')} /> One invoice discount</label>
+          <button className="btn-primary" type="submit">Save discount mode</button>
+        </form>
+      )}
       {tab === 'users' && (
         <div className="grid gap-6 lg:grid-cols-2">
           <form onSubmit={handleCreateUser} className="card space-y-3">

@@ -4,6 +4,7 @@ import {
   BadRequestException,
   Optional,
 } from '@nestjs/common';
+import { appendAudit } from '../../common/audit';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { BookingsService } from '../bookings/bookings.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
@@ -187,6 +188,7 @@ export class BillingService {
         ? new Decimal(line.manualDiscount)
         : new Decimal(0);
 
+      if (!Number.isInteger(quantity) || quantity<1 || !manualDiscount.isFinite() || manualDiscount.lt(0) || manualDiscount.decimalPlaces()>2) throw new BadRequestException('Invalid line quantity or discount');
       if (manualDiscount.greaterThan(basePrice.mul(quantity))) {
         throw new BadRequestException('Manual discount cannot exceed line total');
       }
@@ -214,10 +216,20 @@ export class BillingService {
     }
 
     const taxTotal = new Decimal(0); // Tax not required for v1
-    const grandTotal = subtotal.minus(discountTotal).plus(taxTotal);
+
     const invoiceNumber = generateInvoiceNumber();
 
     const invoice = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM tenants WHERE id=${tenantId} FOR UPDATE`;
+      const config=await tx.configuration.findUnique({where:{tenantId_key:{tenantId,key:'invoice_discount_mode'}}});
+      const discountMode=(config?.value as {mode?:string}|null)?.mode==='INVOICE_LEVEL'?'INVOICE_LEVEL':'PER_LINE';
+      const invoiceDiscountAmount=new Decimal(dto.invoiceDiscountAmount ?? 0);
+      if (!invoiceDiscountAmount.isFinite() || invoiceDiscountAmount.lt(0) || invoiceDiscountAmount.decimalPlaces()>2 || invoiceDiscountAmount.gt(subtotal)) throw new BadRequestException('Invoice discount must be a valid amount no greater than subtotal');
+      if (discountMode==='INVOICE_LEVEL') {
+        if (dto.lines.some(l=>(l.manualDiscount ?? 0)!==0 || !!l.manualDiscountReason?.trim())) throw new BadRequestException('Per-line discounts are disabled in invoice discount mode');
+        discountTotal=invoiceDiscountAmount;
+      } else if (invoiceDiscountAmount.gt(0) || dto.invoiceDiscountReason?.trim()) throw new BadRequestException('Invoice discount is disabled in per-line mode');
+      const grandTotal=subtotal.minus(discountTotal).plus(taxTotal);
       await tx.$queryRaw`SELECT id FROM bookings WHERE id=${dto.bookingId} AND "tenantId"=${tenantId} FOR UPDATE`;
       const currentBooking = await tx.booking.findFirst({where:{id:dto.bookingId,tenantId,branchId}});
       if (!currentBooking || ![BookingStatus.CONFIRMED,BookingStatus.CHECKED_IN].includes(currentBooking.status as 'CONFIRMED'|'CHECKED_IN')) {
@@ -233,6 +245,9 @@ export class BillingService {
           invoiceNumber,
           subtotal,
           discountTotal,
+          discountMode,
+          invoiceDiscountAmount,
+          invoiceDiscountReason: dto.invoiceDiscountReason?.trim().slice(0,1000) || null,
           taxTotal,
           grandTotal,
           amountPaid: new Decimal(0),
@@ -322,6 +337,7 @@ export class BillingService {
         }
       }
 
+      await appendAudit(tx,{tenantId,action:'INVOICE_ISSUED',entityType:'Invoice',entityId:inv.id,after:{subtotal:subtotal.toFixed(2),discountTotal:discountTotal.toFixed(2),grandTotal:grandTotal.toFixed(2),discountMode}});
       return tx.invoice.findUniqueOrThrow({where:{id:inv.id},include:{lines:true,booking:{include:{patient:true}},report:true,
         visit:{include:{orderedTests:{orderBy:{occurrenceNo:'asc'},include:{testVersion:{include:{versionParameters:{include:{choices:true,referenceRanges:true}}}}}}}}}});
     });
@@ -355,6 +371,7 @@ export class BillingService {
         status:amount.eq(state.due) ? PaymentStatus.FULLY_RECEIVED : PaymentStatus.PARTIALLY_RECEIVED,
         reference:dto.reference,notes:dto.notes,receivedAt:at}});
       const updated = await reconcileInvoice(tx,invoice,at);
+      await appendAudit(tx,{tenantId,actorId,action:'PAYMENT_RECORDED',entityType:'Payment',entityId:payment.id,after:{invoiceId,amount:amount.toFixed(2),method:dto.method,status:updated.status}});
       return {payment,invoice:updated};
     });
     this.live?.notifyInvoiceChanged(tenantId,invoiceId);
@@ -410,6 +427,7 @@ export class BillingService {
       const updated = await reconcileInvoice(tx,invoice,at);
       if (type==='VOID') await tx.invoice.update({where:{id:invoiceId},data:{voidReason:reason}});
       if (['REFUND','VOID','DISCOUNT','WRITE_OFF'].includes(type)) await reverseDoctorShares(tx,tenantId,invoiceId,at);
+      await appendAudit(tx,{tenantId,actorId,action:type==='VOID'?'INVOICE_VOID':type==='REFUND'?'REFUND':'ADJUSTMENT',entityType:'InvoiceAdjustment',entityId:adjustment.id,after:{invoiceId,type,amount:adjustment.amount.toFixed(2),reason,status:updated.status}});
       return {adjustment,invoice:type==='VOID' ? {...updated,voidReason:reason} : updated};
     });
     this.live?.notifyInvoiceChanged(tenantId,invoiceId);

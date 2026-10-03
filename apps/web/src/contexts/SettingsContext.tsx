@@ -6,10 +6,11 @@ import {
   type ReactNode,
 } from 'react';
 import * as settingsApi from '../api/settings';
-import type { Branding, PrintLayout } from '../api/settings';
+import type { Branding, PrintLayout, DiscountMode } from '../api/settings';
 
 interface SettingsContextValue {
   branding: Branding;
+  discountMode: DiscountMode;
   printLayout: PrintLayout;
   loading: boolean;
   refresh: () => Promise<void>;
@@ -51,6 +52,7 @@ function applyCssVars(branding: Branding) {
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [branding, setBranding] = useState<Branding>(defaultBranding);
   const [printLayout, setPrintLayout] = useState<PrintLayout>(defaultPrint);
+  const [discountMode,setDiscountMode]=useState<DiscountMode>('PER_LINE');
   const [loading, setLoading] = useState(true);
 
   async function refresh() {
@@ -58,6 +60,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       const data = await settingsApi.getSettings();
       setBranding({ ...defaultBranding, ...data.branding });
       setPrintLayout({ ...defaultPrint, ...data.printLayout });
+      setDiscountMode(data.discountMode ?? 'PER_LINE');
       applyCssVars({ ...defaultBranding, ...data.branding });
     } catch {
       applyCssVars(defaultBranding);
@@ -71,7 +74,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <SettingsContext.Provider value={{ branding, printLayout, loading, refresh }}>
+    <SettingsContext.Provider value={{ branding, printLayout, discountMode, loading, refresh }}>
       {children}
     </SettingsContext.Provider>
   );

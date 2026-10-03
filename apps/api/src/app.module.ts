@@ -1,5 +1,7 @@
 ﻿import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { NestModule, MiddlewareConsumer } from '@nestjs/common';
+import { auditContext } from './common/audit';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { PatientsModule } from './modules/patients/patients.module';
@@ -39,4 +41,11 @@ import { CashShiftsModule } from './modules/cash-shifts/cash-shifts.module';
     CashShiftsModule,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply((req: { ip?: string; headers: Record<string, unknown> }, _res: unknown, next: () => void) => {
+      const ua = req.headers['user-agent'];
+      auditContext.run({ ipAddress: req.ip, userAgent: typeof ua === 'string' ? ua.slice(0, 256) : undefined }, next);
+    }).forRoutes('*');
+  }
+}

@@ -10,8 +10,10 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { SettingsService } from './settings.service';
+import { DiscountModeDto } from './dto/discount-mode.dto';
 import { CreateUserDto, UpdateUserDto } from './dto/create-user.dto';
 import { BrandingDto, PrintLayoutDto } from './dto/branding.dto';
 import { SaveSmsTemplateDto, SmsTemplateRecord } from './dto/sms-settings.dto';
@@ -59,6 +61,20 @@ export class SettingsController {
   @RequirePermissions(Permission.USER_MANAGE)
   async listUsers(@CurrentUser() user: AuthUser) {
     return this.settingsService.listUsers(user.tenantId);
+  }
+
+  @Get('audit')
+  @UseGuards(SessionGuard, PermissionGuard)
+  @RequirePermissions(Permission.SETTINGS_MANAGE)
+  async audit(@CurrentUser() user: AuthUser, @Query() query: Record<string,string|undefined>) {
+    return this.settingsService.listAudit(user.tenantId,user.role,query);
+  }
+
+  @Put('discount-mode')
+  @UseGuards(SessionGuard, PermissionGuard)
+  @RequirePermissions(Permission.SETTINGS_MANAGE)
+  async discountMode(@CurrentUser() user: AuthUser, @Body() dto: DiscountModeDto) {
+    return this.settingsService.saveDiscountMode(user.tenantId,user.role,dto);
   }
 
   @Post('users')

@@ -1,6 +1,13 @@
 import { api } from './client';
 import type { SmsEventKey } from '@lms/shared';
 
+export type DiscountMode = 'PER_LINE' | 'INVOICE_LEVEL';
+
+export async function saveDiscountMode(mode: DiscountMode) {
+  const {data}=await api.put('/settings/discount-mode',{mode});
+  return data;
+}
+
 export interface Branding {
   labName: string;
   primaryColor: string;
@@ -33,7 +40,7 @@ export interface StaffUser {
 }
 
 export async function getSettings() {
-  const { data } = await api.get<{ branding: Branding; printLayout: PrintLayout }>(
+  const { data } = await api.get<{ branding: Branding; printLayout: PrintLayout; discountMode: DiscountMode }>(
     '/settings',
   );
   return data;

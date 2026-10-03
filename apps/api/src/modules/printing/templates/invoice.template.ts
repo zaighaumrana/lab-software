@@ -15,6 +15,7 @@ function ageFromDob(dob: unknown): string {
 export function buildInvoiceHtml(invoice: any, settings: PrintSettings): string {
   const patient = invoice.booking?.patient;
   const doctor = invoice.booking?.doctor;
+  const invoiceLevel = invoice.discountMode === 'INVOICE_LEVEL';
 
   const rightBlock = `
     <div class="doc-label">Invoice</div>
@@ -30,9 +31,9 @@ export function buildInvoiceHtml(invoice: any, settings: PrintSettings): string 
       <tr>
         <td>${esc(l.description)}</td>
         <td style="text-align:right;">${money(l.basePrice ?? l.unitPrice)}</td>
-        <td style="text-align:right; color:${Number(l.discountAmount ?? 0) > 0 ? '#b45309' : '#94a3b8'};">
+        ${invoiceLevel ? '' : `<td style="text-align:right; color:${Number(l.discountAmount ?? 0) > 0 ? '#b45309' : '#94a3b8'};">
           ${Number(l.discountAmount ?? 0) > 0 ? '- ' + money(l.discountAmount) : '—'}
-        </td>
+        </td>`}
         <td style="text-align:right; font-weight:600;">${money(l.lineTotal)}</td>
       </tr>`,
     )
@@ -64,11 +65,13 @@ export function buildInvoiceHtml(invoice: any, settings: PrintSettings): string 
     </div>
     <table class="doc-table">
       <thead>
-        <tr><th>Description</th><th style="text-align:right;">Original</th><th style="text-align:right;">Discount</th><th style="text-align:right;">Total</th></tr>
+        <tr><th>Description</th><th style="text-align:right;">Original</th>${invoiceLevel ? '' : '<th style="text-align:right;">Discount</th>'}<th style="text-align:right;">Total</th></tr>
       </thead>
       <tbody>${rows}</tbody>
     </table>
     <div style="max-width:260px; margin-left:auto; font-size:10pt;">
+      ${invoiceLevel ? `<div style="display:flex; justify-content:space-between;"><span>Subtotal</span><span>${money(invoice.subtotal)}</span></div>
+      <div style="display:flex; justify-content:space-between;"><span>Invoice Discount</span><span>${money(invoice.invoiceDiscountAmount)}</span></div>` : ''}
       <div style="display:flex; justify-content:space-between; font-weight:700; border-top:1px solid #e2e8f0; padding-top:6px;">
         <span>Total</span><span>${money(invoice.grandTotal)}</span>
       </div>

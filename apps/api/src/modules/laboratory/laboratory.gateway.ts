@@ -32,8 +32,8 @@ import { AuthService } from '../auth/auth.service';
  * instead. Both sides now derive from the session, so there's only one
  * source of truth left to keep in sync.)
  *
- * This app is single-server by design (see AuthService's in-memory
- * session store) so the default in-memory socket.io adapter is
+ * This deployment uses one notification server with durable database sessions,
+ * so the default in-memory socket.io adapter is
  * sufficient. If this ever needs to run as multiple API instances behind
  * a load balancer, swap in the Redis adapter (@socket.io/redis-adapter)
  * in main.ts — the gateway code below doesn't need to change.
@@ -50,12 +50,12 @@ export class LaboratoryGateway implements OnGatewayConnection, OnGatewayDisconne
 
   constructor(private readonly authService: AuthService) {}
 
-  handleConnection(client: Socket) {
+  async handleConnection(client: Socket) {
     const sessionId =
       (client.handshake.auth?.sessionId as string | undefined) ??
       (client.handshake.query?.sessionId as string | undefined);
 
-    const session = this.authService.validateSession(sessionId);
+    const session = await this.authService.validateSession(sessionId).catch(() => null);
     if (!session) {
       this.logger.warn(`Rejected socket connection ${client.id}: invalid or missing session`);
       client.disconnect(true);

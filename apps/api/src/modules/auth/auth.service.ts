@@ -1,269 +1,141 @@
-import {
-  Injectable,
-  UnauthorizedException,
-  BadRequestException,
-  OnModuleInit,
-  OnModuleDestroy,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { UpdateOwnProfileDto } from './dto/update-own-profile.dto';
+import { appendAudit, auditContext } from '../../common/audit';
+import { AuthUser } from '../../common/decorators/current-user.decorator';
 import * as bcrypt from 'bcrypt';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'node:crypto';
 
-/** Simple in-memory session store for v1 (single-server, offline-first).
- *  Replace with Redis or DB-backed sessions when multi-instance SaaS is needed.
- */
-interface Session {
-  sessionId: string;
-  userId: string;
-  tenantId: string;
-  branchId: string | null;
-  role: string;
-  fullName: string;
-  username: string;
-  createdAt: Date;
-  lastSeenAt: Date;
-}
-
-const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
-const sessions = new Map<string, Session>();
-
-// --- Login rate limiting / lockout ---
-//
-// Deliberately keyed by the ATTEMPTED username string, not by IP and not
-// only by usernames that turn out to be real. Two reasons:
-//  1. This is a LAN-deployed app (see 02_Technical_Architecture.md) — every
-//     workstation shares the clinic's router, so IP-only limiting would
-//     lock out every legitimate user the moment one of them mistypes a
-//     password a few times.
-//  2. Locking out ONLY real usernames (and staying silent for fake ones)
-//     would itself leak which usernames exist — an attacker could tell a
-//     username is real just by noticing lockout kicks in for it and not
-//     for others. Tracking every attempted string identically closes
-//     that side channel.
-//
-// In-memory, matching the existing session store's own documented
-// single-server assumption above — no new infrastructure introduced.
-const LOGIN_MAX_ATTEMPTS = 5;
-const LOGIN_WINDOW_MS = 15 * 60 * 1000; // failed attempts older than this don't count
-const LOGIN_LOCKOUT_MS = 15 * 60 * 1000; // once locked, how long before retrying is allowed
-
-interface LoginAttemptRecord {
-  failures: number;
-  windowStartedAt: number;
-  lockedUntil?: number;
-}
-
-const loginAttempts = new Map<string, LoginAttemptRecord>();
-
-function normalizeAttemptKey(username: string): string {
-  return username.trim().toLowerCase();
-}
-
-/** Throws if this username string is currently locked out; otherwise no-op. */
-function assertNotLockedOut(key: string) {
-  const record = loginAttempts.get(key);
-  if (record?.lockedUntil && Date.now() < record.lockedUntil) {
-    const minutesLeft = Math.ceil((record.lockedUntil - Date.now()) / 60000);
-    throw new UnauthorizedException(
-      `Too many failed attempts. Try again in ${minutesLeft} minute${minutesLeft === 1 ? '' : 's'}.`,
-    );
-  }
-}
-
-function recordLoginFailure(key: string) {
-  const now = Date.now();
-  const record = loginAttempts.get(key);
-  if (!record || now - record.windowStartedAt > LOGIN_WINDOW_MS) {
-    // First failure, or the previous failure window has expired — start fresh.
-    loginAttempts.set(key, { failures: 1, windowStartedAt: now });
-    return;
-  }
-  record.failures += 1;
-  if (record.failures >= LOGIN_MAX_ATTEMPTS) {
-    record.lockedUntil = now + LOGIN_LOCKOUT_MS;
-  }
-}
-
-function clearLoginFailures(key: string) {
-  loginAttempts.delete(key);
-}
+const TTL = 12 * 60 * 60 * 1000;
+const WINDOW = 15 * 60 * 1000;
+const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 
 @Injectable()
 export class AuthService implements OnModuleInit, OnModuleDestroy {
   private cleanupTimer?: ReturnType<typeof setInterval>;
+  private cleaning = false;
   constructor(private readonly prisma: PrismaService) {}
-
   onModuleInit() {
-    // Periodic cleanup of expired sessions and stale login-attempt records
-    this.cleanupTimer = setInterval(() => {
-      const now = Date.now();
-      for (const [id, session] of sessions) {
-        if (now - session.lastSeenAt.getTime() > SESSION_TTL_MS) {
-          sessions.delete(id);
-        }
-      }
-      for (const [key, record] of loginAttempts) {
-        const expired =
-          (!record.lockedUntil || now > record.lockedUntil) &&
-          now - record.windowStartedAt > LOGIN_WINDOW_MS;
-        if (expired) {
-          loginAttempts.delete(key);
-        }
-      }
-    }, 60_000);
+    this.cleanupTimer = setInterval(() => void this.cleanup(), 60_000);
+    this.cleanupTimer.unref();
   }
-
-  onModuleDestroy() {
-    if (this.cleanupTimer) clearInterval(this.cleanupTimer);
+  onModuleDestroy() { if (this.cleanupTimer) clearInterval(this.cleanupTimer); }
+  private async cleanup() {
+    if (this.cleaning) return;
+    this.cleaning = true;
+    try {
+      // Bounded work; deletion does not determine validity. Retain revocations for one day.
+      await this.prisma.$executeRaw`DELETE FROM auth_sessions WHERE id IN
+        (SELECT id FROM auth_sessions WHERE "expiresAt" < clock_timestamp() - interval '1 day'
+        OR "revokedAt" < clock_timestamp() - interval '1 day' LIMIT 200)`;
+      await this.prisma.$executeRaw`DELETE FROM login_attempts WHERE "attemptKey" IN
+        (SELECT "attemptKey" FROM login_attempts WHERE "updatedAt" < clock_timestamp() - interval '1 day'
+        AND ("lockedUntil" IS NULL OR "lockedUntil" < clock_timestamp()) LIMIT 200)
+        AND "updatedAt" < clock_timestamp() - interval '1 day'
+        AND ("lockedUntil" IS NULL OR "lockedUntil" < clock_timestamp())`;
+    } catch { Logger.warn('Authentication housekeeping failed; durable validity checks remain active', 'AuthService'); }
+    finally { this.cleaning = false; }
   }
-
   async login(dto: LoginDto) {
-    const attemptKey = normalizeAttemptKey(dto.username);
-    assertNotLockedOut(attemptKey);
-
-    // For single-tenant v1 we look up by username across the default tenant.
-    // Multi-tenant login can add a tenant slug field later.
-    const user = await this.prisma.user.findFirst({
-      where: {
-        username: dto.username,
-        isActive: true,
-      },
-      include: { tenant: true, branch: true },
-    });
-
-    if (!user) {
-      recordLoginFailure(attemptKey);
-      throw new UnauthorizedException('Invalid username or password');
-    }
-
-    const valid = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!valid) {
-      recordLoginFailure(attemptKey);
-      throw new UnauthorizedException('Invalid username or password');
-    }
-
-    clearLoginFailures(attemptKey);
-
-    const sessionId = randomBytes(32).toString('hex');
-    const session: Session = {
-      sessionId,
-      userId: user.id,
-      tenantId: user.tenantId,
-      branchId: user.branchId,
-      role: user.role,
-      fullName: user.fullName,
-      username: user.username,
-      createdAt: new Date(),
-      lastSeenAt: new Date(),
-    };
-    sessions.set(sessionId, session);
-
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
-    });
-
-    return {
-      sessionId,
-      user: {
-        id: user.id,
-        username: user.username,
-        fullName: user.fullName,
-        role: user.role,
-        tenantId: user.tenantId,
-        branchId: user.branchId,
-      },
-    };
+    const key = hash(dto.username.trim().toLowerCase());
+    // Authentication failures return a result so counters/audits commit before throwing.
+    const result = await this.prisma.$transaction(async tx => {
+      await tx.$executeRaw`INSERT INTO login_attempts ("attemptKey") VALUES (${key})
+        ON CONFLICT ("attemptKey") DO UPDATE SET "updatedAt"=clock_timestamp()`;
+      await tx.$queryRaw`SELECT "attemptKey" FROM login_attempts WHERE "attemptKey"=${key} FOR UPDATE`;
+      const attempt = await tx.loginAttempt.findUniqueOrThrow({ where: { attemptKey: key } });
+      const [{ now }] = await tx.$queryRaw<{ now: Date }[]>`SELECT clock_timestamp() AS now`;
+      const found = await tx.user.findFirst({ where: { username: dto.username.trim() } });
+      // Anonymous attempts belong to this installation's default tenant.
+      const tenant = found ? await tx.tenant.findUnique({ where: { id: found.tenantId } }) :
+        await tx.tenant.findFirst({ where: process.env.DEFAULT_TENANT_ID ? { id: process.env.DEFAULT_TENANT_ID } : {}, orderBy: { id: 'asc' } });
+      if (!tenant) throw new UnauthorizedException('Authentication is unavailable');
+      const auditFailure = (action: string, failures: number) => appendAudit(tx, { tenantId: tenant.id, actorId: null,
+        action, entityType: 'LoginAttempt', entityId: key, after: { failures } });
+      if (attempt.lockedUntil && attempt.lockedUntil > now) {
+        await auditFailure('LOGIN_LOCKOUT', attempt.failures);
+        return { error: 'Too many failed attempts. Try again later.' };
+      }
+      if (found) await tx.$queryRaw`SELECT id FROM users WHERE id=${found.id} AND "tenantId"=${tenant.id} FOR UPDATE`;
+      const user = found ? await tx.user.findUnique({ where: { id: found.id } }) : null;
+      const valid = user?.isActive && tenant.isActive && await bcrypt.compare(dto.password, user.passwordHash);
+      if (!valid || !user) {
+        const failures = now.getTime() - attempt.windowStartedAt.getTime() > WINDOW ? 1 : attempt.failures + 1;
+        await tx.loginAttempt.update({ where: { attemptKey: key }, data: { failures, updatedAt: now,
+          windowStartedAt: failures === 1 ? now : attempt.windowStartedAt,
+          lockedUntil: failures >= 5 ? new Date(now.getTime() + WINDOW) : null } });
+        await auditFailure('LOGIN_FAILURE', failures);
+        if (failures >= 5) await auditFailure('LOGIN_LOCKOUT', failures);
+        return { error: 'Invalid username or password' };
+      }
+      await tx.loginAttempt.update({ where: { attemptKey: key }, data: { failures: 0, lockedUntil: null, windowStartedAt: now, updatedAt: now } });
+      const sessionId = randomBytes(32).toString('hex');
+      const session = await tx.authSession.create({ data: { tenantId: user.tenantId, userId: user.id, tokenHash: hash(sessionId),
+        createdAt: now, lastSeenAt: now, expiresAt: new Date(now.getTime() + TTL) } });
+      await tx.user.update({ where: { id: user.id }, data: { lastLoginAt: now } });
+      await appendAudit(tx, { tenantId: user.tenantId, actorId: user.id, action: 'LOGIN_SUCCESS', entityType: 'AuthSession', entityId: session.id });
+      return { sessionId, user: { id: user.id, username: user.username, fullName: user.fullName,
+        role: user.role, tenantId: user.tenantId, branchId: user.branchId } };
+    }, { timeout: 15_000 });
+    if ('error' in result) throw new UnauthorizedException(result.error);
+    return result;
   }
-
-  logout(sessionId: string) {
-    sessions.delete(sessionId);
+  async logout(sessionId: string) {
+    await this.prisma.$transaction(async tx => {
+      const rows = await tx.$queryRaw<{ id: string; tenantId: string; userId: string }[]>`
+        SELECT id,"tenantId","userId" FROM auth_sessions WHERE "tokenHash"=${hash(sessionId)} AND "revokedAt" IS NULL FOR UPDATE`;
+      const session = rows[0];
+      if (!session) return;
+      await tx.authSession.update({ where: { id: session.id }, data: { revokedAt: new Date(), revocationReason: 'LOGOUT' } });
+      await appendAudit(tx, { tenantId: session.tenantId, actorId: session.userId, action: 'LOGOUT', entityType: 'AuthSession', entityId: session.id });
+    });
     return { ok: true };
   }
-
-  validateSession(sessionId: string | undefined): Session | null {
-    if (!sessionId) return null;
-    const session = sessions.get(sessionId);
+  async validateSession(sessionId: string | undefined): Promise<(AuthUser & { sessionRecordId: string }) | null> {
+    if (!sessionId || !/^[a-f0-9]{64}$/.test(sessionId)) return null;
+    const tokenHash = hash(sessionId);
+    const rows = await this.prisma.$queryRaw<(AuthUser & { sessionRecordId: string })[]>`
+      SELECT s.id AS "sessionRecordId",u.id AS "userId",u."tenantId",u."branchId",u.role,u."fullName",u.username
+      FROM auth_sessions s JOIN users u ON u.id=s."userId" AND u."tenantId"=s."tenantId"
+      JOIN tenants t ON t.id=s."tenantId"
+      WHERE s."tokenHash"=${tokenHash} AND s."revokedAt" IS NULL AND s."expiresAt">clock_timestamp()
+      AND u."isActive" AND t."isActive"`;
+    const session = rows[0];
     if (!session) return null;
-
-    if (Date.now() - session.lastSeenAt.getTime() > SESSION_TTL_MS) {
-      sessions.delete(sessionId);
-      return null;
-    }
-
-    session.lastSeenAt = new Date();
+    // One-minute idle-touch throttle. Never revive expired/revoked sessions.
+    await this.prisma.$executeRaw`UPDATE auth_sessions SET "lastSeenAt"=clock_timestamp(),
+      "expiresAt"=clock_timestamp()+interval '12 hours' WHERE "tokenHash"=${tokenHash}
+      AND "revokedAt" IS NULL AND "expiresAt">clock_timestamp() AND "lastSeenAt"<clock_timestamp()-interval '1 minute'`;
     return session;
   }
-
-  getSession(sessionId: string) {
-    const session = this.validateSession(sessionId);
-    if (!session) {
-      throw new UnauthorizedException('Session expired or invalid');
-    }
-    return {
-      userId: session.userId,
-      tenantId: session.tenantId,
-      branchId: session.branchId,
-      role: session.role,
-      fullName: session.fullName,
-      username: session.username,
-    };
+  async getSession(sessionId: string) {
+    const session = await this.validateSession(sessionId);
+    if (!session) throw new UnauthorizedException('Session expired or invalid');
+    const { sessionRecordId: _record, ...user } = session;
+    return user;
   }
-
-  /**
-   * Self-service profile update: any logged-in user (any role) can
-   * rename themselves and/or change their own password. Never touches
-   * role, tenantId, branchId, or username — UpdateOwnProfileDto has no
-   * fields for those, so there's nothing here to accidentally trust.
-   *
-   * Changing the password requires currentPassword to match what's on
-   * file — the DTO's @ValidateIf already requires currentPassword
-   * whenever newPassword is present, but we re-check for null here too
-   * (defense in depth against the DTO's validation ever changing).
-   */
   async updateOwnProfile(userId: string, tenantId: string, dto: UpdateOwnProfileDto) {
-    const user = await this.prisma.user.findFirst({ where: { id: userId, tenantId } });
-    if (!user) {
-      throw new UnauthorizedException('User not found');
-    }
-
-    const data: { fullName?: string; passwordHash?: string } = {};
-
-    if (dto.fullName !== undefined) {
-      data.fullName = dto.fullName;
-    }
-
-    if (dto.newPassword) {
-      if (!dto.currentPassword) {
-        throw new BadRequestException('Current password is required to set a new password');
+    return this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM users WHERE id=${userId} AND "tenantId"=${tenantId} FOR UPDATE`;
+      const user = await tx.user.findFirst({ where: { id: userId, tenantId, isActive: true } });
+      if (!user) throw new UnauthorizedException('User not found');
+      const data: { fullName?: string; passwordHash?: string } = {};
+      if (dto.fullName !== undefined) data.fullName = dto.fullName;
+      if (dto.newPassword) {
+        if (!dto.currentPassword || !await bcrypt.compare(dto.currentPassword, user.passwordHash)) throw new BadRequestException('Current password is incorrect');
+        data.passwordHash = await bcrypt.hash(dto.newPassword, 10);
+        const currentId = auditContext.getStore()?.sessionRecordId;
+        await tx.authSession.updateMany({ where: { tenantId, userId, revokedAt: null, ...(currentId ? { id: { not: currentId } } : {}) },
+          data: { revokedAt: new Date(), revocationReason: 'PASSWORD_CHANGE' } });
+        await appendAudit(tx, { tenantId, actorId: userId, action: 'PASSWORD_CHANGE', entityType: 'User', entityId: userId,
+          after: { otherSessionsRevoked: true, currentSessionRetained: !!currentId } });
       }
-      const valid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
-      if (!valid) {
-        throw new BadRequestException('Current password is incorrect');
-      }
-      data.passwordHash = await bcrypt.hash(dto.newPassword, 10);
-    }
-
-    const updated = await this.prisma.user.update({ where: { id: user.id }, data });
-
-    // Keep the in-memory session's cached fullName in sync — session.me()
-    // reads from the session object, not a fresh DB lookup, so without
-    // this the header would keep showing the old name until next login.
-    for (const session of sessions.values()) {
-      if (session.userId === user.id && data.fullName !== undefined) {
-        session.fullName = data.fullName;
-      }
-    }
-
-    return {
-      userId: updated.id,
-      username: updated.username,
-      fullName: updated.fullName,
-      role: updated.role,
-      tenantId: updated.tenantId,
-      branchId: updated.branchId,
-    };
+      const updated = await tx.user.update({ where: { id: user.id }, data });
+      if (data.fullName !== undefined && data.fullName !== user.fullName) await appendAudit(tx, { tenantId, actorId: userId,
+        action: 'PROFILE_CHANGE', entityType: 'User', entityId: userId, after: { nameChanged: true } });
+      return { userId: updated.id, username: updated.username, fullName: updated.fullName,
+        role: updated.role, tenantId: updated.tenantId, branchId: updated.branchId };
+    });
   }
 }

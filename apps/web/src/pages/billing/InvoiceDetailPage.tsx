@@ -182,7 +182,7 @@ export function InvoiceDetailPage() {
             <span>{money(invoice.subtotal)}</span>
           </div>
           <div className="flex justify-between">
-            <span>Discount</span>
+            <span>{invoice.discountMode==='INVOICE_LEVEL'?'Invoice Discount':'Discount'}</span>
             <span>{money(invoice.discountTotal)}</span>
           </div>
           <div className="flex justify-between border-t border-slate-200 pt-1 font-semibold">
