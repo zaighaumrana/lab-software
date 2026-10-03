@@ -83,4 +83,8 @@ export class LaboratoryGateway implements OnGatewayConnection, OnGatewayDisconne
   notifySampleChanged(tenantId: string, sampleId: string) {
     this.server.to(`tenant:${tenantId}`).emit('sample:changed', { sampleId });
   }
+
+  notifyInvoiceChanged(tenantId: string, invoiceId: string) {
+    this.server?.to(`tenant:${tenantId}`).emit('invoice:changed', { invoiceId });
+  }
 }

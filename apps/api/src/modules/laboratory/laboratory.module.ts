@@ -8,6 +8,6 @@ import { NotificationsModule } from '../notifications/notifications.module';
   imports: [NotificationsModule],
   controllers: [LaboratoryController],
   providers: [LaboratoryService, LaboratoryGateway],
-  exports: [LaboratoryService],
+  exports: [LaboratoryService, LaboratoryGateway],
 })
 export class LaboratoryModule {}

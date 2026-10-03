@@ -34,6 +34,7 @@ export enum Permission {
   BILLING_VIEW = 'BILLING_VIEW',
   BILLING_CREATE_INVOICE = 'BILLING_CREATE_INVOICE',
   PAYMENT_RECORD = 'PAYMENT_RECORD',
+  BILLING_ADJUST = 'BILLING_ADJUST', // Administrative refunds, credits and voids.
 
   // Laboratory workflow
   LAB_SAMPLE_VIEW = 'LAB_SAMPLE_VIEW',

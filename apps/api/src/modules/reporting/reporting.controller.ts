@@ -55,7 +55,7 @@ export class ReportingController {
   @Get('tracking/:trackingId')
   @RequirePermissions(Permission.REPORT_VIEW)
   async findByTrackingId(@CurrentUser() user: AuthUser, @Param('trackingId') trackingId: string) {
-    return this.reportingService.findByTrackingId(user.tenantId, trackingId);
+    return this.deliverableProjection(await this.reportingService.findByTrackingId(user.tenantId, trackingId));
   }
 
   /**
@@ -71,7 +71,14 @@ export class ReportingController {
   @Get(':id')
   @RequirePermissions(Permission.REPORT_VIEW)
   async findOne(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    const report = await this.reportingService.findById(user.tenantId, id);
+    return this.deliverableProjection(await this.reportingService.findById(user.tenantId, id));
+  }
+
+  private async deliverableProjection(report: Awaited<ReturnType<ReportingService['findById']>>) {
+    const latest = await this.reportingService.currentFinancialState(report.tenantId,report.invoiceId);
+    report.invoice.status=latest.status;
+    report.invoice.amountPaid=latest.amountPaid;
+    report.invoice.amountDue=latest.amountDue;
     const finalized = isReportFinalized(report);
     const deliverable = canDeliverReport(report, report.invoice);
 
@@ -107,12 +114,6 @@ export class ReportingController {
   async version(@CurrentUser() user: AuthUser, @Param('id') id: string,
     @Param('versionNo', ParseIntPipe) versionNo: number) {
     const report = await this.reportingService.findVersion(user.tenantId, id, versionNo);
-    const deliverable = canDeliverReport(report, report.invoice);
-    return deliverable ? { ...report, finalized: true, deliverable } : {
-      ...report, finalized: true, deliverable,
-      currentVersion: report.currentVersion ? { ...report.currentVersion, memberships: [] } : null,
-      selectedVersion: { ...report.selectedVersion, memberships: [] },
-      invoice: { ...report.invoice, samples: report.invoice.samples.map(s => ({ ...s, results: [] })) },
-    };
+    return this.deliverableProjection(report);
   }
 }

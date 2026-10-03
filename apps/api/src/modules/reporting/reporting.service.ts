@@ -1,8 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { ReportStatus } from '@lms/database';
 import { clinicalResultInclude, projectClinicalResult } from '../laboratory/clinical-results';
 import { reportBaseInclude, reportVersionInclude, projectReportVersion } from './report-version.projection';
+import { lockInvoice } from '../billing/financial-state';
+import { canPrintReport, PENDING_PAYMENT_MESSAGE, REPORT_NOT_FINALIZED_MESSAGE, isReportFinalized } from '../../common/report-eligibility.util';
 
 @Injectable()
 export class ReportingService {
@@ -37,6 +39,12 @@ export class ReportingService {
       throw new NotFoundException('Report not found');
     }
     return this.prisma.reportVersion.findMany({ where: { tenantId, reportId }, orderBy: { versionNo: 'asc' } });
+  }
+
+  async currentFinancialState(tenantId:string, invoiceId:string) {
+    const invoice = await this.prisma.invoice.findFirst({where:{id:invoiceId,tenantId}});
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    return invoice;
   }
 
   async findVersion(tenantId: string, reportId: string, versionNo: number) {
@@ -120,8 +128,16 @@ export class ReportingService {
    */
   async markPrinted(tenantId: string, id: string, versionId?: string) {
     await this.prisma.$transaction(async tx => {
+      const identity = await tx.report.findFirst({where:{id,tenantId},select:{invoiceId:true}});
+      if (!identity) throw new NotFoundException('Report not found');
+      // Final print authorization is serialized with financial mutations, after
+      // rendering. The committed print counter is the authorization's ordering point.
+      const invoice = await lockInvoice(tx,tenantId,identity.invoiceId);
       const rows = await tx.$queryRaw<{id:string}[]>`SELECT id FROM reports WHERE id=${id} AND "tenantId"=${tenantId} FOR UPDATE`;
       if (!rows.length) throw new NotFoundException('Report not found');
+      const report = await tx.report.findUniqueOrThrow({where:{id}});
+      if (!isReportFinalized(report)) throw new ForbiddenException(REPORT_NOT_FINALIZED_MESSAGE);
+      if (!canPrintReport(report,invoice)) throw new ForbiddenException(PENDING_PAYMENT_MESSAGE);
       if (versionId) {
         const version = await tx.reportVersion.findFirst({ where: { id: versionId, tenantId, reportId: id, pdfPath: { not: null } } });
         if (!version) throw new NotFoundException('Generated report artifact not found');

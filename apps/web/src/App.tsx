@@ -6,6 +6,7 @@ import { Loading } from './components/Loading';
 import { RequirePermission } from './components/RequirePermission';
 import { Permission, isAdminRole } from './lib/permissions';
 import { lazy, Suspense, type ReactNode } from 'react';
+import { FinancialLiveRefresh } from './lib/financialRefresh';
 
 // Operational pages load on demand; session and permission guards remain unchanged.
 const LoginPage = lazy(() => import('./pages/auth/LoginPage').then((module) => ({ default: module.LoginPage })));
@@ -159,6 +160,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <FinancialLiveRefresh />
         <SettingsProvider>
           <Suspense fallback={<Loading label="Loading page..." />}>
             <AppRoutes />

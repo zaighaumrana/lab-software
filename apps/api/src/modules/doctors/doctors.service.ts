@@ -145,10 +145,11 @@ export class DoctorsService {
 
     // ----- Summary -----
     const patientIds = new Set(shares.map((s) => s.invoice.booking?.patientId).filter(Boolean));
-    const totalRevenue = shares.reduce((sum, s) => sum + Number(s.invoice.grandTotal), 0);
-    const totalShare = shares.reduce((sum, s) => sum + Number(s.calculatedAmount), 0);
-    const totalPaid = shares.reduce((sum, s) => sum + Number(s.paidAmount ?? 0), 0);
-    const pendingShare = totalShare - totalPaid;
+    const totalRevenue = shares.reduce((sum,s)=>sum.plus(s.invoice.grandTotal),new Decimal(0)).toNumber();
+    const totalShare = shares.reduce((sum,s)=>sum.plus(['CALCULATED','PAYABLE','PAID','SETTLED'].includes(s.status) ? s.calculatedAmount : 0),new Decimal(0)).toNumber();
+    const totalPaid = shares.reduce((sum,s)=>sum.plus(s.paidAmount ?? 0),new Decimal(0)).toNumber();
+    const pendingShare = shares.reduce((sum,s)=>sum.plus(['CALCULATED','PAYABLE'].includes(s.status) ? s.calculatedAmount.minus(s.paidAmount ?? 0) : 0),new Decimal(0)).toNumber();
+    const clawbackPending = shares.reduce((sum,s)=>sum.plus(s.status==='CLAWBACK_PENDING' ? s.paidAmount ?? 0 : 0),new Decimal(0)).toNumber();
 
     // ----- Patient list rows -----
     let rows = shares.map((s) => ({
@@ -214,6 +215,7 @@ export class DoctorsService {
         totalShare,
         totalPaid,
         pendingShare,
+        clawbackPending,
       },
       patients: {
         rows: paged,

@@ -1,3 +1,4 @@
+import { useFinancialRefresh } from '../../lib/financialRefresh';
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import * as reportsApi from '../../api/reports';
@@ -182,6 +183,8 @@ export function ReportDocumentPage() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  useFinancialRefresh(()=>{load();},report?.invoice?.id);
 
   async function handlePayment(e: FormEvent) {
     e.preventDefault();

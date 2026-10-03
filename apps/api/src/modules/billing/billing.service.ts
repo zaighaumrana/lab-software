@@ -2,11 +2,15 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { BookingsService } from '../bookings/bookings.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { RecordPaymentDto } from './dto/record-payment.dto';
+import { FinancialAdjustmentDto, FinancialOperationDto, RefundDto } from './dto/financial-adjustment.dto';
+import { financialState, lockInvoice, lockCashBranch, moneyAmount, operationHash, postingInstant, reconcileInvoice, reverseDoctorShares, cashShiftForActor } from './financial-state';
+import { LaboratoryGateway } from '../laboratory/laboratory.gateway';
 import {
   InvoiceStatus,
   PaymentStatus,
@@ -33,6 +37,7 @@ export class BillingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly bookingsService: BookingsService,
+    @Optional() private readonly live?: LaboratoryGateway,
   ) {}
 
   async findInvoiceById(tenantId: string, id: string) {
@@ -41,6 +46,7 @@ export class BillingService {
       include: {
         lines: { include: { test: true, package: true }, orderBy: { createdAt: 'asc' } },
         payments: { orderBy: { receivedAt: 'asc' } },
+        adjustments: { orderBy: { createdAt: 'asc' } },
         booking: { include: { patient: true, doctor: true } },
         company: true,
         report: true,
@@ -96,6 +102,7 @@ export class BillingService {
         booking: { include: { patient: true } },
         report: { select: { id: true, trackingId: true, status: true, reportNumber: true } },
         payments: true,
+        adjustments: true,
         lines: true,
       },
     });
@@ -327,69 +334,85 @@ export class BillingService {
    * Record a payment against an invoice.
    * Updates amountPaid / amountDue and closes invoice when fully paid.
    */
-  async recordPayment(tenantId: string, invoiceId: string, dto: RecordPaymentDto) {
-    const invoice = await this.findInvoiceById(tenantId, invoiceId);
-
-    if (
-      invoice.status === InvoiceStatus.VOIDED ||
-      invoice.status === InvoiceStatus.REFUNDED
-    ) {
-      throw new BadRequestException(
-        `Cannot record payment on invoice in status ${invoice.status}`,
-      );
-    }
-
-    if (invoice.status === InvoiceStatus.DRAFT) {
-      throw new BadRequestException('Invoice must be issued before payment');
-    }
-
-    const amount = new Decimal(dto.amount);
-    if (amount.greaterThan(invoice.amountDue)) {
-      throw new BadRequestException(
-        `Payment amount ${amount} exceeds amount due ${invoice.amountDue}`,
-      );
-    }
-
-    const newAmountPaid = new Decimal(invoice.amountPaid).plus(amount);
-    const newAmountDue = new Decimal(invoice.grandTotal).minus(newAmountPaid);
-    const isFullyPaid = newAmountDue.lessThanOrEqualTo(0);
-
-    const paymentStatus = isFullyPaid
-      ? PaymentStatus.FULLY_RECEIVED
-      : PaymentStatus.PARTIALLY_RECEIVED;
-
-    const result = await this.prisma.$transaction(async (tx) => {
-      const payment = await tx.payment.create({
-        data: {
-          invoiceId,
-          amount,
-          method: dto.method as PaymentMethod,
-          status: paymentStatus,
-          reference: dto.reference,
-          notes: dto.notes,
-          receivedAt: new Date(),
-        },
-      });
-
-      const updatedInvoice = await tx.invoice.update({
-        where: { id: invoiceId },
-        data: {
-          amountPaid: newAmountPaid,
-          amountDue: newAmountDue.lessThan(0) ? new Decimal(0) : newAmountDue,
-          status: isFullyPaid ? InvoiceStatus.CLOSED : invoice.status,
-          closedAt: isFullyPaid ? new Date() : invoice.closedAt,
-        },
-        include: {
-          lines: true,
-          payments: true,
-          booking: { include: { patient: true } },
-        },
-      });
-
-      return { payment, invoice: updatedInvoice };
+  async recordPayment(tenantId: string, invoiceId: string, dto: RecordPaymentDto, actorId: string) {
+    const amount = moneyAmount(dto.amount);
+    const hash = operationHash(dto.operationKey,[invoiceId,actorId,amount.toFixed(2),dto.method,dto.reference ?? null,dto.notes ?? null]);
+    const result = await this.prisma.$transaction(async tx => {
+      const invoice = await lockInvoice(tx,tenantId,invoiceId);
+      const prior = await tx.payment.findUnique({where:{tenantId_operationKey:{tenantId,operationKey:dto.operationKey}}});
+      if (prior) {
+        if (prior.requestHash!==hash) throw new BadRequestException('Operation key was already used for another request');
+        return {payment:prior,invoice:await tx.invoice.findUniqueOrThrow({where:{id:invoiceId},include:{lines:true,payments:true,adjustments:true,booking:{include:{patient:true}}}})};
+      }
+      if (invoice.status!=='ISSUED') throw new BadRequestException(`Cannot record payment on invoice in status ${invoice.status}`);
+      const state = await financialState(tx,invoice);
+      if (amount.gt(state.due)) throw new BadRequestException(`Payment amount ${amount} exceeds amount due ${state.due}`);
+      if (dto.method==='CASH') await lockCashBranch(tx,tenantId,invoice.branchId);
+      const cashShiftId = dto.method==='CASH' ? await cashShiftForActor(tx,tenantId,invoice.branchId,actorId) : null;
+      const at = await postingInstant(tx);
+      const payment = await tx.payment.create({data:{invoiceId,tenantId,recordedById:actorId,
+        operationKey:dto.operationKey,requestHash:hash,postedAt:at,cashShiftId,amount,method:dto.method as PaymentMethod,
+        status:amount.eq(state.due) ? PaymentStatus.FULLY_RECEIVED : PaymentStatus.PARTIALLY_RECEIVED,
+        reference:dto.reference,notes:dto.notes,receivedAt:at}});
+      const updated = await reconcileInvoice(tx,invoice,at);
+      return {payment,invoice:updated};
     });
+    this.live?.notifyInvoiceChanged(tenantId,invoiceId);
+    return result;
+  }
 
-    // TODO: raise PaymentReceived domain event
+  async refund(tenantId:string, invoiceId:string, dto:RefundDto, actorId:string) {
+    return this.postAdjustment(tenantId,invoiceId,'REFUND',dto,actorId,dto.relatedPaymentId);
+  }
+
+  async adjust(tenantId:string, invoiceId:string, dto:FinancialAdjustmentDto, actorId:string) {
+    if (!['CHARGE','DISCOUNT','WRITE_OFF'].includes(dto.type)) throw new BadRequestException('Unsupported balance adjustment');
+    return this.postAdjustment(tenantId,invoiceId,dto.type,dto,actorId);
+  }
+
+  async voidInvoice(tenantId:string, invoiceId:string, dto:FinancialOperationDto, actorId:string) {
+    return this.postAdjustment(tenantId,invoiceId,'VOID',dto,actorId);
+  }
+
+  private async postAdjustment(tenantId:string, invoiceId:string,
+    type:'CHARGE'|'DISCOUNT'|'WRITE_OFF'|'REFUND'|'VOID', dto:FinancialOperationDto & {amount?:number}, actorId:string, paymentId?:string) {
+    const reason = dto.reason?.trim();
+    if (!reason || reason.length>1000) throw new BadRequestException('A concise reason is required');
+    const amount = type==='VOID' ? null : moneyAmount(dto.amount!);
+    const hash = operationHash(dto.operationKey,[invoiceId,actorId,type,amount?.toFixed(2) ?? null,reason,paymentId ?? null]);
+    const result = await this.prisma.$transaction(async tx => {
+      const invoice = await lockInvoice(tx,tenantId,invoiceId);
+      const prior = await tx.invoiceAdjustment.findUnique({where:{tenantId_operationKey:{tenantId,operationKey:dto.operationKey}}});
+      if (prior) {
+        if (prior.requestHash!==hash) throw new BadRequestException('Operation key was already used for another request');
+        return {adjustment:prior,invoice:await tx.invoice.findUniqueOrThrow({where:{id:invoiceId},include:{lines:true,payments:true,adjustments:true,booking:{include:{patient:true}}}})};
+      }
+      if (invoice.status==='VOIDED' || invoice.status==='DRAFT' || (invoice.status==='REFUNDED' && type!=='VOID')) {
+        throw new BadRequestException(`Cannot adjust invoice in status ${invoice.status}`);
+      }
+      const state = await financialState(tx,invoice);
+      if (type==='VOID' && state.paid.gt(0)) throw new BadRequestException('Refund received funds before voiding this invoice');
+      let cashShiftId:string|null = null;
+      if (type==='REFUND') {
+        const original = await tx.payment.findFirst({where:{id:paymentId,invoiceId,status:{in:['FULLY_RECEIVED','PARTIALLY_RECEIVED']}}});
+        if (!original) throw new BadRequestException('Refund requires a received payment from this invoice');
+        const refunded = await tx.invoiceAdjustment.aggregate({where:{invoiceId,type:'REFUND',relatedPaymentId:original.id},_sum:{amount:true}});
+        if (amount!.gt(original.amount.minus(refunded._sum.amount ?? 0))) throw new BadRequestException('Refund exceeds the remaining received amount');
+        if (original.method==='CASH') {
+          await lockCashBranch(tx,tenantId,invoice.branchId);
+          cashShiftId = await cashShiftForActor(tx,tenantId,invoice.branchId,actorId);
+        }
+      }
+      const at = await postingInstant(tx);
+      const adjustment = await tx.invoiceAdjustment.create({data:{tenantId,invoiceId,type,
+        amount:amount ?? state.total,reason,createdById:actorId,createdAt:at,relatedPaymentId:paymentId,cashShiftId,
+        operationKey:dto.operationKey,requestHash:hash}});
+      const updated = await reconcileInvoice(tx,invoice,at);
+      if (type==='VOID') await tx.invoice.update({where:{id:invoiceId},data:{voidReason:reason}});
+      if (['REFUND','VOID','DISCOUNT','WRITE_OFF'].includes(type)) await reverseDoctorShares(tx,tenantId,invoiceId,at);
+      return {adjustment,invoice:type==='VOID' ? {...updated,voidReason:reason} : updated};
+    });
+    this.live?.notifyInvoiceChanged(tenantId,invoiceId);
     return result;
   }
 }

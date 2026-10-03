@@ -121,6 +121,8 @@ model User {
   sampleEvents SampleEvent[]
   resultCorrections Result[] @relation("ResultCorrectionActor")
   reportReleases ReportVersion[]
+  recordedPayments Payment[]
+  invoiceAdjustments InvoiceAdjustment[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, username])
@@ -519,12 +521,14 @@ model Invoice {
   company  Company?      @relation(fields: [companyId], references: [id])
   lines    InvoiceLine[]
   payments Payment[]
+  adjustments InvoiceAdjustment[]
   samples  Sample[]
   report   Report?
   shares DoctorShare[]
   visit Visit? @relation(fields: [tenantId, branchId, visitId], references: [tenantId, branchId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, branchId, visitId])
+  @@unique([tenantId, id])
   @@unique([tenantId, invoiceNumber])
   @@index([tenantId, status])
   @@index([branchId])
@@ -594,9 +598,22 @@ model Payment {
   notes         String?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+  tenantId      String?       // Legacy movements retain unknown metadata.
+  recordedById  String?
+  operationKey  String?
+  requestHash   String?
+  postedAt      DateTime?     @db.Timestamptz(3)
+  cashShiftId   String?
 
   invoice Invoice @relation(fields: [invoiceId], references: [id])
+  recordedBy User? @relation(fields: [tenantId, recordedById], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  adjustments InvoiceAdjustment[]
+  cashShift CashShift? @relation(fields: [cashShiftId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
+  @@unique([tenantId, operationKey])
+  @@unique([invoiceId, id])
+  @@index([recordedById, postedAt])
+  @@index([cashShiftId])
   @@index([invoiceId])
   @@map("payments")
 }
@@ -613,15 +630,8 @@ enum CashShiftStatus {
  * touch a drawer, so they're excluded from expectedCash entirely; see
  * cash-shifts.service.ts).
  *
- * v1 scope, worth knowing about before extending this: expectedCash is
- * computed from CASH payments' `receivedAt` falling within
- * [openedAt, closedAt ?? now] for the tenant/branch — it is NOT currently
- * attributed to which specific user recorded each payment, because
- * Payment has no actor field yet. That's fine for this deployment's
- * single-operator-at-a-time reality, but if multiple cashiers ever work
- * concurrent shifts at the same branch, Payment would need a
- * `recordedById` field to attribute cash correctly per shift — don't
- * assume this already handles that case.
+ * Phase C attributes new cash by branch, cashier and posting-time shift.
+ * Legacy unknown actors stay unassigned; closed historical snapshots are retained.
  */
 model CashShift {
   id           String          @id @default(cuid())
@@ -640,6 +650,8 @@ model CashShift {
   tenant   Tenant @relation(fields: [tenantId], references: [id])
   openedBy User   @relation("CashShiftOpenedBy", fields: [openedById], references: [id])
   closedBy User?  @relation("CashShiftClosedBy", fields: [closedById], references: [id])
+  payments Payment[]
+  adjustments InvoiceAdjustment[]
 
   @@index([tenantId, status])
   @@map("cash_shifts")
@@ -1069,6 +1081,41 @@ model Configuration {
 
   @@unique([tenantId, key])
   @@map("configurations")
+}
+
+enum InvoiceAdjustmentType {
+  CHARGE
+  DISCOUNT
+  WRITE_OFF
+  REFUND
+  VOID
+}
+
+model InvoiceAdjustment {
+  id               String @id @default(cuid())
+  tenantId         String
+  invoiceId        String
+  type             InvoiceAdjustmentType
+  amount           Decimal @db.Decimal(12, 2)
+  reason           String
+  createdById      String
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  relatedPaymentId String?
+  cashShiftId      String?
+  operationKey     String
+  requestHash      String
+
+  invoice Invoice @relation(fields: [tenantId, invoiceId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy User @relation(fields: [tenantId, createdById], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  relatedPayment Payment? @relation(fields: [invoiceId, relatedPaymentId], references: [invoiceId, id], onDelete: Restrict, onUpdate: Restrict)
+  cashShift CashShift? @relation(fields: [cashShiftId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, operationKey])
+  @@index([invoiceId, createdAt])
+  @@index([createdById])
+  @@index([cashShiftId])
+  @@index([invoiceId, relatedPaymentId])
+  @@map("invoice_adjustments")
 }
 
 enum ReportVersionKind {

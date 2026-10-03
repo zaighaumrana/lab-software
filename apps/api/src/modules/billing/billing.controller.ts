@@ -12,6 +12,7 @@ import {
 import { BillingService } from './billing.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { RecordPaymentDto } from './dto/record-payment.dto';
+import { FinancialAdjustmentDto, FinancialOperationDto, RefundDto } from './dto/financial-adjustment.dto';
 import { SessionGuard } from '../../common/guards/session.guard';
 import { PermissionGuard } from '../../common/guards/permission.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
@@ -93,6 +94,24 @@ export class BillingController {
     @Param('id') invoiceId: string,
     @Body() dto: RecordPaymentDto,
   ) {
-    return this.billingService.recordPayment(user.tenantId, invoiceId, dto);
+    return this.billingService.recordPayment(user.tenantId, invoiceId, dto, user.userId);
+  }
+
+  @Post('invoices/:id/refunds')
+  @RequirePermissions(Permission.BILLING_ADJUST)
+  async refund(@CurrentUser() user:AuthUser, @Param('id') id:string, @Body() dto:RefundDto) {
+    return this.billingService.refund(user.tenantId,id,dto,user.userId);
+  }
+
+  @Post('invoices/:id/adjustments')
+  @RequirePermissions(Permission.BILLING_ADJUST)
+  async adjust(@CurrentUser() user:AuthUser, @Param('id') id:string, @Body() dto:FinancialAdjustmentDto) {
+    return this.billingService.adjust(user.tenantId,id,dto,user.userId);
+  }
+
+  @Post('invoices/:id/voids')
+  @RequirePermissions(Permission.BILLING_ADJUST)
+  async voidInvoice(@CurrentUser() user:AuthUser, @Param('id') id:string, @Body() dto:FinancialOperationDto) {
+    return this.billingService.voidInvoice(user.tenantId,id,dto,user.userId);
   }
 }

@@ -1,3 +1,4 @@
+import { useFinancialRefresh } from '../../lib/financialRefresh';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import * as patientsApi from '../../api/patients';
@@ -65,6 +66,9 @@ export function VisitPage() {
   const [orderedTestIds, setOrderedTestIds] = useState<string[]>([]);
   const [collectedOrderIds, setCollectedOrderIds] = useState<string[]>([]);
   const [sampleType, setSampleType] = useState('Blood');
+  useFinancialRefresh(()=>{
+    if (invoice) billingApi.getInvoice(invoice.id).then(setInvoice).catch(()=>setError('Could not refresh invoice'));
+  },invoice?.id);
 
   useEffect(() => {
     Promise.all([

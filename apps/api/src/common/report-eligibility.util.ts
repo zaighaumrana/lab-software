@@ -11,8 +11,11 @@ export interface ReportLike {
   status: string; // ReportStatus: PENDING | PARTIAL_READY | COMPLETE | AMENDED | ARCHIVED
 }
 
+import { Decimal } from '@lms/database';
+
 export interface InvoiceLike {
   amountDue: unknown; // Prisma Decimal | number | string
+  status?: string;
 }
 
 /** A report is "finalized" once the lab has confirmed every result is
@@ -22,7 +25,9 @@ export function isReportFinalized(report: ReportLike): boolean {
 }
 
 export function isInvoiceFullyPaid(invoice: InvoiceLike): boolean {
-  return Number(invoice.amountDue ?? 0) <= 0;
+  if (invoice.status && !['ISSUED','CLOSED'].includes(invoice.status)) return false;
+  if (invoice.amountDue == null) return false;
+  try { return new Decimal(String(invoice.amountDue)).eq(0); } catch { return false; }
 }
 
 /** Finalized + fully paid = the report may be shown to the patient

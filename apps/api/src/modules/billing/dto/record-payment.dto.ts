@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsString,
   Min,
+  Matches,
 } from 'class-validator';
 
 export enum PaymentMethodDto {
@@ -16,6 +17,9 @@ export enum PaymentMethodDto {
 }
 
 export class RecordPaymentDto {
+  @Matches(/^[a-zA-Z0-9_-]{8,100}$/)
+  operationKey!: string;
+
   @IsNumber()
   @Min(0.01)
   amount!: number;

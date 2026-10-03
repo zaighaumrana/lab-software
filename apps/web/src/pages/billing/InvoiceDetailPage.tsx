@@ -1,3 +1,4 @@
+import { useFinancialRefresh } from '../../lib/financialRefresh';
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import * as billingApi from '../../api/billing';
@@ -37,6 +38,8 @@ export function InvoiceDetailPage() {
   useEffect(() => {
     load();
   }, [id]);
+
+  useFinancialRefresh(()=>{void load();},id);
 
   async function handlePayment(e: FormEvent) {
     e.preventDefault();

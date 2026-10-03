@@ -1,3 +1,4 @@
+import { useFinancialRefresh } from '../../lib/financialRefresh';
 import { FormEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import * as reportsApi from '../../api/reports';
@@ -57,6 +58,8 @@ export function ReportsPage() {
   }
 
   const STATUS_OPTIONS = ['', 'PENDING', 'PARTIAL_READY', 'COMPLETE', 'AMENDED', 'ARCHIVED'];
+  useFinancialRefresh(()=>{void load(q.trim() || undefined,status,showAll);});
+
 
   return (
     <div className="space-y-6">

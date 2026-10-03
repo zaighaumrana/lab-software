@@ -1,3 +1,4 @@
+import { useFinancialRefresh } from '../../lib/financialRefresh';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import * as billingApi from '../../api/billing';
@@ -57,6 +58,8 @@ export function InvoicesPage() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range.from, range.to, status]);
+
+  useFinancialRefresh(()=>{void load();});
 
   function handleSearch(e: FormEvent) {
     e.preventDefault();

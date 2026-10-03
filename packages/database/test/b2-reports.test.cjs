@@ -150,6 +150,7 @@ test('G first artifact renders/stores/reads back; later requests reuse exact byt
   await assert.rejects(()=>store.publish('../escape',f.inv.report.id,1,first));
   const configured=process.env.REPORT_STORAGE_ROOT; process.env.REPORT_STORAGE_ROOT=root;
   try { assert.throws(()=>persistentReportRoot()); } finally { if(configured===undefined)delete process.env.REPORT_STORAGE_ROOT;else process.env.REPORT_STORAGE_ROOT=configured; }
+  await billing.recordPayment(tenantId,f.inv.id,{amount:200,method:'CASH',operationKey:randomUUID()},actor);
   await Promise.all([1,2].map(()=>reporting.markPrinted(tenantId,f.inv.report.id,v.id)));
   const printed=await db.reportVersion.findUniqueOrThrow({where:{id:v.id}});
   assert.equal(printed.printCount,2); assert(printed.firstPrintedAt<=printed.lastPrintedAt);

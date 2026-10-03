@@ -2,7 +2,7 @@
 const assert = require('node:assert/strict');
 const { createRequire } = require('node:module');
 const { resolve } = require('node:path');
-const { randomBytes } = require('node:crypto');
+const { randomBytes, randomUUID } = require('node:crypto');
 const { test } = require('node:test');
 const { createDatabaseClient, Decimal } = require('@lms/database');
 const apiRequire = createRequire(resolve('../../apps/api/package.json'));
@@ -74,11 +74,11 @@ test('built Nest API, billing transactions, reads, auth, socket and shutdown on 
     assert.equal(new Decimal(invoice.grandTotal).toFixed(2), '300.00');
     const share = await db.doctorShare.findFirstOrThrow({ where: { invoiceId: invoice.id } });
     assert.equal(share.calculatedAmount.toFixed(2), '37.50');
-    const payment = await request(`/billing/invoices/${invoice.id}/payments`, 'POST', { amount: 100.10, method: 'CASH' });
+    const payment = await request(`/billing/invoices/${invoice.id}/payments`, 'POST', { amount: 100.10, method: 'CASH', operationKey: randomUUID() });
     assert.equal(new Decimal(payment.invoice.amountDue).toFixed(2), '199.90');
     const rejected = await fetch(base + `/billing/invoices/${invoice.id}/payments`, { method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-session-id': sessionId },
-      body: JSON.stringify({ amount: 200, method: 'CASH' }) });
+      body: JSON.stringify({ amount: 200, method: 'CASH', operationKey: randomUUID() }) });
     assert.equal(rejected.status, 400);
     assert.equal(await db.payment.count({ where: { invoiceId: invoice.id } }), 1);
     const orders = invoice.visit.orderedTests;
