@@ -22,6 +22,9 @@ export interface SmsSendParams {
 
 export interface SmsSendResult {
   success: boolean;
+  failureKind?: 'TRANSIENT' | 'PERMANENT' | 'AMBIGUOUS';
+  errorCode?: string;
+  providerStatus?: string;
   /** Provider-side message ID, if the send succeeded — used for delivery lookups. */
   providerMessageId?: string;
   /** Raw response body, kept (redacted of secrets) for troubleshooting and the audit trail. */

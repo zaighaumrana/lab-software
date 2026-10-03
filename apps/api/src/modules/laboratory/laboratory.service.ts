@@ -86,28 +86,10 @@ export class LaboratoryService {
       await appendSampleEvent(tx, { tenantId, sampleId: created.id, actorId: collectedById,
         eventType: SampleEventType.COLLECTED, toStatus: SampleStatus.COLLECTED,
         occurredAt: created.collectedAt ?? new Date() });
+      await appendAudit(tx,{tenantId,actorId:collectedById,action:'SAMPLE_COLLECTED',entityType:'Sample',entityId:created.id,after:{status:created.status}});
+      await this.queueClinicalNotification(tx,tenantId,'SAMPLE_COLLECTED',invoice.id);
       return created;
     });
-
-    // Fire-and-forget-ish, but never inside the write above: sample
-    // collection must succeed and commit regardless of SMS/network state.
-    // See notes in NotificationsService for the offline-first rationale.
-    const booking = invoice.booking;
-    const patient = booking?.patient;
-    if (booking && patient?.smsConsent && patient.phone) {
-      const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
-      await this.notifications.sendTemplatedSms(
-        tenantId,
-        'SAMPLE_COLLECTED',
-        patient.phone,
-        {
-          patientName: patient.fullName,
-          bookingId: booking.bookingCode,
-          labName: tenant?.name ?? '',
-        },
-        { relatedType: 'Booking', relatedId: booking.id },
-      );
-    }
 
     return sample;
   }
@@ -384,7 +366,6 @@ export class LaboratoryService {
         const report=await this.recomputeReportStatus(tx,tenantId,sample.invoiceId,enteredById);
         return {result,report};
       });
-      if(outcome.report.justCompleted) await this.notifyReportReady(tenantId,sample.invoiceId,outcome.report.trackingId);
       this.gateway.notifySampleChanged(tenantId,sample.id);
       return projectClinicalResult(outcome.result);
     }
@@ -566,17 +547,8 @@ export class LaboratoryService {
       return { created, reportOutcome };
     });
 
-    // SMS sent AFTER the transaction commits — an SMS gateway call has no
-    // place holding a DB transaction open (see notes in NotificationsService).
-    // TODO: raise ResultReleased / ReportGenerated domain events (this direct
-    // call is the v1 stand-in — fine at this scale, revisit if more than
-    // notifications ever needs to react to a report completing).
-    if (result.reportOutcome.justCompleted) {
-      await this.notifyReportReady(tenantId, sample.invoiceId, result.reportOutcome.trackingId);
-    }
-
+    // The committed notification intent is delivered by the dispatcher.
     this.gateway.notifySampleChanged(tenantId, sample.id);
-
     return result.created;
   }
 
@@ -598,7 +570,6 @@ export class LaboratoryService {
         const report=await this.recomputeReportStatus(tx,tenantId,sample.invoiceId,actorId);
         return {result,sample,report};
       });
-      if(outcome.report.justCompleted) await this.notifyReportReady(tenantId,outcome.sample.invoiceId,outcome.report.trackingId);
       this.gateway.notifySampleChanged(tenantId,outcome.sample.id);
       return projectClinicalResult(outcome.result);
     }
@@ -633,14 +604,6 @@ export class LaboratoryService {
       return { updated, reportOutcome };
     });
 
-    if (outcome.reportOutcome.justCompleted) {
-      await this.notifyReportReady(
-        tenantId,
-        sampleForResult.invoiceId,
-        outcome.reportOutcome.trackingId,
-      );
-    }
-
     this.gateway.notifySampleChanged(tenantId, sampleForResult.id);
 
     return outcome.updated;
@@ -669,7 +632,6 @@ export class LaboratoryService {
         for(const draft of drafts) await releaseOccurrenceResult(tx,tenantId,draft.id,actorId);
         return {released:drafts.length,samples:invoice.samples,report:await this.recomputeReportStatus(tx,tenantId,invoiceId,actorId)};
       });
-      if(outcome.report.justCompleted) await this.notifyReportReady(tenantId,invoiceId,outcome.report.trackingId);
       for(const s of outcome.samples) this.gateway.notifySampleChanged(tenantId,s.id);
       return {invoiceId,released:outcome.released};
     }
@@ -704,7 +666,7 @@ export class LaboratoryService {
       );
     }
 
-    const reportOutcome = await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx) => {
       for (const resultId of resultIdsToRelease) {
         await tx.result.update({
           where: { id: resultId },
@@ -718,10 +680,6 @@ export class LaboratoryService {
       }
       return this.recomputeReportStatus(tx,tenantId,invoiceId,actorId);
     });
-
-    if (reportOutcome.justCompleted) {
-      await this.notifyReportReady(tenantId, invoiceId, reportOutcome.trackingId);
-    }
 
     // Every sample on this invoice may be open on someone else's screen —
     // notify for each so all of them refresh live.
@@ -790,37 +748,13 @@ export class LaboratoryService {
     return updated;
   }
 
-  private async notifyReportReady(
-    tenantId: string,
-    invoiceId: string,
-    trackingId?: string,
-  ) {
-    const invoice = await this.prisma.invoice.findFirst({
-      where: { id: invoiceId },
-      include: { booking: { include: { patient: true } } },
-    });
-    const patient = invoice?.booking?.patient;
-    if (!patient?.smsConsent || !patient.phone) return;
-
-    // Wording (including whether/how tracking ID or payment status is
-    // mentioned) is entirely administrator-owned via Settings → SMS; this
-    // service only supplies the values. Tracking ID is safe to include
-    // regardless of payment status — it's already printed on the patient's
-    // receipt, and the online report-lookup page itself still withholds the
-    // actual report for a partially-paid invoice.
-    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
-    await this.notifications.sendTemplatedSms(
-      tenantId,
-      'REPORT_READY',
-      patient.phone,
-      {
-        patientName: patient.fullName,
-        bookingId: invoice?.booking?.bookingCode ?? '',
-        labName: tenant?.name ?? '',
-        trackingId: trackingId ?? '',
-      },
-      { relatedType: 'Report', relatedId: invoiceId },
-    );
+  private async queueClinicalNotification(tx:Prisma.TransactionClient,tenantId:string,eventKey:'SAMPLE_COLLECTED'|'REPORT_READY',invoiceId:string) {
+    const invoice=await tx.invoice.findFirst({where:{id:invoiceId,tenantId},include:{tenant:true,report:true,booking:{include:{patient:true}}}});
+    const patient=invoice?.booking.patient;
+    if (!invoice || !patient?.smsConsent) return;
+    await this.notifications.queueTemplatedSms(tx,tenantId,eventKey,patient.phone,{patientName:patient.fullName,bookingId:invoice.booking.bookingCode,
+      labName:invoice.tenant.name,trackingId:invoice.report?.trackingId??''},
+      {relatedType:eventKey==='SAMPLE_COLLECTED'?'Booking':'Report',relatedId:eventKey==='SAMPLE_COLLECTED'?invoice.bookingId:invoiceId,patientId:patient.id});
   }
 
   async amendResult(
@@ -843,7 +777,7 @@ export class LaboratoryService {
       const result=await this.prisma.$transaction(async tx=>{
         await reopenOccurrenceResult(tx,tenantId,resultId,dto.amendmentReason,amendedById);
         const replacement=await enterOccurrenceResult(tx,tenantId,{sampleId:original.sampleId,orderedTestId:original.orderedTestId!,values:dto.values,releaseImmediately:true},amendedById);
-        await this.recomputeReportStatus(tx,tenantId,original.sample.invoiceId,amendedById);
+        await this.recomputeReportStatus(tx,tenantId,original.sample.invoiceId,amendedById,false);
         return replacement;
       });
       this.gateway.notifySampleChanged(tenantId,original.sampleId);
@@ -971,6 +905,7 @@ export class LaboratoryService {
     tenantId: string,
     invoiceId: string,
     actorId?: string,
+    notify=true,
   ): Promise<{ justCompleted: boolean; trackingId?: string }> {
     const invoice = await tx.invoice.findFirst({
       where: { id: invoiceId,tenantId },
@@ -1010,12 +945,14 @@ export class LaboratoryService {
         const versionId=await captureReleasedReportVersion(tx,tenantId,created.id);
         if (versionId) await appendAudit(tx,{tenantId,actorId,action:'REPORT_VERSION_RELEASE',entityType:'ReportVersion',entityId:versionId,after:{reportId:created.id,status:'COMPLETE'}});
       }
+      if (allReleased && notify) await this.queueClinicalNotification(tx,tenantId,'REPORT_READY',invoiceId);
       return { justCompleted: allReleased, trackingId: created.trackingId };
     }
 
     if (allReleased && invoice.visitId) {
       const versionId = await captureReleasedReportVersion(tx, tenantId, invoice.report.id);
       if (versionId && versionId!==invoice.report.currentVersionId) await appendAudit(tx,{tenantId,actorId,action:'REPORT_VERSION_RELEASE',entityType:'ReportVersion',entityId:versionId,after:{reportId:invoice.report.id,status:'COMPLETE'}});
+      if (versionId && versionId!==invoice.report.currentVersionId && notify) await this.queueClinicalNotification(tx,tenantId,'REPORT_READY',invoiceId);
       return { justCompleted: versionId !== invoice.report.currentVersionId, trackingId: invoice.report.trackingId };
     }
 
@@ -1030,6 +967,7 @@ export class LaboratoryService {
       });
       // Only the PENDING/PARTIAL_READY → COMPLETE transition is a genuine
       // "just became ready" moment worth notifying about.
+      if (allReleased && !wasComplete && notify) await this.queueClinicalNotification(tx,tenantId,'REPORT_READY',invoiceId);
       return { justCompleted: allReleased && !wasComplete, trackingId: updated.trackingId };
     }
 

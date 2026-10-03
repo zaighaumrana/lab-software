@@ -18,6 +18,7 @@
     "test:integration": "pnpm build && tsx test/run-integration.ts",
     "test:b1": "pnpm build && tsx test/run-integration.ts b1",
     "test:b2": "pnpm build && tsx test/run-integration.ts b2",
+    "test:d2": "pnpm build && tsx test/run-integration.ts d2",
     "test:d1": "pnpm build && tsx test/run-integration.ts d1",
     "test:c": "pnpm build && tsx test/run-integration.ts c",
     "test:phase-a": "pnpm build && tsx test/run-phase-a.ts",

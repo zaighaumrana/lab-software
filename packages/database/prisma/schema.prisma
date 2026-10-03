@@ -189,6 +189,7 @@ model Patient {
   bookings Booking[]
   companyLinks PatientCompany[]
   visits Visit[]
+  notifications Notification[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, phone])
@@ -953,6 +954,7 @@ enum NotificationStatus {
   FAILED
   RETRYING
   ABANDONED
+  RECONCILIATION_REQUIRED
 }
 
 model Notification {
@@ -983,7 +985,18 @@ model Notification {
   messageType          String?   // "text" | "unicode" — detected at render time
   smsParts             Int?      // Calculated SMS part count for the final rendered message
 
+  patientId String?
+  nextAttemptAt DateTime? @db.Timestamptz(3)
+  claimedAt DateTime? @db.Timestamptz(3)
+  claimExpiresAt DateTime? @db.Timestamptz(3)
+  claimedBy String?
+  dispatchStartedAt DateTime? @db.Timestamptz(3)
+  lastErrorCode String?
+  deliveryChecks Int @default(0)
+  nextDeliveryCheckAt DateTime? @db.Timestamptz(3)
+  attemptsHistory NotificationAttempt[]
   tenant Tenant @relation(fields: [tenantId], references: [id])
+  patient Patient? @relation(fields: [tenantId, patientId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   // Idempotency guard: the same event (by related entity + event key) for a
   // tenant is only ever recorded/sent once, so retries, double-submits, and
@@ -991,15 +1004,38 @@ model Notification {
   // notifications with no relatedType/relatedId/templateKey) are exempt —
   // Postgres treats NULLs as distinct in unique indexes.
   @@unique([tenantId, relatedType, relatedId, templateKey])
+  @@unique([tenantId, id])
+  @@index([status, nextAttemptAt, createdAt])
+  @@index([status, claimExpiresAt])
+  @@index([status, nextDeliveryCheckAt])
   @@index([tenantId, status])
   @@index([status, createdAt])
   @@map("notifications")
 }
 
+model NotificationAttempt {
+  id String @id @default(cuid())
+  tenantId String
+  notificationId String
+  attemptNo Int
+  startedAt DateTime @db.Timestamptz(3)
+  completedAt DateTime @db.Timestamptz(3)
+  outcome String
+  providerMessageId String?
+  providerStatus String?
+  errorCode String?
+  errorMessage String?
+  providerResponse String?
+  notification Notification @relation(fields: [tenantId, notificationId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([notificationId, attemptNo])
+  @@index([tenantId, notificationId, startedAt])
+  @@map("notification_attempts")
+}
+
 /// One row per automatic SMS event (SAMPLE_COLLECTED, REPORT_READY). Holds
 /// the administrator-owned local wording plus the mapping to an approved
 /// SENDPK template — nothing about the actual SMS wording is hardcoded in
-/// application code; it is always read from here at send time.
+/// application code; it is read here when a durable intent is created.
 model SmsTemplate {
   id        String   @id @default(cuid())
   tenantId  String

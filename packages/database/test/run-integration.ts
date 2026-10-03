@@ -23,10 +23,10 @@ async function main() {
   try {
     await admin.query(`CREATE DATABASE "${name}"`);
     created = true;
-    const env = { ...process.env, DATABASE_URL: fixture.toString(), DATABASE_TEST_URL: fixture.toString() };
+    const env = { ...process.env, DATABASE_URL: fixture.toString(), DATABASE_TEST_URL: fixture.toString(), SENDPK_API_KEY: '', SENDPK_SENDER: '' };
     const commands = [
       [resolve('node_modules/prisma/build/index.js'), 'migrate', 'deploy'],
-      ...(['b1','b2','c','d1'].includes(process.argv[2]) ? [[resolve({b1:'test/b1-clinical.test.cjs',b2:'test/b2-reports.test.cjs',c:'test/c-financial.test.cjs',d1:'test/d1-auth-audit.test.cjs'}[process.argv[2] as 'b1'|'b2'|'c'|'d1'])]] : [
+      ...(['b1','b2','c','d1','d2'].includes(process.argv[2]) ? [[resolve({b1:'test/b1-clinical.test.cjs',b2:'test/b2-reports.test.cjs',c:'test/c-financial.test.cjs',d1:'test/d1-auth-audit.test.cjs',d2:'test/d2-notifications.test.cjs'}[process.argv[2] as 'b1'|'b2'|'c'|'d1'|'d2'])]] : [
         [require.resolve('tsx/cli'), '--test', 'test/integration.test.ts'],
         [resolve('test/api-smoke.cjs')],
       ]),

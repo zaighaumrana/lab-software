@@ -41,14 +41,8 @@ export class SendPkProvider implements SmsGateway {
   }
 
   async send(params: SmsSendParams): Promise<SmsSendResult> {
-    if (!this.isConfigured()) {
-      const err = 'SENDPK_API_KEY or SENDPK_SENDER is not configured';
-      this.logger.error(err);
-      return { success: false, rawResponse: '', errorMessage: err };
-    }
-    if (!params.templateId) {
-      return { success: false, rawResponse: '', errorMessage: 'No SENDPK template_id mapped' };
-    }
+    if (!this.isConfigured()) return {success:false,failureKind:'PERMANENT',errorCode:'PROVIDER_NOT_CONFIGURED',rawResponse:'',errorMessage:'SMS provider is not configured'};
+    if (!params.templateId) return {success:false,failureKind:'PERMANENT',errorCode:'MISSING_TEMPLATE',rawResponse:'',errorMessage:'Provider template is missing'};
 
     const body = new URLSearchParams({
       api_key: this.apiKey,
@@ -63,20 +57,38 @@ export class SendPkProvider implements SmsGateway {
     }
 
     try {
-      const res = await this.postWithTimeout(`${this.baseUrl}/sms.php`, body);
-      const raw = await res.text();
-      return this.parseResponse(raw);
+      const response=await this.requestText(`${this.baseUrl}/sms.php`,body);
+      if (!response.ok) {
+        const transient=response.status===429;
+        return {success:false,failureKind:transient?'TRANSIENT':response.status>=500||response.status===408?'AMBIGUOUS':'PERMANENT',
+          errorCode:transient?'RATE_LIMITED':'HTTP_REJECTION',rawResponse:JSON.stringify({httpStatus:response.status}),errorMessage:'Provider HTTP request was not accepted normally'};
+      }
+      return this.parseResponse(response.raw);
     } catch (e) {
-      const errorMessage = this.describeNetworkError(e);
-      this.logger.error(`SendPK request failed: ${errorMessage}`);
-      return { success: false, rawResponse: '', errorMessage };
+      const code=(e as {cause?:{code?:string}})?.cause?.code;
+      const beforeConnection=['ECONNREFUSED','ENOTFOUND','EAI_AGAIN'].includes(code??'');
+      const timeout=e instanceof Error&&e.name==='AbortError';
+      return {success:false,failureKind:beforeConnection?'TRANSIENT':'AMBIGUOUS',errorCode:beforeConnection?'NETWORK_UNREACHABLE':timeout?'NETWORK_TIMEOUT':'NETWORK_UNCERTAIN',
+        rawResponse:'',errorMessage:beforeConnection?'Provider connection could not be established':'Provider acceptance is uncertain'};
     }
   }
 
   async checkDelivery(providerMessageId: string): Promise<string> {
-    const params = new URLSearchParams({ api_key: this.apiKey, id: providerMessageId });
-    const res = await this.getWithTimeout(`${this.baseUrl}/delivery.php?${params.toString()}`);
-    return res.text();
+    const response=await this.requestText(`${this.baseUrl}/delivery.php`,new URLSearchParams({api_key:this.apiKey,id:providerMessageId}));
+    if (!response.ok) return 'UNKNOWN';
+    let value=response.raw.trim().toUpperCase();
+    try {const parsed=JSON.parse(response.raw);value=String(parsed.delivery_status??parsed.status??'').trim().toUpperCase();} catch { /* Plain text is also supported. */ }
+    // No undocumented numeric delivery-code mapping or substring guessing.
+    return ['DELIVERED','FAILED','PENDING'].includes(value)?value:'UNKNOWN';
+  }
+
+  private async requestText(url:string,body:URLSearchParams) {
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),this.timeoutMs);
+    try {
+      const response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body.toString(),signal:controller.signal});
+      const raw=await response.text(); // Timeout covers both headers and response body.
+      return {ok:response.ok,status:response.status,raw};
+    }finally{clearTimeout(timer);}
   }
 
   async checkBalance(): Promise<number | null> {
@@ -178,48 +190,25 @@ export class SendPkProvider implements SmsGateway {
   }
 
   private describeNetworkError(e: unknown): string {
-    if (e instanceof Error) {
-      return e.name === 'AbortError' ? 'SendPK request timed out' : e.message;
-    }
-    return 'Unknown network error';
+    return e instanceof Error&&e.name==='AbortError'?'SendPK request timed out':'SendPK network request failed';
   }
 
   private parseResponse(raw: string): SmsSendResult {
-    // format=json gives back something like {"status":"OK","id":"29346"}
-    // but SendPK's plain-text status codes are the documented source of
-    // truth, so we handle both defensively. HTTP 200 alone is never treated
-    // as success — only an explicit OK status is.
+    let status='',id='';
     try {
-      const parsed = JSON.parse(raw);
-      const status = String(parsed.status ?? parsed.Status ?? '').toUpperCase();
-      if (status === 'OK') {
-        return {
-          success: true,
-          providerMessageId: String(parsed.id ?? parsed.ID ?? ''),
-          rawResponse: raw,
-        };
-      }
-      return {
-        success: false,
-        rawResponse: raw,
-        errorMessage: this.describeStatusCode(status || String(parsed.code ?? '')),
-      };
-    } catch {
-      // Fall back to plain-text parsing: "OK ID:29346" or a bare numeric code.
-      if (raw.trim().toUpperCase().startsWith('OK')) {
-        const match = raw.match(/ID:(\d+)/i);
-        return {
-          success: true,
-          providerMessageId: match?.[1],
-          rawResponse: raw,
-        };
-      }
-      return {
-        success: false,
-        rawResponse: raw,
-        errorMessage: this.describeStatusCode(raw.trim()),
-      };
+      const parsed=JSON.parse(raw);
+      if(parsed && typeof parsed==='object') {
+        status=String(parsed.status??parsed.Status??parsed.code??'').trim().toUpperCase();id=String(parsed.id??parsed.ID??'');
+      } else status=String(parsed).trim().toUpperCase();
     }
+    catch {const ok=raw.trim().match(/^OK(?:\s+ID:(\d+))?$/i);status=ok?'OK':raw.trim().match(/^(\d+)(?:\s|$)/)?.[1]??'';id=ok?.[1]??'';}
+    const providerMessageId=/^\d{1,64}$/.test(id)&&(!this.apiKey||!id.includes(this.apiKey))?id:undefined;
+    if(status==='OK')return {success:true,providerStatus:'ACCEPTED',providerMessageId,rawResponse:JSON.stringify({status:'OK',id:providerMessageId}).slice(0,500)};
+    const known=['1','2','4','5','6','7','8','9','12'].includes(status);
+    const errorCode=status==='8'?'INSUFFICIENT_CREDIT':status==='7'||status==='5'?'INVALID_RECIPIENT':known?'PROVIDER_REJECTED':'UNKNOWN_RESPONSE';
+    return {success:false,failureKind:status==='8'?'TRANSIENT':known?'PERMANENT':'AMBIGUOUS',errorCode,
+      providerMessageId,providerStatus:known?'REJECTED':'UNKNOWN',errorMessage:known?this.describeStatusCode(status):'Provider acceptance is uncertain',
+      rawResponse:JSON.stringify({status:known?status:'UNKNOWN',id:providerMessageId}).slice(0,500)};
   }
 
   private describeStatusCode(code: string): string {
