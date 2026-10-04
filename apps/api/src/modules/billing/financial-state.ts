@@ -1,6 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { Decimal, Prisma } from '@lms/database';
+import { enqueueInvoicePublicReport } from '../public-sync/public-projection';
 
 export function moneyAmount(value: number | string): Decimal {
   let amount: Decimal;
@@ -61,10 +62,12 @@ export async function reconcileInvoice(tx: Prisma.TransactionClient, invoice: {i
   const state = await financialState(tx,invoice);
   const status = state.voided || invoice.status==='VOIDED' ? 'VOIDED' : invoice.status==='DRAFT' ? 'DRAFT' :
     state.refunded.gt(0) && state.paid.eq(0) ? 'REFUNDED' : state.due.eq(0) ? 'CLOSED' : 'ISSUED';
-  return tx.invoice.update({ where:{id:invoice.id}, data:{amountPaid:state.paid,amountDue:state.due,status,
+  const updated = await tx.invoice.update({ where:{id:invoice.id}, data:{amountPaid:state.paid,amountDue:state.due,status,
     closedAt:status==='CLOSED' ? invoice.closedAt ?? at : null,
     ...(state.voided ? {voidedAt:at} : {})},
     include:{lines:true,payments:true,adjustments:{orderBy:{createdAt:'asc'}},booking:{include:{patient:true}}} });
+  await enqueueInvoicePublicReport(tx, invoice.id);
+  return updated;
 }
 
 export async function reverseDoctorShares(tx: Prisma.TransactionClient, tenantId:string, invoiceId:string, at:Date) {

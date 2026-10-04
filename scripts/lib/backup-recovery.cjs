@@ -213,13 +213,16 @@ async function cutover(options){
   if((target==='lms_v2'||target===verified.manifest.database)&&!(options.allowOperationalRestore&&options.confirmOperationalRestore==='RESTORE '+target))fail('OPERATIONAL_CUTOVER_REFUSED');
   await validateRestored(options,verified);
   const db=new Client({connectionString:options.ownerUrl});await db.connect();
-  try{await db.query('BEGIN');const totals={sessions:0,notifications:0};
+  try{await db.query('BEGIN');const totals={sessions:0,notifications:0,syncIntents:0};
     const tenants=(await db.query('SELECT id FROM tenants ORDER BY id FOR UPDATE')).rows;
     for(const t of tenants){
       const sessions=await db.query(`UPDATE auth_sessions SET "revokedAt"=clock_timestamp(),"revocationReason"='DISASTER_RECOVERY' WHERE "tenantId"=$1 AND "revokedAt" IS NULL`,[t.id]);
       const notifications=await db.query(`UPDATE notifications SET status='RECONCILIATION_REQUIRED',"lastErrorCode"='RESTORED_BACKUP_UNCERTAIN',"lastError"='Historical backup requires administrator reconciliation',"nextAttemptAt"=NULL,"nextDeliveryCheckAt"=NULL,"claimedAt"=NULL,"claimExpiresAt"=NULL,"claimedBy"=NULL,"updatedAt"=clock_timestamp() WHERE "tenantId"=$1 AND channel='SMS' AND status IN ('QUEUED','RETRYING','SENDING')`,[t.id]);
-      totals.sessions+=sessions.rowCount;totals.notifications+=notifications.rowCount;
-      if(sessions.rowCount||notifications.rowCount)await db.query(`INSERT INTO audit_logs(id,"tenantId",action,"entityType","entityId","after") VALUES (gen_random_uuid()::text,$1,'RECOVERY_CUTOVER','Recovery',$2,$3::jsonb)`,[t.id,verified.manifest.backupId,JSON.stringify({revokedSessions:sessions.rowCount,heldNotifications:notifications.rowCount,actorContext:'OWNER_RECOVERY_MAINTENANCE'})]);
+      // Cloud may already be ahead of this snapshot. Never replay restored revisions automatically.
+      const sync=await db.query(`UPDATE sync_outbox SET status='ABANDONED',"failureCode"='RECOVERY_HOLD',"lastError"='RECOVERY_HOLD',"nextAttemptAt"=NULL,"claimedBy"=NULL,"claimExpiresAt"=NULL,"dispatchStartedAt"=NULL,"updatedAt"=(clock_timestamp() AT TIME ZONE 'UTC') WHERE "tenantId"=$1 AND "eventType"='public-report/v1' AND status IN ('QUEUED','RETRYING','SYNCING')`,[t.id]);
+      await db.query(`INSERT INTO configurations(id,"tenantId",key,value,"updatedAt") VALUES (gen_random_uuid()::text,$1,'public-sync','{"enabled":false,"recoveryHold":true}'::jsonb,(clock_timestamp() AT TIME ZONE 'UTC')) ON CONFLICT ("tenantId",key) DO UPDATE SET value='{"enabled":false,"recoveryHold":true}'::jsonb,"updatedAt"=(clock_timestamp() AT TIME ZONE 'UTC')`,[t.id]);
+      totals.sessions+=sessions.rowCount;totals.notifications+=notifications.rowCount;totals.syncIntents+=sync.rowCount;
+      await db.query(`INSERT INTO audit_logs(id,"tenantId",action,"entityType","entityId","after") VALUES (gen_random_uuid()::text,$1,'RECOVERY_CUTOVER','Recovery',$2,$3::jsonb)`,[t.id,verified.manifest.backupId,JSON.stringify({revokedSessions:sessions.rowCount,heldNotifications:notifications.rowCount,heldSyncIntents:sync.rowCount,publicSyncRecoveryHold:true,actorContext:'OWNER_RECOVERY_MAINTENANCE'})]);
     }
     await db.query('COMMIT');return totals;
   }catch(e){await db.query('ROLLBACK');throw e;}finally{await db.end();}

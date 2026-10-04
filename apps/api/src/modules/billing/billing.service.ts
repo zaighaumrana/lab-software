@@ -11,6 +11,7 @@ import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { RecordPaymentDto } from './dto/record-payment.dto';
 import { FinancialAdjustmentDto, FinancialOperationDto, RefundDto } from './dto/financial-adjustment.dto';
 import { financialState, lockInvoice, lockCashBranch, moneyAmount, operationHash, postingInstant, reconcileInvoice, reverseDoctorShares, cashShiftForActor } from './financial-state';
+import { enqueueInvoicePublicReport } from '../public-sync/public-projection';
 import { LaboratoryGateway } from '../laboratory/laboratory.gateway';
 import {
   InvoiceStatus,
@@ -338,6 +339,7 @@ export class BillingService {
       }
 
       await appendAudit(tx,{tenantId,action:'INVOICE_ISSUED',entityType:'Invoice',entityId:inv.id,after:{subtotal:subtotal.toFixed(2),discountTotal:discountTotal.toFixed(2),grandTotal:grandTotal.toFixed(2),discountMode}});
+      await enqueueInvoicePublicReport(tx, inv.id);
       return tx.invoice.findUniqueOrThrow({where:{id:inv.id},include:{lines:true,booking:{include:{patient:true}},report:true,
         visit:{include:{orderedTests:{orderBy:{occurrenceNo:'asc'},include:{testVersion:{include:{versionParameters:{include:{choices:true,referenceRanges:true}}}}}}}}}});
     });

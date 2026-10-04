@@ -18,6 +18,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { PrintingModule } from './modules/printing/printing.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { CashShiftsModule } from './modules/cash-shifts/cash-shifts.module';
+import { PublicSyncModule } from './modules/public-sync/public-sync.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { CashShiftsModule } from './modules/cash-shifts/cash-shifts.module';
     PrintingModule,
     DashboardModule,
     CashShiftsModule,
+    PublicSyncModule,
   ],
 })
 export class AppModule implements NestModule {

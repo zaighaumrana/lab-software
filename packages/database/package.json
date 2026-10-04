@@ -21,6 +21,7 @@
     "test:sms": "pnpm build && tsx test/run-integration.ts sms",
     "test:e1": "pnpm build && node test/run-e1.cjs",
     "test:e2": "pnpm build && node test/run-e2.cjs",
+    "test:f1": "pnpm build && node test/run-f1.cjs",
     "test:d2": "pnpm build && tsx test/run-integration.ts d2",
     "test:d1": "pnpm build && tsx test/run-integration.ts d1",
     "test:c": "pnpm build && tsx test/run-integration.ts c",

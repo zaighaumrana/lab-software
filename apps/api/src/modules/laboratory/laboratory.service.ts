@@ -1,3 +1,4 @@
+import { enqueueInvoicePublicReport } from '../public-sync/public-projection';
 import {
   Injectable,
   NotFoundException,
@@ -885,6 +886,7 @@ export class LaboratoryService {
       }
 
       await appendAudit(tx,{tenantId,actorId:amendedById,action:'AMENDMENT_RELEASE',entityType:'Result',entityId:newResult.id,before:{sourceResultId:original.id,status:original.status},after:{status:newResult.status,reason:dto.amendmentReason,legacy:true}});
+      await enqueueInvoicePublicReport(tx, original.sample.invoiceId);
       return newResult;
     });
   }
@@ -901,6 +903,15 @@ export class LaboratoryService {
    * without a separate, easy-to-drift code path).
    */
   private async recomputeReportStatus(
+    tx: Prisma.TransactionClient, tenantId: string, invoiceId: string, actorId?: string, notify=true,
+  ): Promise<{ justCompleted: boolean; trackingId?: string }> {
+    await tx.$queryRaw`SELECT id FROM invoices WHERE id=${invoiceId} AND "tenantId"=${tenantId} FOR UPDATE`;
+    const outcome = await this.recomputeLocalReportStatus(tx, tenantId, invoiceId, actorId, notify);
+    await enqueueInvoicePublicReport(tx, invoiceId);
+    return outcome;
+  }
+
+  private async recomputeLocalReportStatus(
     tx: Prisma.TransactionClient,
     tenantId: string,
     invoiceId: string,

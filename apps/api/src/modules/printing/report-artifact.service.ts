@@ -6,6 +6,7 @@ import { ReportArtifactStore, persistentReportRoot, pdfHash } from './report-art
 import { buildReportHtml } from './templates/report.template';
 import type { PrintSettings } from './templates/shared';
 import { ReportingService } from '../reporting/reporting.service';
+import { enqueuePublicReport, lockPublicReport } from '../public-sync/public-projection';
 
 type VersionProjection = Awaited<ReturnType<ReportingService['findVersion']>>;
 
@@ -43,15 +44,19 @@ export class ReportArtifactService {
     });
     const candidate = await this.storage().publish(report.tenantId, report.id, version.versionNo, bytes);
     try {
-      await this.prisma.reportVersion.updateMany({
-        where: { id: version.id, tenantId: report.tenantId, reportId: report.id, pdfPath: null },
-        data: { ...candidate, pdfGeneratedAt: new Date(), renderSettingsSnapshot: {
-          template: 'report-b2-v1', htmlSha256: pdfHash(Buffer.from(html)), settings: printSettings,
-          financialDisplay: { status: report.invoice.status,
-            amountPaid: String(report.invoice.amountPaid), amountDue: String(report.invoice.amountDue) },
-        } as unknown as Prisma.InputJsonValue },
+      version = await this.prisma.$transaction(async tx => {
+        await lockPublicReport(tx, report.tenantId, report.id);
+        const changed = await tx.reportVersion.updateMany({
+          where: { id: version.id, tenantId: report.tenantId, reportId: report.id, pdfPath: null },
+          data: { ...candidate, pdfGeneratedAt: new Date(), renderSettingsSnapshot: {
+            template: 'report-b2-v1', htmlSha256: pdfHash(Buffer.from(html)), settings: printSettings,
+            financialDisplay: { status: report.invoice.status,
+              amountPaid: String(report.invoice.amountPaid), amountDue: String(report.invoice.amountDue) },
+          } as unknown as Prisma.InputJsonValue },
+        });
+        if (changed.count) await enqueuePublicReport(tx, report.tenantId, report.id);
+        return tx.reportVersion.findUniqueOrThrow({ where: { id: version.id } });
       });
-      version = await this.prisma.reportVersion.findUniqueOrThrow({ where: { id: version.id } });
       if (version.pdfPath !== candidate.pdfPath) {
         await this.storage().removeCandidate(report.tenantId, report.id, version.versionNo, candidate.pdfPath);
       }
