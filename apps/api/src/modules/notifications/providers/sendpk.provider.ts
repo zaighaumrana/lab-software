@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { recoveryMode } from '../../../common/recovery-mode';
 import type {
   SmsGateway,
   SmsSendParams,
@@ -33,7 +34,7 @@ export class SendPkProvider implements SmsGateway {
   private readonly timeoutMs = 15_000;
 
   isConfigured(): boolean {
-    return Boolean(this.apiKey && this.sender);
+    return !recoveryMode() && Boolean(this.apiKey && this.sender);
   }
 
   getSenderId(): string {
@@ -83,6 +84,7 @@ export class SendPkProvider implements SmsGateway {
   }
 
   private async requestText(url:string,body:URLSearchParams) {
+    if(recoveryMode())throw new Error('Outbound providers are disabled in recovery mode');
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),this.timeoutMs);
     try {
       const response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body.toString(),signal:controller.signal});
@@ -165,6 +167,7 @@ export class SendPkProvider implements SmsGateway {
   }
 
   private async postWithTimeout(url: string, body: URLSearchParams): Promise<Response> {
+    if(recoveryMode())throw new Error('Outbound providers are disabled in recovery mode');
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
@@ -180,6 +183,7 @@ export class SendPkProvider implements SmsGateway {
   }
 
   private async getWithTimeout(url: string): Promise<Response> {
+    if(recoveryMode())throw new Error('Outbound providers are disabled in recovery mode');
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {

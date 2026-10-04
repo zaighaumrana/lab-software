@@ -6,6 +6,7 @@ import { appendAudit, auditContext } from '../../common/audit';
 import { AuthUser } from '../../common/decorators/current-user.decorator';
 import * as bcrypt from 'bcrypt';
 import { createHash, randomBytes } from 'node:crypto';
+import { recoveryMode } from '../../common/recovery-mode';
 
 const TTL = 12 * 60 * 60 * 1000;
 const WINDOW = 15 * 60 * 1000;
@@ -17,6 +18,7 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
   private cleaning = false;
   constructor(private readonly prisma: PrismaService) {}
   onModuleInit() {
+    if(recoveryMode())return;
     this.cleanupTimer = setInterval(() => void this.cleanup(), 60_000);
     this.cleanupTimer.unref();
   }
@@ -104,7 +106,7 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     const session = rows[0];
     if (!session) return null;
     // One-minute idle-touch throttle. Never revive expired/revoked sessions.
-    await this.prisma.$executeRaw`UPDATE auth_sessions SET "lastSeenAt"=clock_timestamp(),
+    if(!recoveryMode())await this.prisma.$executeRaw`UPDATE auth_sessions SET "lastSeenAt"=clock_timestamp(),
       "expiresAt"=clock_timestamp()+interval '12 hours' WHERE "tokenHash"=${tokenHash}
       AND "revokedAt" IS NULL AND "expiresAt">clock_timestamp() AND "lastSeenAt"<clock_timestamp()-interval '1 minute'`;
     return session;

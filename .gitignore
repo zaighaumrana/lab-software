@@ -30,6 +30,10 @@ packages/database/src/generated/prisma/
 packages/database/.env
 !packages/database/.env.example
 
+# Medical backup packages and newly provisioned recovery credentials.
+LabFlow_Backup_*/
+recovery.env
+
 # ============================================================
 # Logs & debug artifacts
 # ============================================================

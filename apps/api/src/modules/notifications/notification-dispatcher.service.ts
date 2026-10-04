@@ -7,6 +7,7 @@ import { appendAudit } from '../../common/audit';
 import { SMS_GATEWAY, SmsGateway, SmsSendResult } from './providers/sms-gateway.interface';
 import { MAX_NOTIFICATION_ATTEMPTS } from './notifications.service';
 import { getSmsProviderConfig, selectSmsGateway, SMS_PROVIDER_KEY } from './sms-provider-config';
+import { recoveryMode } from '../../common/recovery-mode';
 
 const LEASE_SECONDS=120;
 const BATCH_SIZE=10;
@@ -23,13 +24,14 @@ export class NotificationDispatcher implements OnModuleInit,OnModuleDestroy {
   private stopping=false;
   constructor(private readonly prisma:PrismaService,@Inject(SMS_GATEWAY) private readonly gateway:SmsGateway) {}
   onModuleInit() {
+    if(recoveryMode())return;
     this.timer=setInterval(()=>void this.runOnce().catch(()=>Logger.warn('Notification dispatch cycle failed; durable work is retained','NotificationDispatcher')),10_000);
     this.timer.unref();
     void this.runOnce().catch(()=>Logger.warn('Notification startup recovery failed; durable work is retained','NotificationDispatcher'));
   }
   async onModuleDestroy() {this.stopping=true;if(this.timer)clearInterval(this.timer);await this.running;}
   async runOnce() {
-    if(this.stopping)return;
+    if(this.stopping||recoveryMode())return;
     if(this.running)return this.running;
     this.running=this.cycle();
     try{await this.running;}finally{this.running=null;}
@@ -44,6 +46,7 @@ export class NotificationDispatcher implements OnModuleInit,OnModuleDestroy {
   }
   /** Public for deterministic fixture checks; ownership is a DB lease, never a process mutex. */
   async claimDue():Promise<{id:string;owner:string}|null> {
+    if(recoveryMode())return null;
     const owner=randomUUID();
     return this.prisma.$transaction(async tx=>{
       const rows=await tx.$queryRaw<{id:string}[]>`SELECT id FROM notifications WHERE channel='SMS'
@@ -110,6 +113,7 @@ export class NotificationDispatcher implements OnModuleInit,OnModuleDestroy {
     });
   }
   async dispatchClaim(id:string,owner:string) {
+    if(recoveryMode())return;
     const row=await this.beginDispatch(id,owner);if(!row)return;
     let result:SmsSendResult;
     try{result=await selectSmsGateway(row.provider!,this.gateway)!.send({mobile:normalizePakistaniMobile(row.recipient)!,templateId:row.providerTemplateId!,
